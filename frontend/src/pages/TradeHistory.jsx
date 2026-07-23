@@ -7,6 +7,7 @@ import {
   X, CheckCircle, RefreshCw, LineChart
 } from "lucide-react";
 import { API_URL } from "../config/api";
+import PriceTicker from "../components/PriceTicker";
 
 const PIP_DECIMALS = {
   USDJPY: 100, GBPJPY: 100, EURJPY: 100,
@@ -256,26 +257,7 @@ function TradeHistory() {
       </div>
 
       {/* Live Prices Ticker */}
-      {Object.keys(livePrices).length > 0 && (
-        <div className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 mb-5 overflow-hidden">
-          <div className="flex items-center gap-6 overflow-x-auto scrollbar-none">
-            <span className="text-xs text-slate-500 font-semibold flex items-center gap-1.5 flex-shrink-0">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse inline-block" />
-              LIVE
-            </span>
-            {Object.entries(livePrices).map(([pair, price]) => (
-              <div key={pair} className="flex items-center gap-1.5 flex-shrink-0">
-                <span className="text-xs text-slate-500">
-                  {pair.slice(0, 3)}/{pair.slice(3)}
-                </span>
-                <span className="text-xs font-mono font-bold text-white">
-                  {formatPrice(pair, price)}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      <PriceTicker compact className="mb-5" />
 
       {/* Trades */}
       {loading ? (

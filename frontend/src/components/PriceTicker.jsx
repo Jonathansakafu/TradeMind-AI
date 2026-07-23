@@ -19,7 +19,16 @@ const formatPrice = (pair, price) => {
 const formatLabel = (pair) =>
   CRYPTO_PAIRS.has(pair) ? `${pair.slice(0, -3)}/${pair.slice(-3)}` : `${pair.slice(0, 3)}/${pair.slice(3)}`;
 
-function PriceTicker() {
+// Slow, steady drift rather than a brisk scroll — roughly constant speed
+// regardless of how many prices are in the feed, since duration scales
+// with the (doubled) content length.
+const PIXELS_PER_SECOND = 22;
+const ESTIMATED_CHIP_WIDTH = 150;
+
+// className/mb let callers control outer spacing without fighting the
+// component's own margin; compact renders a slimmer variant for use
+// inline within a page (e.g. Trade History) instead of as a dashboard hero.
+function PriceTicker({ compact = false, className = "" }) {
   const [items, setItems] = useState([]);
   const prevPrices = useRef({});
 
@@ -47,43 +56,50 @@ function PriceTicker() {
 
   if (items.length === 0) return null;
 
+  const durationSeconds = Math.max(30, Math.round((items.length * ESTIMATED_CHIP_WIDTH) / PIXELS_PER_SECOND));
+  const animationName = `tm-ticker-scroll-${compact ? "compact" : "full"}`;
+
   const renderChip = (item, key) => (
     <div
       key={key}
-      className="flex items-center gap-2.5 px-5 py-3 flex-shrink-0 border-r border-slate-800"
+      className={`flex items-center flex-shrink-0 border-r border-slate-800 ${
+        compact ? "gap-1.5 px-4 py-2.5" : "gap-2.5 px-5 py-3"
+      }`}
     >
       <span className={`text-xs font-bold ${CRYPTO_PAIRS.has(item.pair) ? "text-yellow-400" : "text-slate-500"}`}>
         {CRYPTO_PAIRS.has(item.pair) ? "₿" : "FX"}
       </span>
-      <span className="text-sm font-semibold text-white">{formatLabel(item.pair)}</span>
-      <span className={`text-sm font-mono ${
+      <span className={`font-semibold text-white ${compact ? "text-xs" : "text-sm"}`}>
+        {formatLabel(item.pair)}
+      </span>
+      <span className={`font-mono ${compact ? "text-xs" : "text-sm"} ${
         item.direction === "up" ? "text-green-400" : item.direction === "down" ? "text-red-400" : "text-slate-300"
       }`}>
         {formatPrice(item.pair, item.price)}
       </span>
-      {item.direction === "up" && <TrendingUp size={13} className="text-green-400" />}
-      {item.direction === "down" && <TrendingDown size={13} className="text-red-400" />}
+      {!compact && item.direction === "up" && <TrendingUp size={13} className="text-green-400" />}
+      {!compact && item.direction === "down" && <TrendingDown size={13} className="text-red-400" />}
     </div>
   );
 
   return (
-    <div className="relative w-full min-w-0 overflow-hidden bg-slate-900 border border-slate-800 rounded-2xl mb-8">
+    <div className={`relative w-full min-w-0 overflow-hidden bg-slate-900 border border-slate-800 rounded-2xl ${className || (compact ? "" : "mb-8")}`}>
       <style>{`
-        @keyframes tm-ticker-scroll {
+        @keyframes ${animationName} {
           from { transform: translateX(0); }
           to { transform: translateX(-50%); }
         }
-        .tm-ticker-track {
-          animation: tm-ticker-scroll 40s linear infinite;
+        .${animationName} {
+          animation: ${animationName} ${durationSeconds}s linear infinite;
         }
-        .tm-ticker-track:hover {
+        .${animationName}:hover {
           animation-play-state: paused;
         }
         @media (prefers-reduced-motion: reduce) {
-          .tm-ticker-track { animation: none; }
+          .${animationName} { animation: none; }
         }
       `}</style>
-      <div className="flex w-max tm-ticker-track">
+      <div className={`flex w-max ${animationName}`}>
         {items.map((item, i) => renderChip(item, `a-${i}`))}
         {items.map((item, i) => renderChip(item, `b-${i}`))}
       </div>
