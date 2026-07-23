@@ -1,3 +1,6 @@
+# Local embedding model cache (downloaded on first run)
+.model-cache/
+
 # Logs
 logs
 *.log
