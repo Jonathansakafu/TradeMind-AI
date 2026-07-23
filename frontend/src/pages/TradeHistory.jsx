@@ -290,8 +290,11 @@ function TradeHistory() {
         <>
         {/* Mobile card list — the table below is unreadable below md, so
             small screens get a stacked-card layout instead of a horizontal-
-            scroll table. */}
-        <div className="md:hidden space-y-3">
+            scroll table. The switch happens at lg (1024px), not md
+            (768px), because md is also where the 256px sidebar appears —
+            below lg there isn't actually enough room next to the sidebar
+            for a real trades table without it still needing to scroll. */}
+        <div className="lg:hidden space-y-3">
           {filtered.map((trade, i) => {
             const livePrice = livePrices[trade.pair];
             const livePL = !trade.outcome && livePrice
@@ -399,21 +402,21 @@ function TradeHistory() {
         </div>
 
         {/* Desktop table */}
-        <div className="hidden md:block bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+        <div className="hidden lg:block bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[700px]">
+            <table className="w-full min-w-[640px]">
               <thead>
                 <tr className="text-left border-b border-slate-800">
-                  <th className="px-5 py-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Pair</th>
-                  <th className="px-5 py-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Direction</th>
-                  <th className="px-5 py-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Entry</th>
-                  <th className="px-5 py-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Exit</th>
-                  <th className="px-5 py-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Live Price</th>
-                  <th className="px-5 py-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Strategy</th>
-                  <th className="px-5 py-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Status</th>
-                  <th className="px-5 py-4 text-xs font-semibold text-slate-400 uppercase tracking-wider text-right">P&L</th>
-                  <th className="px-5 py-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Date</th>
-                  <th className="px-5 py-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Actions</th>
+                  <th className="px-4 py-3.5 text-xs font-semibold text-slate-400 uppercase tracking-wider">Pair</th>
+                  <th className="px-4 py-3.5 text-xs font-semibold text-slate-400 uppercase tracking-wider">Direction</th>
+                  <th className="px-4 py-3.5 text-xs font-semibold text-slate-400 uppercase tracking-wider">Entry</th>
+                  <th className="px-4 py-3.5 text-xs font-semibold text-slate-400 uppercase tracking-wider">Exit</th>
+                  <th className="px-4 py-3.5 text-xs font-semibold text-slate-400 uppercase tracking-wider">Live Price</th>
+                  <th className="px-4 py-3.5 text-xs font-semibold text-slate-400 uppercase tracking-wider">Strategy</th>
+                  <th className="px-4 py-3.5 text-xs font-semibold text-slate-400 uppercase tracking-wider">Status</th>
+                  <th className="px-4 py-3.5 text-xs font-semibold text-slate-400 uppercase tracking-wider text-right">P&L</th>
+                  <th className="px-4 py-3.5 text-xs font-semibold text-slate-400 uppercase tracking-wider">Date</th>
+                  <th className="px-4 py-3.5 text-xs font-semibold text-slate-400 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
@@ -429,12 +432,12 @@ function TradeHistory() {
                       className="hover:bg-slate-800/50 transition-colors"
                     >
                       {/* Pair */}
-                      <td className="px-5 py-4">
+                      <td className="px-4 py-3.5">
                         <span className="font-bold text-white text-sm">{trade.pair}</span>
                       </td>
 
                       {/* Direction */}
-                      <td className="px-5 py-4">
+                      <td className="px-4 py-3.5">
                         <span className={`inline-flex items-center gap-1.5 text-sm font-semibold ${
                           trade.direction === "buy" ? "text-green-400" : "text-red-400"
                         }`}>
@@ -446,21 +449,21 @@ function TradeHistory() {
                       </td>
 
                       {/* Entry */}
-                      <td className="px-5 py-4">
+                      <td className="px-4 py-3.5">
                         <span className="font-mono text-sm text-slate-300">
                           {trade.entryPrice || "—"}
                         </span>
                       </td>
 
                       {/* Exit */}
-                      <td className="px-5 py-4">
+                      <td className="px-4 py-3.5">
                         <span className="font-mono text-sm text-slate-300">
                           {trade.exitPrice || "—"}
                         </span>
                       </td>
 
                       {/* Live Price */}
-                      <td className="px-5 py-4">
+                      <td className="px-4 py-3.5">
                         {livePrice ? (
                           <div>
                             <p className="font-mono text-xs font-bold text-green-400">
@@ -480,14 +483,14 @@ function TradeHistory() {
                       </td>
 
                       {/* Strategy */}
-                      <td className="px-5 py-4">
+                      <td className="px-4 py-3.5">
                         <span className="text-slate-400 text-sm">
                           {trade.setup || "—"}
                         </span>
                       </td>
 
                       {/* Status */}
-                      <td className="px-5 py-4">
+                      <td className="px-4 py-3.5">
                         {!trade.outcome ? (
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
                             ⏳ OPEN
@@ -508,7 +511,7 @@ function TradeHistory() {
                       </td>
 
                       {/* P&L */}
-                      <td className="px-5 py-4 text-right">
+                      <td className="px-4 py-3.5 text-right">
                         {trade.outcome ? (
                           <span className={`font-bold text-sm ${
                             Number(trade.profitLoss) >= 0 ? "text-green-400" : "text-red-400"
@@ -522,7 +525,7 @@ function TradeHistory() {
                       </td>
 
                       {/* Date */}
-                      <td className="px-5 py-4">
+                      <td className="px-4 py-3.5">
                         <span className="text-slate-400 text-xs">
                           {trade.openedAt
                             ? new Date(trade.openedAt).toLocaleDateString()
@@ -531,7 +534,7 @@ function TradeHistory() {
                       </td>
 
                       {/* Actions */}
-                      <td className="px-5 py-4">
+                      <td className="px-4 py-3.5">
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => navigate("/charts", {
