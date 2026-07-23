@@ -8,7 +8,7 @@ import Analytics from "./pages/Analytics";
 import Charts from "./pages/Charts";
 import Settings from "./pages/Settings";
 import Home from "./pages/Home";
-import LiveAnalysis from "./pages/LiveAnalysis";
+import LiveAnalysis from "./pages/liveAnalysis";
 import News from "./pages/News";
 import Notifications from "./pages/Notifications";
 import MT5 from "./pages/MT5";
