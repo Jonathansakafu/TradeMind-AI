@@ -86,13 +86,36 @@ exports.removeTrade = async (tradeId) => {
   await DocumentChunk.deleteMany({ sourceId: tradeId, source: "trade" });
 };
 
+// Global content (e.g. the user guide) that every user can retrieve,
+// re-indexed on each boot so edits to userGuide.js take effect on deploy.
+exports.indexGuideChunks = async (guideId, rawText) => {
+  await DocumentChunk.deleteMany({ sourceId: guideId, source: "guide" });
+
+  const pieces = chunkText(rawText, { chunkSize: 700, overlap: 100 });
+  if (pieces.length === 0) return 0;
+
+  const embeddings = await embeddingService.embedBatch(pieces);
+  const docs = pieces.map((text, i) => ({
+    source: "guide",
+    sourceId: guideId,
+    label: "TradeMind AI User Guide",
+    text,
+    embedding: embeddings[i],
+    chunkIndex: i,
+  }));
+
+  await DocumentChunk.insertMany(docs);
+  return docs.length;
+};
+
 // ---- Retrieval ----
 
 const bruteForceSearch = async (userId, queryEmbedding, { topK, sources }) => {
-  const chunks = await DocumentChunk.find({
-    user: userId,
-    source: { $in: sources },
-  }).lean();
+  const filter = { source: { $in: sources } };
+  if (userId) filter.user = userId;
+  else filter.user = { $exists: false };
+
+  const chunks = await DocumentChunk.find(filter).lean();
 
   return chunks
     .map((c) => ({ ...c, score: cosineSimilarity(c.embedding, queryEmbedding) }))
@@ -100,24 +123,23 @@ const bruteForceSearch = async (userId, queryEmbedding, { topK, sources }) => {
     .slice(0, topK);
 };
 
-exports.retrieve = async (userId, queryText, { topK = 6, sources = ["book", "trade"] } = {}) => {
-  if (!queryText || !queryText.trim()) return [];
-  const queryEmbedding = await embeddingService.embed(queryText);
-
+// Scoped search: userId present -> that user's book/trade chunks only.
+// userId null -> unscoped (used for the shared "guide" source).
+const searchScoped = async (userId, queryEmbedding, { topK, sources }) => {
   if (vectorSearchAvailable !== false) {
     try {
+      const vectorStage = {
+        index: VECTOR_INDEX_NAME,
+        path: "embedding",
+        queryVector: queryEmbedding,
+        numCandidates: Math.max(100, topK * 20),
+        limit: topK * 3,
+      };
+      if (userId) vectorStage.filter = { user: new mongoose.Types.ObjectId(userId) };
+
       const results = await DocumentChunk.aggregate([
-        {
-          $vectorSearch: {
-            index: VECTOR_INDEX_NAME,
-            path: "embedding",
-            queryVector: queryEmbedding,
-            numCandidates: Math.max(100, topK * 20),
-            limit: topK * 3,
-            filter: { user: new mongoose.Types.ObjectId(userId) },
-          },
-        },
-        { $match: { source: { $in: sources } } },
+        { $vectorSearch: vectorStage },
+        { $match: { source: { $in: sources }, ...(userId ? {} : { user: { $exists: false } }) } },
         { $limit: topK },
         {
           $project: {
@@ -138,6 +160,24 @@ exports.retrieve = async (userId, queryText, { topK = 6, sources = ["book", "tra
   }
 
   return bruteForceSearch(userId, queryEmbedding, { topK, sources });
+};
+
+exports.retrieve = async (userId, queryText, { topK = 6, sources = ["book", "trade"] } = {}) => {
+  if (!queryText || !queryText.trim()) return [];
+  const queryEmbedding = await embeddingService.embed(queryText);
+
+  const userSources = sources.filter((s) => s !== "guide");
+  const includeGuide = sources.includes("guide");
+
+  const results = [];
+  if (userSources.length > 0) {
+    results.push(...(await searchScoped(userId, queryEmbedding, { topK, sources: userSources })));
+  }
+  if (includeGuide) {
+    results.push(...(await searchScoped(null, queryEmbedding, { topK, sources: ["guide"] })));
+  }
+
+  return results.sort((a, b) => b.score - a.score).slice(0, topK);
 };
 
 exports.formatContext = (chunks) => {

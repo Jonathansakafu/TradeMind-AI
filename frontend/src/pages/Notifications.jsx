@@ -139,11 +139,12 @@ function Notifications() {
           source: notification.source,
           sourceLabel: notification.sourceLabel,
           reasoning: notification.reasoning,
+          accountType: localStorage.getItem("mt5AccountType") || "demo",
         },
         { headers }
       );
       alert(`✅ Signal sent to MT5 — EA will execute ${notification.pair} ${notification.signal?.toUpperCase()} shortly!`);
-    } catch (err) {
+    } catch {
       alert("Failed to send to MT5");
     }
   };

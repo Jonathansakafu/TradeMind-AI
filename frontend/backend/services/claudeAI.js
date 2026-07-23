@@ -320,29 +320,30 @@ exports.analyzeLiveMarket = async (pair, currentPrice, historicalPrices, pastTra
   return exports.analyzeMarketSmart(pair, currentPrice, historicalPrices, pastTrades, [], []);
 };
 
-// RAG Q&A — answer a free-form question grounded only in retrieved chunks
+// RAG Q&A — answer any trading or app-usage question, grounded in
+// retrieved context (books/trades/guide) when there's relevant context,
+// falling back to general forex/trading knowledge otherwise.
 exports.answerQuestion = async (question, retrievedChunks = []) => {
   const ragCtx = ragService.formatContext(retrievedChunks);
 
-  if (!ragCtx) {
-    return {
-      answer: "I don't have any uploaded books or trade history to ground an answer yet. Upload a trading book (PDF) or log some trades first, then ask again.",
-      sources: [],
-    };
-  }
-
-  const prompt = `You are TradeMind AI. Answer the trader's question using ONLY the retrieved context below — do not invent facts that aren't present in it. If the context doesn't contain the answer, say so honestly.
+  const prompt = ragCtx
+    ? `You are TradeMind AI, an assistant embedded in a forex/crypto trading journal app. Answer the trader's question. Prefer the retrieved context below when it's relevant (cite sources by label) — it may include their own trades, their uploaded books, or the app's own user guide. If the context isn't relevant to the question, ignore it and answer from your own general trading/market knowledge instead. Never claim something is in their data if it isn't.
 
 ${ragCtx}
 
-Question: ${question}
+Question: ${question}`
+    : `You are TradeMind AI, an assistant embedded in a forex/crypto trading journal app. Answer the trader's question using your general trading and market knowledge. Nothing specific to their own trades, books, or the app guide was found for this question, so answer generally and helpfully — do not refuse just because there's no personal data to cite.
+
+Question: ${question}`;
+
+  const suffix = `
 
 Respond ONLY in JSON with no markdown:
 {
   "answer": ""
 }`;
 
-  const text = await askGroq(prompt);
+  const text = await askGroq(prompt + suffix);
   const sources = retrievedChunks.map((c) => ({
     label: c.label || c.source,
     source: c.source,

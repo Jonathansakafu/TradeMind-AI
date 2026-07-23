@@ -44,6 +44,13 @@ app.listen(PORT, async () => {
   const { ensureVectorIndex } = require("./scripts/createVectorIndex");
   ensureVectorIndex().catch((err) => console.warn("Vector index setup skipped:", err.message));
 
+  const ragService = require("./services/ragService");
+  const { getFullGuideText } = require("./data/userGuide");
+  const GUIDE_ID = "000000000000000000000001";
+  ragService.indexGuideChunks(GUIDE_ID, getFullGuideText())
+    .then((count) => console.log(`📘 User guide indexed (${count} chunks)`))
+    .catch((err) => console.warn("Guide indexing skipped:", err.message));
+
   const User = require("./models/User");
   const { autoGenerate } = require("./controllers/notificationController");
 

@@ -1,13 +1,13 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import MainLayout from "../layouts/MainLayout";
 import {
   Zap, CheckCircle, XCircle, Clock,
   TrendingUp, TrendingDown, Copy, ExternalLink,
-  RefreshCw, AlertTriangle, Info
+  RefreshCw, AlertTriangle, Info, ShieldCheck, ShieldAlert
 } from "lucide-react";
 import { API_URL } from "../config/api";
+import { MT5_BROKERS } from "../config/brokers";
 
 function MT5() {
   const [signals, setSignals] = useState([]);
@@ -15,9 +15,18 @@ function MT5() {
   const [loading, setLoading] = useState(true);
   const [lotSize, setLotSize] = useState("0.01");
   const [copied, setCopied] = useState(false);
+  const [showBrokers, setShowBrokers] = useState(false);
+  const [accountType, setAccountType] = useState(
+    localStorage.getItem("mt5AccountType") || "demo"
+  );
   const token = localStorage.getItem("token");
   const user = JSON.parse(localStorage.getItem("user") || "{}");
   const headers = { Authorization: `Bearer ${token}` };
+
+  const selectAccountType = (type) => {
+    setAccountType(type);
+    localStorage.setItem("mt5AccountType", type);
+  };
 
   const SERVER_URL = API_URL;
   const MT5_ENDPOINT = `${SERVER_URL}/api/mt5/pending?userId=${user._id}`;
@@ -158,8 +167,8 @@ void ParseAndExecuteSignals(string jsonResponse) {
 void ReportToServer(string signalId, string token, string status, string msg) {
    string url = ExecutedURL;
    string headers = "Content-Type: application/json\\r\\n";
-   string body = "{\"signalId\":\"" + signalId + "\",\"token\":\"" + token + 
-                 "\",\"status\":\"" + status + "\",\"mt5Response\":\"" + msg + "\"}";
+   string body = "{\\"signalId\\":\\"" + signalId + "\\",\\"token\\":\\"" + token +
+                 "\\",\\"status\\":\\"" + status + "\\",\\"mt5Response\\":\\"" + msg + "\\"}";
    
    char post[], result[];
    string resultHeaders;
@@ -170,7 +179,7 @@ void ReportToServer(string signalId, string token, string status, string msg) {
 }
 
 string ExtractValue(string json, string key) {
-   string search = "\"" + key + "\":";
+   string search = "\\"" + key + "\\":";
    int start = StringFind(json, search);
    if(start < 0) return "";
    
@@ -215,6 +224,49 @@ void OnDeinit(const int reason) {
         </button>
       </div>
 
+      {/* Account Type — safety-critical, shown prominently */}
+      <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 rounded-2xl border p-5 ${
+        accountType === "real"
+          ? "bg-red-500/10 border-red-500/30"
+          : "bg-green-500/10 border-green-500/30"
+      }`}>
+        <div className="flex items-center gap-3">
+          {accountType === "real"
+            ? <ShieldAlert className="text-red-400 flex-shrink-0" size={24} />
+            : <ShieldCheck className="text-green-400 flex-shrink-0" size={24} />
+          }
+          <div>
+            <p className={`font-bold text-sm ${accountType === "real" ? "text-red-400" : "text-green-400"}`}>
+              {accountType === "real" ? "REAL MONEY ACCOUNT" : "DEMO ACCOUNT"}
+            </p>
+            <p className="text-slate-400 text-xs mt-0.5">
+              {accountType === "real"
+                ? "Signals sent to MT5 will be tagged for your live account — real funds are at risk"
+                : "Signals sent to MT5 will be tagged for practice/demo trading only"
+              }
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center bg-slate-950/50 rounded-xl p-1 flex-shrink-0 w-full sm:w-auto">
+          <button
+            onClick={() => selectAccountType("demo")}
+            className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-sm font-semibold transition ${
+              accountType === "demo" ? "bg-green-500 text-slate-950" : "text-slate-400 hover:text-white"
+            }`}
+          >
+            Demo
+          </button>
+          <button
+            onClick={() => selectAccountType("real")}
+            className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-sm font-semibold transition ${
+              accountType === "real" ? "bg-red-500 text-white" : "text-slate-400 hover:text-white"
+            }`}
+          >
+            Real
+          </button>
+        </div>
+      </div>
+
       {/* Stats */}
       {stats && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
@@ -251,15 +303,38 @@ void OnDeinit(const int reason) {
               <h3 className="font-bold text-white">Download & Install MT5</h3>
             </div>
             <p className="text-slate-400 text-sm mb-4">
-              Download MetaTrader 5 from your broker (Exness recommended for Tanzania)
+              Choose your broker to download MetaTrader 5
             </p>
-            <button
-              onClick={() => window.open("https://www.exness.com/metatrader-5/", "_blank")}
-              className="flex items-center gap-2 bg-slate-800 border border-slate-700 hover:border-green-500/50 px-4 py-2.5 rounded-xl text-sm text-slate-300 hover:text-white transition"
-            >
-              <ExternalLink size={14} className="text-green-400" />
-              Download MT5 from Exness
-            </button>
+            <div className="relative">
+              <button
+                onClick={() => setShowBrokers(!showBrokers)}
+                className="flex items-center justify-between gap-2 w-full bg-slate-800 border border-slate-700 hover:border-green-500/50 px-4 py-2.5 rounded-xl text-sm text-slate-300 hover:text-white transition"
+              >
+                <span className="flex items-center gap-2">
+                  <ExternalLink size={14} className="text-green-400" />
+                  Select a broker
+                </span>
+              </button>
+              {showBrokers && (
+                <div className="absolute left-0 right-0 top-12 bg-slate-950 border border-slate-700 rounded-2xl shadow-2xl z-30 overflow-hidden">
+                  <div className="max-h-64 overflow-y-auto">
+                    {MT5_BROKERS.map((broker) => (
+                      <button
+                        key={broker.name}
+                        onClick={() => {
+                          window.open(broker.url, "_blank");
+                          setShowBrokers(false);
+                        }}
+                        className="flex items-center justify-between w-full px-4 py-3 hover:bg-slate-800 transition text-sm text-slate-300 hover:text-white text-left"
+                      >
+                        {broker.name}
+                        <ExternalLink size={12} className="text-slate-500" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Step 2 */}
@@ -409,6 +484,13 @@ void OnDeinit(const int reason) {
                         {signal.action?.toUpperCase()}
                       </span>
                       <span className="font-bold text-white">{signal.pair}</span>
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-md ${
+                        signal.accountType === "real"
+                          ? "bg-red-500/10 text-red-400"
+                          : "bg-green-500/10 text-green-400"
+                      }`}>
+                        {signal.accountType === "real" ? "REAL" : "DEMO"}
+                      </span>
                     </div>
                     <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border text-xs font-bold ${getStatusColor(signal.status)}`}>
                       {getStatusIcon(signal.status)}

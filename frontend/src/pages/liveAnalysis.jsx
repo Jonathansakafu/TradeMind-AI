@@ -136,12 +136,13 @@ const sendToMT5 = async (analysisData) => {
         source: "live_analysis",
         sourceLabel: "Live Analysis Signal",
         reasoning: analysisData.analysis?.reasoning,
+        accountType: localStorage.getItem("mt5AccountType") || "demo",
       },
       { headers }
     );
     setMt5Success(true);
     setTimeout(() => setMt5Success(false), 5000);
-  } catch (err) {
+  } catch {
     alert("Failed to send signal to MT5");
   } finally {
     setMt5Loading(false);

@@ -8,6 +8,7 @@ const mt5SignalSchema = new mongoose.Schema({
   },
   pair: { type: String, required: true },
   action: { type: String, enum: ["buy", "sell"], required: true },
+  accountType: { type: String, enum: ["demo", "real"], default: "demo" },
   entry: { type: Number, required: true },
   stopLoss: { type: Number },
   takeProfit: { type: Number },

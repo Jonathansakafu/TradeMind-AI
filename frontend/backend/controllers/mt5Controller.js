@@ -7,7 +7,7 @@ exports.sendSignal = async (req, res) => {
     const {
       pair, action, entry, stopLoss,
       takeProfit, lotSize, confidence,
-      source, sourceLabel, reasoning,
+      source, sourceLabel, reasoning, accountType,
     } = req.body;
 
     if (!pair || !action || !entry) {
@@ -21,6 +21,7 @@ exports.sendSignal = async (req, res) => {
       user: req.user._id,
       pair: pair.replace("/", ""),
       action,
+      accountType: accountType === "real" ? "real" : "demo",
       entry: parseFloat(entry),
       stopLoss: stopLoss ? parseFloat(stopLoss) : null,
       takeProfit: takeProfit ? parseFloat(takeProfit) : null,

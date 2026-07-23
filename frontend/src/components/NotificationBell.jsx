@@ -133,27 +133,30 @@ function NotificationBell() {
         </button>
       </div>
 
-      {/* Dropdown — Fixed to top-right corner of screen */}
+      {/* Backdrop — mobile only, gives the full-screen sheet a real dismiss target */}
       {open && (
         <div
-          className="fixed z-[999] bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden"
-          style={{
-            top: "16px",
-            right: "16px",
-            width: "380px",
-            maxWidth: "calc(100vw - 32px)",
-            maxHeight: "85vh",
-          }}
+          className="fixed inset-0 bg-black/60 z-[996] sm:hidden"
+          onClick={() => setOpen(false)}
+        />
+      )}
+
+      {/* Dropdown — full-screen sheet on mobile, floating card from sm: up */}
+      {open && (
+        <div
+          className="fixed z-[999] bg-slate-900 border border-slate-700 shadow-2xl overflow-hidden
+            inset-3 rounded-2xl
+            sm:inset-auto sm:top-4 sm:right-4 sm:w-[380px] sm:max-h-[85vh]"
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800 bg-slate-900 sticky top-0 z-10">
+          <div className="flex items-center justify-between gap-2 flex-wrap px-4 sm:px-5 py-4 border-b border-slate-800 bg-slate-900 sticky top-0 z-10">
             <div>
               <p className="font-bold text-white text-sm">AI Alerts</p>
               <p className="text-xs text-slate-400">
                 {unreadCount > 0 ? `${unreadCount} unread` : "All caught up"}
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               {unreadCount > 0 && (
                 <button
                   onClick={markAllAsRead}
@@ -180,7 +183,7 @@ function NotificationBell() {
           </div>
 
           {/* List */}
-          <div className="overflow-y-auto" style={{ maxHeight: "calc(85vh - 65px)" }}>
+          <div className="overflow-y-auto h-[calc(100%-73px)] sm:h-auto sm:max-h-[calc(85vh-65px)]">
             {notifications.length === 0 ? (
               <div className="text-center py-10">
                 <Bell size={32} className="text-slate-700 mx-auto mb-3" />

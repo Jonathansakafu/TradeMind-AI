@@ -13,6 +13,7 @@ import News from "./pages/News";
 import Notifications from "./pages/Notifications";
 import MT5 from "./pages/MT5";
 import AskAI from "./pages/AskAI";
+import Guide from "./pages/Guide";
 
 const ProtectedRoute = ({ children }) => {
   const token = localStorage.getItem("token");
@@ -37,6 +38,7 @@ function App() {
         <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
         <Route path="/mt5" element={<ProtectedRoute><MT5 /></ProtectedRoute>} />
         <Route path="/ask-ai" element={<ProtectedRoute><AskAI /></ProtectedRoute>} />
+        <Route path="/guide" element={<ProtectedRoute><Guide /></ProtectedRoute>} />
       </Routes>
     </Router>
   );

@@ -1,0 +1,15 @@
+export const MT5_BROKERS = [
+  { name: "JustMarkets", url: "https://www.justmarkets.com/mt5" },
+  { name: "Markets.com", url: "https://www.markets.com/platforms/metatrader5/" },
+  { name: "Exness", url: "https://www.exness.com/metatrader-5/" },
+  { name: "ICMarkets", url: "https://www.icmarkets.com/global/en/trading-platforms/metatrader-5/" },
+  { name: "XM", url: "https://www.xm.com/mt5" },
+  { name: "Pepperstone", url: "https://pepperstone.com/en/trading-platforms/metatrader-5/" },
+  { name: "FXTM", url: "https://www.forextime.com/trading-platforms/metatrader-5" },
+  { name: "HotForex", url: "https://www.hotforex.com/en/trading-software/mt5.html" },
+  { name: "AvaTrade", url: "https://www.avatrade.com/trading-platforms/metatrader-5" },
+  { name: "FBS", url: "https://fbs.com/trading/platforms/mt5" },
+  { name: "OctaFX", url: "https://www.octafx.com/metatrader-5/" },
+  { name: "Binance", url: "https://www.binance.com/en/trade" },
+  { name: "Other Brokers", url: "https://www.metatrader5.com/en/traders" },
+];

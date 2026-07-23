@@ -75,7 +75,6 @@ function TradeHistory() {
   const fetchCurrentPriceForPair = async (pair) => {
     setFetchingCurrentPrice(true);
     try {
-      const formattedPair = pair.slice(0, 3) + "/" + pair.slice(3);
       const res = await axios.get(
         `${API_URL}/api/market/prices`,
         { headers }
@@ -88,7 +87,7 @@ function TradeHistory() {
       } else {
         alert(`Live price not available for ${pair} — market may be closed`);
       }
-    } catch (err) {
+    } catch {
       alert("Failed to fetch live price");
     } finally {
       setFetchingCurrentPrice(false);
@@ -158,7 +157,7 @@ function TradeHistory() {
       setClosingTrade(null);
       setExitPrice("");
       await fetchTrades();
-    } catch (err) {
+    } catch {
       alert("Failed to close trade");
     } finally {
       setCloseLoading(false);
@@ -278,7 +277,7 @@ function TradeHistory() {
         </div>
       )}
 
-      {/* Table */}
+      {/* Trades */}
       {loading ? (
         <div className="flex justify-center py-20">
           <div className="w-8 h-8 border-4 border-green-500 border-t-transparent rounded-full animate-spin" />
@@ -288,7 +287,119 @@ function TradeHistory() {
           <p>No trades found</p>
         </div>
       ) : (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+        <>
+        {/* Mobile card list — the table below is unreadable below md, so
+            small screens get a stacked-card layout instead of a horizontal-
+            scroll table. */}
+        <div className="md:hidden space-y-3">
+          {filtered.map((trade, i) => {
+            const livePrice = livePrices[trade.pair];
+            const livePL = !trade.outcome && livePrice
+              ? calculateClosePL(trade, livePrice)
+              : null;
+
+            return (
+              <div key={trade._id || i} className="bg-slate-900 border border-slate-800 rounded-2xl p-4">
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-white">{trade.pair}</span>
+                    <span className={`inline-flex items-center gap-1 text-xs font-semibold ${
+                      trade.direction === "buy" ? "text-green-400" : "text-red-400"
+                    }`}>
+                      {trade.direction === "buy" ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+                      {trade.direction || "—"}
+                    </span>
+                  </div>
+                  {!trade.outcome ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                      ⏳ OPEN
+                    </span>
+                  ) : trade.outcome === "win" ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold bg-green-500/10 text-green-400 border border-green-500/20">
+                      ✅ WIN
+                    </span>
+                  ) : trade.outcome === "loss" ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold bg-red-500/10 text-red-400 border border-red-500/20">
+                      ❌ LOSS
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold bg-slate-700 text-slate-400">
+                      ➖ EVEN
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 mb-3">
+                  <div className="bg-slate-800 rounded-lg p-2 text-center">
+                    <p className="text-[10px] text-slate-500 mb-0.5">Entry</p>
+                    <p className="font-mono text-xs text-slate-300">{trade.entryPrice || "—"}</p>
+                  </div>
+                  <div className="bg-slate-800 rounded-lg p-2 text-center">
+                    <p className="text-[10px] text-slate-500 mb-0.5">Exit</p>
+                    <p className="font-mono text-xs text-slate-300">{trade.exitPrice || "—"}</p>
+                  </div>
+                  <div className="bg-slate-800 rounded-lg p-2 text-center">
+                    <p className="text-[10px] text-slate-500 mb-0.5">Live</p>
+                    <p className="font-mono text-xs text-green-400">
+                      {livePrice ? formatPrice(trade.pair, livePrice) : "—"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between text-xs text-slate-400 mb-3">
+                  <span>{trade.setup || "No strategy"}</span>
+                  <span>{trade.openedAt ? new Date(trade.openedAt).toLocaleDateString() : "—"}</span>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    {trade.outcome ? (
+                      <span className={`font-bold text-sm ${
+                        Number(trade.profitLoss) >= 0 ? "text-green-400" : "text-red-400"
+                      }`}>
+                        {Number(trade.profitLoss) >= 0 ? "+" : ""}${Number(trade.profitLoss || 0).toFixed(2)}
+                      </span>
+                    ) : livePL ? (
+                      <span className={`text-sm font-semibold ${
+                        Number(livePL.pl) >= 0 ? "text-green-400" : "text-red-400"
+                      }`}>
+                        {Number(livePL.pl) >= 0 ? "+" : ""}${livePL.pl} <span className="text-slate-500 font-normal">unrealized</span>
+                      </span>
+                    ) : (
+                      <span className="text-slate-600 text-sm">—</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => navigate("/charts", {
+                        state: { symbol: TRADINGVIEW_SYMBOLS[trade.pair] }
+                      })}
+                      className="p-2 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400"
+                    >
+                      <LineChart size={14} />
+                    </button>
+                    {!trade.outcome && (
+                      <button
+                        onClick={() => {
+                          setClosingTrade(trade);
+                          setExitPrice(
+                            livePrices[trade.pair] ? String(livePrices[trade.pair]) : ""
+                          );
+                        }}
+                        className="px-3 py-2 rounded-lg text-xs font-bold bg-green-500/10 border border-green-500/30 text-green-400"
+                      >
+                        Close
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Desktop table */}
+        <div className="hidden md:block bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[700px]">
               <thead>
@@ -455,6 +566,7 @@ function TradeHistory() {
             </table>
           </div>
         </div>
+        </>
       )}
 
       {/* Close Trade Modal */}

@@ -3,9 +3,10 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, PlusCircle, History,
   BarChart2, LineChart, Settings, LogOut,
-  Zap, Menu, X, Newspaper, Bell, Bot, Sparkles
+  Zap, Menu, X, Newspaper, Bell, Bot, Sparkles, BookOpen
 } from "lucide-react";
 import NotificationBell from "../components/NotificationBell";
+import ChatWidget from "../components/ChatWidget";
 
 const navItems = [
   { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -18,44 +19,33 @@ const navItems = [
   { path: "/news", label: "Forex News", icon: Newspaper },
   { path: "/notifications", label: "Notifications", icon: Bell },
   { path: "/charts", label: "Live Charts", icon: LineChart },
+  { path: "/guide", label: "User Guide", icon: BookOpen },
   { path: "/settings", label: "Settings", icon: Settings },
 ];
 
-function MainLayout({ children }) {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const user = JSON.parse(localStorage.getItem("user") || "{}");
-
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    navigate("/login");
-  };
-
-  const SidebarContent = () => (
+// Hoisted out of MainLayout so it isn't redefined (and its two instances
+// aren't recreated from scratch) on every MainLayout render.
+function SidebarContent({ pathname, onNavigate, onClose, user, onLogout }) {
+  return (
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between mb-8 px-2">
         <h1 className="text-xl font-bold text-green-400">TradeMind AI</h1>
-        <div className="flex items-center gap-2">
-          <NotificationBell />
-          <button
-            onClick={() => setSidebarOpen(false)}
-            className="md:hidden text-slate-400 hover:text-white"
-          >
-            <X size={20} />
-          </button>
-        </div>
+        <button
+          onClick={onClose}
+          className="md:hidden text-slate-400 hover:text-white"
+        >
+          <X size={20} />
+        </button>
       </div>
 
       <nav className="flex flex-col gap-1 flex-1">
         {navItems.map(({ path, label, icon: Icon }) => {
-          const isActive = location.pathname === path;
+          const isActive = pathname === path;
           return (
             <Link
               key={path}
               to={path}
-              onClick={() => setSidebarOpen(false)}
+              onClick={onNavigate}
               className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition ${
                 isActive
                   ? "bg-green-500/10 text-green-400"
@@ -90,7 +80,7 @@ function MainLayout({ children }) {
           </div>
         </div>
         <button
-          onClick={handleLogout}
+          onClick={onLogout}
           className="flex items-center gap-3 w-full px-4 py-3 rounded-xl text-sm text-slate-400 hover:text-red-400 hover:bg-slate-800 transition"
         >
           <LogOut size={18} /> Logout
@@ -98,24 +88,56 @@ function MainLayout({ children }) {
       </div>
     </div>
   );
+}
+
+function MainLayout({ children }) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const user = JSON.parse(localStorage.getItem("user") || "{}");
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    navigate("/login");
+  };
+
+  const closeSidebar = () => setSidebarOpen(false);
 
   return (
     <div className="min-h-screen bg-slate-950 text-white flex">
+      <div className="fixed top-3 right-3 md:top-4 md:right-4 z-40">
+        <NotificationBell />
+      </div>
+      <ChatWidget />
+
       {sidebarOpen && (
         <div
           className="fixed inset-0 bg-black/60 z-40 md:hidden"
-          onClick={() => setSidebarOpen(false)}
+          onClick={closeSidebar}
         />
       )}
 
       <aside className="hidden md:flex flex-col w-64 bg-slate-900 border-r border-slate-800 fixed h-full z-30 p-6">
-        <SidebarContent />
+        <SidebarContent
+          pathname={location.pathname}
+          onNavigate={closeSidebar}
+          onClose={closeSidebar}
+          user={user}
+          onLogout={handleLogout}
+        />
       </aside>
 
       <aside className={`md:hidden fixed top-0 left-0 h-full w-72 bg-slate-900 border-r border-slate-800 z-50 p-6 transform transition-transform duration-300 ${
         sidebarOpen ? "translate-x-0" : "-translate-x-full"
       }`}>
-        <SidebarContent />
+        <SidebarContent
+          pathname={location.pathname}
+          onNavigate={closeSidebar}
+          onClose={closeSidebar}
+          user={user}
+          onLogout={handleLogout}
+        />
       </aside>
 
       <div className="flex-1 md:ml-64 flex flex-col min-h-screen">
@@ -127,7 +149,7 @@ function MainLayout({ children }) {
             <Menu size={22} />
           </button>
           <h1 className="text-lg font-bold text-green-400">TradeMind AI</h1>
-          <NotificationBell />
+          <span className="w-[22px]" aria-hidden="true" />
         </div>
 
         <main className="flex-1 p-4 md:p-8">

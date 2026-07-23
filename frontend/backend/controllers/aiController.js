@@ -211,7 +211,10 @@ exports.askQuestion = async (req, res) => {
       return res.status(400).json({ message: "Question is required" });
     }
 
-    const retrievedChunks = await ragService.retrieve(req.user._id, question, { topK: 8 });
+    const retrievedChunks = await ragService.retrieve(req.user._id, question, {
+      topK: 8,
+      sources: ["book", "trade", "guide"],
+    });
     const result = await claudeAI.answerQuestion(question, retrievedChunks);
 
     res.json(result);

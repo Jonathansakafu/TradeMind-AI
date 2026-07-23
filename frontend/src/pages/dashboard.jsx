@@ -7,21 +7,8 @@ import {
   Activity, Eye, EyeOff, ExternalLink
 } from "lucide-react";
 import { API_URL } from "../config/api";
-
-const MT5_BROKERS = [
-  { name: "Markets.com", url: "https://www.markets.com/platforms/metatrader5/" },
-  { name: "Exness", url: "https://www.exness.com/metatrader-5/" },
-  { name: "ICMarkets", url: "https://www.icmarkets.com/global/en/trading-platforms/metatrader-5/" },
-  { name: "XM", url: "https://www.xm.com/mt5" },
-  { name: "Pepperstone", url: "https://pepperstone.com/en/trading-platforms/metatrader-5/" },
-  { name: "FXTM", url: "https://www.forextime.com/trading-platforms/metatrader-5" },
-  { name: "HotForex", url: "https://www.hotforex.com/en/trading-software/mt5.html" },
-  { name: "AvaTrade", url: "https://www.avatrade.com/trading-platforms/metatrader-5" },
-  { name: "FBS", url: "https://fbs.com/trading/platforms/mt5" },
-  { name: "OctaFX", url: "https://www.octafx.com/metatrader-5/" },
-  { name: "Binance", url: "https://www.binance.com/en/trade" },
-  { name: "Other Brokers", url: "https://www.metatrader5.com/en/traders" },
-];
+import { MT5_BROKERS } from "../config/brokers";
+import PriceTicker from "../components/PriceTicker";
 
 function Dashboard() {
   const navigate = useNavigate();
@@ -49,10 +36,6 @@ function Dashboard() {
     : 0;
   const totalPL = trades.reduce((sum, t) => sum + (Number(t.profitLoss) || 0), 0);
   const recentTrades = trades.slice(0, 6);
-
-  const goToAddTrade = (signalData) => {
-    navigate("/add-trade", { state: { signal: signalData } });
-  };
 
   if (loading) {
     return (
@@ -165,58 +148,8 @@ function Dashboard() {
         </div>
       </div>
 
-      {/* AI SIGNALS */}
-      <div className="grid md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-slate-900 p-6 rounded-2xl border border-green-500">
-          <h3 className="text-xl font-bold mb-4 text-green-400">BUY SIGNAL</h3>
-          <p className="text-3xl font-bold mb-2">EUR/USD</p>
-          <p className="text-slate-400 mb-4">AI predicts bullish movement</p>
-          <button
-            onClick={() => goToAddTrade({
-              pair: "EURUSD",
-              signal: "buy",
-              entry: null,
-              stopLoss: null,
-              takeProfit: null,
-              reasoning: "Dashboard BUY signal — EUR/USD bullish movement predicted by AI",
-              sourceLabel: "Dashboard Signal",
-            })}
-            className="bg-green-500 hover:bg-green-600 px-4 py-2 rounded-lg font-semibold transition text-slate-950 text-sm"
-          >
-            Record Trade
-          </button>
-        </div>
-        <div className="bg-slate-900 p-6 rounded-2xl border border-red-500">
-          <h3 className="text-xl font-bold mb-4 text-red-400">SELL SIGNAL</h3>
-          <p className="text-3xl font-bold mb-2">GBP/JPY</p>
-          <p className="text-slate-400 mb-4">AI predicts bearish movement</p>
-          <button
-            onClick={() => goToAddTrade({
-              pair: "GBPJPY",
-              signal: "sell",
-              entry: null,
-              stopLoss: null,
-              takeProfit: null,
-              reasoning: "Dashboard SELL signal — GBP/JPY bearish movement predicted by AI",
-              sourceLabel: "Dashboard Signal",
-            })}
-            className="bg-red-500 hover:bg-red-600 px-4 py-2 rounded-lg font-semibold transition text-white text-sm"
-          >
-            Record Trade
-          </button>
-        </div>
-        <div className="bg-slate-900 p-6 rounded-2xl border border-blue-500">
-          <h3 className="text-xl font-bold mb-4 text-blue-400">MARKET STATUS</h3>
-          <p className="text-3xl font-bold mb-2">HIGH VOLATILITY</p>
-          <p className="text-slate-400 mb-4">Major news affecting market</p>
-          <button
-            onClick={() => navigate("/analytics")}
-            className="bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded-lg font-semibold transition text-white text-sm"
-          >
-            View Analysis
-          </button>
-        </div>
-      </div>
+      {/* LIVE MARKET TICKER */}
+      <PriceTicker />
 
       {/* RECENT TRADES */}
       <div className="bg-slate-900 p-6 rounded-2xl overflow-x-auto border border-slate-800">
@@ -239,51 +172,33 @@ function Dashboard() {
             </button>
           </div>
         ) : (
-          <table className="w-full">
-            <thead>
-              <tr className="text-left text-slate-400 border-b border-slate-700">
-                <th className="pb-4 text-sm font-medium">Pair</th>
-                <th className="pb-4 text-sm font-medium">Direction</th>
-                <th className="pb-4 text-sm font-medium">Entry</th>
-                <th className="pb-4 text-sm font-medium">Exit</th>
-                <th className="pb-4 text-sm font-medium">Result</th>
-                <th className="pb-4 text-sm font-medium text-right">P&L</th>
-              </tr>
-            </thead>
-            <tbody>
+          <>
+            {/* Mobile card list */}
+            <div className="sm:hidden space-y-3">
               {recentTrades.map((trade, index) => (
-                <tr
-                  key={index}
-                  className="border-b border-slate-800 hover:bg-slate-800/40 transition"
-                >
-                  <td className="py-4 font-semibold">{trade.pair}</td>
-                  <td className="py-4">
-                    <span className={`flex items-center gap-1.5 ${
-                      trade.direction === "buy" ? "text-green-400" : "text-red-400"
-                    }`}>
-                      {trade.direction === "buy"
-                        ? <TrendingUp size={14} />
-                        : <TrendingDown size={14} />
-                      }
-                      {trade.direction || "—"}
-                    </span>
-                  </td>
-                  <td className="py-4 text-slate-300 font-mono text-sm">
-                    {trade.entryPrice || "—"}
-                  </td>
-                  <td className="py-4 text-slate-300 font-mono text-sm">
-                    {trade.exitPrice || "—"}
-                  </td>
-                  <td className="py-4">
-                    <span className={`px-3 py-1 rounded-lg text-xs font-semibold ${
+                <div key={index} className="bg-slate-800/50 border border-slate-800 rounded-xl p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold">{trade.pair}</span>
+                      <span className={`flex items-center gap-1 text-xs ${
+                        trade.direction === "buy" ? "text-green-400" : "text-red-400"
+                      }`}>
+                        {trade.direction === "buy" ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+                        {trade.direction || "—"}
+                      </span>
+                    </div>
+                    <span className={`px-2.5 py-1 rounded-lg text-xs font-semibold ${
                       trade.outcome === "win" ? "bg-green-500/10 text-green-400"
                       : trade.outcome === "loss" ? "bg-red-500/10 text-red-400"
                       : "bg-slate-700 text-slate-400"
                     }`}>
                       {trade.outcome?.toUpperCase() || "OPEN"}
                     </span>
-                  </td>
-                  <td className="py-4 text-right">
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-slate-400 font-mono">
+                      {trade.entryPrice || "—"} → {trade.exitPrice || "—"}
+                    </span>
                     {showPL ? (
                       <span className={`font-semibold ${
                         Number(trade.profitLoss) >= 0 ? "text-green-400" : "text-red-400"
@@ -294,11 +209,73 @@ function Dashboard() {
                     ) : (
                       <span className="text-slate-600 font-mono tracking-widest">••••</span>
                     )}
-                  </td>
-                </tr>
+                  </div>
+                </div>
               ))}
-            </tbody>
-          </table>
+            </div>
+
+            {/* Desktop table */}
+            <table className="w-full hidden sm:table">
+              <thead>
+                <tr className="text-left text-slate-400 border-b border-slate-700">
+                  <th className="pb-4 text-sm font-medium">Pair</th>
+                  <th className="pb-4 text-sm font-medium">Direction</th>
+                  <th className="pb-4 text-sm font-medium">Entry</th>
+                  <th className="pb-4 text-sm font-medium">Exit</th>
+                  <th className="pb-4 text-sm font-medium">Result</th>
+                  <th className="pb-4 text-sm font-medium text-right">P&L</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentTrades.map((trade, index) => (
+                  <tr
+                    key={index}
+                    className="border-b border-slate-800 hover:bg-slate-800/40 transition"
+                  >
+                    <td className="py-4 font-semibold">{trade.pair}</td>
+                    <td className="py-4">
+                      <span className={`flex items-center gap-1.5 ${
+                        trade.direction === "buy" ? "text-green-400" : "text-red-400"
+                      }`}>
+                        {trade.direction === "buy"
+                          ? <TrendingUp size={14} />
+                          : <TrendingDown size={14} />
+                        }
+                        {trade.direction || "—"}
+                      </span>
+                    </td>
+                    <td className="py-4 text-slate-300 font-mono text-sm">
+                      {trade.entryPrice || "—"}
+                    </td>
+                    <td className="py-4 text-slate-300 font-mono text-sm">
+                      {trade.exitPrice || "—"}
+                    </td>
+                    <td className="py-4">
+                      <span className={`px-3 py-1 rounded-lg text-xs font-semibold ${
+                        trade.outcome === "win" ? "bg-green-500/10 text-green-400"
+                        : trade.outcome === "loss" ? "bg-red-500/10 text-red-400"
+                        : "bg-slate-700 text-slate-400"
+                      }`}>
+                        {trade.outcome?.toUpperCase() || "OPEN"}
+                      </span>
+                    </td>
+                    <td className="py-4 text-right">
+                      {showPL ? (
+                        <span className={`font-semibold ${
+                          Number(trade.profitLoss) >= 0 ? "text-green-400" : "text-red-400"
+                        }`}>
+                          {Number(trade.profitLoss) >= 0 ? "+" : ""}
+                          ${Number(trade.profitLoss || 0).toFixed(2)}
+                        </span>
+                      ) : (
+                        <span className="text-slate-600 font-mono tracking-widest">••••</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
         )}
       </div>
 

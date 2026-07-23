@@ -2,14 +2,15 @@ const mongoose = require("mongoose");
 
 const documentChunkSchema = new mongoose.Schema(
   {
+    // Absent for shared/global content (e.g. the "guide" source), which
+    // every user can retrieve regardless of who's asking.
     user: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
-      required: true,
     },
     source: {
       type: String,
-      enum: ["book", "trade"],
+      enum: ["book", "trade", "guide"],
       required: true,
     },
     sourceId: {
