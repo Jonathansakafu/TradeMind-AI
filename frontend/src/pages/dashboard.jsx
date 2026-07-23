@@ -7,8 +7,8 @@ import {
   Activity, Eye, EyeOff, ExternalLink
 } from "lucide-react";
 import { API_URL } from "../config/api";
-import { MT5_BROKERS } from "../config/brokers";
 import PriceTicker from "../components/PriceTicker";
+import BrokerModal from "../components/BrokerModal";
 
 function Dashboard() {
   const navigate = useNavigate();
@@ -59,37 +59,14 @@ function Dashboard() {
         <div className="flex items-center gap-3 flex-wrap">
 
           {/* MT5 Broker Selector */}
-          <div className="relative">
-            <button
-              onClick={() => setShowBrokers(!showBrokers)}
-              className="flex items-center gap-2 bg-slate-800 border border-slate-700 hover:border-green-500/50 px-4 py-2.5 rounded-xl text-sm font-semibold text-slate-300 hover:text-white transition"
-            >
-              <ExternalLink size={16} className="text-green-400" />
-              Open MT5
-            </button>
-            {showBrokers && (
-              <div className="absolute right-0 top-12 w-56 bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl z-50 overflow-hidden">
-                <p className="text-xs text-slate-500 px-4 py-3 border-b border-slate-800 font-semibold">
-                  Select your broker
-                </p>
-                <div className="max-h-64 overflow-y-auto">
-                  {MT5_BROKERS.map((broker) => (
-                    <button
-                      key={broker.name}
-                      onClick={() => {
-                        window.open(broker.url, "_blank");
-                        setShowBrokers(false);
-                      }}
-                      className="flex items-center justify-between w-full px-4 py-3 hover:bg-slate-800 transition text-sm text-slate-300 hover:text-white text-left"
-                    >
-                      {broker.name}
-                      <ExternalLink size={12} className="text-slate-500" />
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+          <button
+            onClick={() => setShowBrokers(true)}
+            className="flex items-center gap-2 bg-slate-800 border border-slate-700 hover:border-green-500/50 px-4 py-2.5 rounded-xl text-sm font-semibold text-slate-300 hover:text-white transition"
+          >
+            <ExternalLink size={16} className="text-green-400" />
+            Open MT5
+          </button>
+          <BrokerModal open={showBrokers} onClose={() => setShowBrokers(false)} />
 
           <button
             onClick={() => navigate("/add-trade")}

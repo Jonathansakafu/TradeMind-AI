@@ -2,24 +2,43 @@ import MainLayout from "../layouts/MainLayout";
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import axios from "axios";
+import { Search, X } from "lucide-react";
 import { API_URL } from "../config/api";
 
 const PAIRS = [
-  { label: "EUR/USD", symbol: "FX:EURUSD", pair: "EURUSD" },
-  { label: "GBP/USD", symbol: "FX:GBPUSD", pair: "GBPUSD" },
-  { label: "USD/JPY", symbol: "FX:USDJPY", pair: "USDJPY" },
-  { label: "XAU/USD", symbol: "OANDA:XAUUSD", pair: "XAUUSD" },
-  { label: "GBP/JPY", symbol: "FX:GBPJPY", pair: "GBPJPY" },
-  { label: "AUD/USD", symbol: "FX:AUDUSD", pair: "AUDUSD" },
-  { label: "USD/CAD", symbol: "FX:USDCAD", pair: "USDCAD" },
-  { label: "EUR/JPY", symbol: "FX:EURJPY", pair: "EURJPY" },
-  { label: "NZD/USD", symbol: "FX:NZDUSD", pair: "NZDUSD" },
-  { label: "USD/CHF", symbol: "FX:USDCHF", pair: "USDCHF" },
-  { label: "BTC/USD", symbol: "COINBASE:BTCUSD", pair: "BTCUSD" },
-  { label: "ETH/USD", symbol: "COINBASE:ETHUSD", pair: "ETHUSD" },
-  { label: "XRP/USD", symbol: "BINANCE:XRPUSDT", pair: "XRPUSD" },
-  { label: "BNB/USD", symbol: "BINANCE:BNBUSDT", pair: "BNBUSD" },
-  { label: "SOL/USD", symbol: "BINANCE:SOLUSDT", pair: "SOLUSD" },
+  // Forex majors
+  { label: "EUR/USD", symbol: "FX:EURUSD", pair: "EURUSD", group: "Forex" },
+  { label: "GBP/USD", symbol: "FX:GBPUSD", pair: "GBPUSD", group: "Forex" },
+  { label: "USD/JPY", symbol: "FX:USDJPY", pair: "USDJPY", group: "Forex" },
+  { label: "AUD/USD", symbol: "FX:AUDUSD", pair: "AUDUSD", group: "Forex" },
+  { label: "USD/CAD", symbol: "FX:USDCAD", pair: "USDCAD", group: "Forex" },
+  { label: "NZD/USD", symbol: "FX:NZDUSD", pair: "NZDUSD", group: "Forex" },
+  { label: "USD/CHF", symbol: "FX:USDCHF", pair: "USDCHF", group: "Forex" },
+  // Forex crosses
+  { label: "GBP/JPY", symbol: "FX:GBPJPY", pair: "GBPJPY", group: "Forex" },
+  { label: "EUR/JPY", symbol: "FX:EURJPY", pair: "EURJPY", group: "Forex" },
+  { label: "EUR/GBP", symbol: "FX:EURGBP", pair: "EURGBP", group: "Forex" },
+  { label: "AUD/JPY", symbol: "FX:AUDJPY", pair: "AUDJPY", group: "Forex" },
+  { label: "EUR/AUD", symbol: "FX:EURAUD", pair: "EURAUD", group: "Forex" },
+  { label: "GBP/AUD", symbol: "FX:GBPAUD", pair: "GBPAUD", group: "Forex" },
+  { label: "CHF/JPY", symbol: "FX:CHFJPY", pair: "CHFJPY", group: "Forex" },
+  // Metals & commodities
+  { label: "Gold (XAU/USD)", symbol: "OANDA:XAUUSD", pair: "XAUUSD", group: "Commodities" },
+  { label: "Silver (XAG/USD)", symbol: "OANDA:XAGUSD", pair: "XAGUSD", group: "Commodities" },
+  { label: "Crude Oil (WTI)", symbol: "OANDA:WTICOUSD", pair: "WTIUSD", group: "Commodities" },
+  // Indices
+  { label: "US30 (Dow Jones)", symbol: "OANDA:US30USD", pair: "US30", group: "Indices" },
+  { label: "NAS100 (Nasdaq)", symbol: "OANDA:NAS100USD", pair: "NAS100", group: "Indices" },
+  { label: "SPX500 (S&P 500)", symbol: "OANDA:SPX500USD", pair: "SPX500", group: "Indices" },
+  // Crypto
+  { label: "BTC/USD", symbol: "COINBASE:BTCUSD", pair: "BTCUSD", group: "Crypto" },
+  { label: "ETH/USD", symbol: "COINBASE:ETHUSD", pair: "ETHUSD", group: "Crypto" },
+  { label: "XRP/USD", symbol: "BINANCE:XRPUSDT", pair: "XRPUSD", group: "Crypto" },
+  { label: "BNB/USD", symbol: "BINANCE:BNBUSDT", pair: "BNBUSD", group: "Crypto" },
+  { label: "SOL/USD", symbol: "BINANCE:SOLUSDT", pair: "SOLUSD", group: "Crypto" },
+  { label: "ADA/USD", symbol: "BINANCE:ADAUSDT", pair: "ADAUSD", group: "Crypto" },
+  { label: "DOGE/USD", symbol: "BINANCE:DOGEUSDT", pair: "DOGEUSD", group: "Crypto" },
+  { label: "LTC/USD", symbol: "BINANCE:LTCUSDT", pair: "LTCUSD", group: "Crypto" },
 ];
 
 const INTERVALS = [
@@ -64,7 +83,34 @@ function Charts() {
   const [openTrades, setOpenTrades] = useState([]);
   const [selectedTrade, setSelectedTrade] = useState(incomingTrade || null);
   const [livePrice, setLivePrice] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [search, setSearch] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchRef = useRef(null);
+
+  const searchResults = search.trim()
+    ? PAIRS.filter((p) =>
+        p.label.toLowerCase().includes(search.toLowerCase()) ||
+        p.pair.toLowerCase().includes(search.toLowerCase()) ||
+        p.group.toLowerCase().includes(search.toLowerCase())
+      )
+    : PAIRS;
+
+  const selectPair = (pair) => {
+    setSelectedPair(pair);
+    setSelectedTrade(null);
+    setSearch("");
+    setSearchOpen(false);
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (searchRef.current && !searchRef.current.contains(e.target)) {
+        setSearchOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   // Fetch open trades for selected pair
   const fetchOpenTrades = async (pair) => {
@@ -179,15 +225,61 @@ function Charts() {
         </p>
       </div>
 
-      {/* Pair Selector */}
+      {/* Symbol Search — TradingView-style: type to find any pair/crypto/index/commodity */}
+      <div className="relative mb-3" ref={searchRef}>
+        <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 focus-within:border-green-500/50 rounded-xl px-4 py-2.5">
+          <Search size={16} className="text-slate-500 flex-shrink-0" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setSearchOpen(true); }}
+            onFocus={() => setSearchOpen(true)}
+            placeholder={`Search a symbol... (currently ${selectedPair.label})`}
+            className="bg-transparent outline-none text-sm text-white placeholder-slate-500 flex-1 min-w-0"
+          />
+          {search && (
+            <button onClick={() => setSearch("")} className="text-slate-500 hover:text-white flex-shrink-0">
+              <X size={14} />
+            </button>
+          )}
+        </div>
+
+        {searchOpen && (
+          <div className="absolute left-0 right-0 top-full mt-2 bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl z-30 max-h-80 overflow-y-auto">
+            {searchResults.length === 0 ? (
+              <p className="text-slate-500 text-sm px-4 py-4 text-center">No symbols match "{search}"</p>
+            ) : (
+              searchResults.map((pair) => (
+                <button
+                  key={pair.symbol}
+                  onClick={() => selectPair(pair)}
+                  className={`flex items-center justify-between w-full px-4 py-3 hover:bg-slate-800 transition text-left border-b border-slate-800/50 last:border-0 ${
+                    selectedPair.symbol === pair.symbol ? "bg-green-500/10" : ""
+                  }`}
+                >
+                  <span className={`text-sm font-medium ${
+                    selectedPair.symbol === pair.symbol ? "text-green-400" : "text-white"
+                  }`}>
+                    {pair.label}
+                  </span>
+                  <span className="text-xs text-slate-500 bg-slate-800 px-2 py-0.5 rounded-md flex-shrink-0">
+                    {pair.group}
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Popular — one-click quick access to majors */}
       <div className="flex flex-wrap gap-2 mb-3">
-        {PAIRS.map((pair) => (
+        {PAIRS.filter((p) =>
+          ["EURUSD","GBPUSD","USDJPY","XAUUSD","GBPJPY","BTCUSD","ETHUSD"].includes(p.pair)
+        ).map((pair) => (
           <button
             key={pair.symbol}
-            onClick={() => {
-              setSelectedPair(pair);
-              setSelectedTrade(null);
-            }}
+            onClick={() => selectPair(pair)}
             className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition ${
               selectedPair.symbol === pair.symbol
                 ? "bg-green-500 text-slate-950"
@@ -224,7 +316,7 @@ function Charts() {
           {openTrades.length > 1 && (
             <div className="flex gap-2 flex-wrap">
               <span className="text-xs text-slate-400 self-center">Open trades:</span>
-              {openTrades.map((t, i) => (
+              {openTrades.map((t) => (
                 <button
                   key={t._id}
                   onClick={() => setSelectedTrade(t)}
@@ -333,8 +425,6 @@ function Charts() {
                       const current = livePrice;
                       const range = tp - sl;
                       if (range === 0) return null;
-                      const slPos = 0;
-                      const tpPos = 100;
                       const entryPos = ((entry - sl) / range) * 100;
                       const currentPos = Math.max(0, Math.min(100, ((current - sl) / range) * 100));
                       return (
