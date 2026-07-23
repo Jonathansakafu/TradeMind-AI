@@ -105,7 +105,7 @@ function MainLayout({ children }) {
   const closeSidebar = () => setSidebarOpen(false);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex">
+    <div className="min-h-screen bg-slate-950 text-white flex overflow-x-hidden">
       <div className="fixed top-3 right-3 md:top-4 md:right-4 z-40">
         <NotificationBell />
       </div>
@@ -140,7 +140,7 @@ function MainLayout({ children }) {
         />
       </aside>
 
-      <div className="flex-1 md:ml-64 flex flex-col min-h-screen">
+      <div className="flex-1 min-w-0 md:ml-64 flex flex-col min-h-screen">
         <div className="md:hidden flex items-center justify-between px-4 py-3 bg-slate-900 border-b border-slate-800 sticky top-0 z-20">
           <button
             onClick={() => setSidebarOpen(true)}

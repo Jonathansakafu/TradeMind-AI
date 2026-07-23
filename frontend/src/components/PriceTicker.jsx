@@ -67,7 +67,7 @@ function PriceTicker() {
   );
 
   return (
-    <div className="relative overflow-hidden bg-slate-900 border border-slate-800 rounded-2xl mb-8">
+    <div className="relative w-full min-w-0 overflow-hidden bg-slate-900 border border-slate-800 rounded-2xl mb-8">
       <style>{`
         @keyframes tm-ticker-scroll {
           from { transform: translateX(0); }
