@@ -16,7 +16,21 @@ function Register() {
   const [password, setPassword] =
     useState("");
 
+  const [loading, setLoading] =
+    useState(false);
+
+  const [message, setMessage] =
+    useState(null);
+
   const handleRegister = async () => {
+
+    if (!username || !email || !password) {
+      setMessage({ type: "error", text: "Please fill all fields" });
+      return;
+    }
+
+    setLoading(true);
+    setMessage({ type: "info", text: "Creating account — first request after inactivity can take up to a minute..." });
 
     try {
 
@@ -41,17 +55,19 @@ function Register() {
         JSON.stringify(res.data.user)
       );
 
-      alert("Account created successfully");
+      setMessage({ type: "success", text: "Account created successfully" });
 
       navigate("/dashboard");
 
     } catch (error) {
 
-      alert(
-        error.response?.data?.message ||
-        "Registration failed"
-      );
+      setMessage({
+        type: "error",
+        text: error.response?.data?.message || "Registration failed",
+      });
 
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -100,11 +116,29 @@ function Register() {
             className="w-full bg-slate-800 p-4 rounded-xl outline-none"
           />
 
+          {message && (
+            <div
+              className={`text-sm rounded-xl p-3 ${
+                message.type === "error"
+                  ? "bg-red-500/10 text-red-400 border border-red-500/20"
+                  : message.type === "success"
+                  ? "bg-green-500/10 text-green-400 border border-green-500/20"
+                  : "bg-slate-800 text-slate-300 border border-slate-700"
+              }`}
+            >
+              {message.text}
+            </div>
+          )}
+
           <button
             onClick={handleRegister}
-            className="w-full bg-green-500 hover:bg-green-600 p-4 rounded-xl font-semibold transition"
+            disabled={loading}
+            className="w-full bg-green-500 hover:bg-green-600 disabled:opacity-50 p-4 rounded-xl font-semibold transition flex items-center justify-center gap-2"
           >
-            Create Account
+            {loading
+              ? <div className="w-5 h-5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
+              : "Create Account"
+            }
           </button>
 
         </div>

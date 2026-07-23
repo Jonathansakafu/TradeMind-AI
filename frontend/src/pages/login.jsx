@@ -8,13 +8,15 @@ function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState(null);
 
   const handleLogin = async () => {
     if (!email || !password) {
-      alert("Please fill all fields");
+      setMessage({ type: "error", text: "Please fill all fields" });
       return;
     }
     setLoading(true);
+    setMessage({ type: "info", text: "Logging in — first request after inactivity can take up to a minute..." });
     try {
       const res = await axios.post(
         `${API_URL}/api/auth/login`,
@@ -24,7 +26,7 @@ function Login() {
       localStorage.setItem("user", JSON.stringify(res.data.user));
       navigate("/dashboard");
     } catch (error) {
-      alert(error.response?.data?.message || "Login failed");
+      setMessage({ type: "error", text: error.response?.data?.message || "Login failed" });
     } finally {
       setLoading(false);
     }
@@ -58,6 +60,18 @@ function Login() {
             onKeyDown={handleKeyDown}
             className="w-full bg-slate-800 p-4 rounded-xl outline-none focus:ring-2 focus:ring-green-500 transition"
           />
+          {message && (
+            <div
+              className={`text-sm rounded-xl p-3 ${
+                message.type === "error"
+                  ? "bg-red-500/10 text-red-400 border border-red-500/20"
+                  : "bg-slate-800 text-slate-300 border border-slate-700"
+              }`}
+            >
+              {message.text}
+            </div>
+          )}
+
           <button
             onClick={handleLogin}
             disabled={loading}
