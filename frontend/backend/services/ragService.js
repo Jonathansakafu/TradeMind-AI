@@ -6,6 +6,14 @@ const embeddingService = require("./embeddingService");
 const VECTOR_INDEX_NAME = "vector_index";
 const MAX_CHUNKS_PER_BOOK = 400;
 
+// Atlas $vectorSearch scores cosine similarity as (1 + cos) / 2, i.e. a
+// 0-1 range rather than raw -1..1 cosine. Below this, a chunk is close
+// enough to be *found* by ANN search but not actually relevant to the
+// query -- without this cutoff, "closest available" chunks were being
+// shown as cited sources even when the model correctly ignored them and
+// answered from general knowledge instead (misleading in the UI).
+const MIN_RELEVANCE_SCORE = 0.75;
+
 // Cached after the first attempt so we don't retry a doomed $vectorSearch
 // call on every single retrieval once we know the cluster/index can't do it.
 let vectorSearchAvailable = null;
@@ -118,7 +126,9 @@ const bruteForceSearch = async (userId, queryEmbedding, { topK, sources }) => {
   const chunks = await DocumentChunk.find(filter).lean();
 
   return chunks
-    .map((c) => ({ ...c, score: cosineSimilarity(c.embedding, queryEmbedding) }))
+    // Match Atlas $vectorSearch's score scale so MIN_RELEVANCE_SCORE means
+    // the same thing regardless of which search path served the request.
+    .map((c) => ({ ...c, score: (1 + cosineSimilarity(c.embedding, queryEmbedding)) / 2 }))
     .sort((a, b) => b.score - a.score)
     .slice(0, topK);
 };
@@ -177,7 +187,10 @@ exports.retrieve = async (userId, queryText, { topK = 6, sources = ["book", "tra
     results.push(...(await searchScoped(null, queryEmbedding, { topK, sources: ["guide"] })));
   }
 
-  return results.sort((a, b) => b.score - a.score).slice(0, topK);
+  return results
+    .filter((c) => c.score >= MIN_RELEVANCE_SCORE)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, topK);
 };
 
 exports.formatContext = (chunks) => {
