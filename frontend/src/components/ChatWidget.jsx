@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from "react";
-import axios from "axios";
 import { Sparkles, X, Send, Bot, User, BookOpen, History, HelpCircle } from "lucide-react";
-import { API_URL } from "../config/api";
+import { streamAsk } from "../utils/streamAsk";
 
 const SOURCE_ICONS = {
   book: <BookOpen size={11} className="text-purple-400" />,
@@ -23,30 +22,42 @@ function ChatWidget() {
 
   if (!token) return null;
 
+  const updateLastMessage = (updater) => {
+    setMessages((prev) => {
+      const next = [...prev];
+      next[next.length - 1] = updater(next[next.length - 1]);
+      return next;
+    });
+  };
+
   const ask = async (e) => {
     e.preventDefault();
     const question = input.trim();
     if (!question || loading) return;
 
-    setMessages((prev) => [...prev, { role: "user", text: question }]);
+    setMessages((prev) => [
+      ...prev,
+      { role: "user", text: question },
+      { role: "ai", text: "", sources: [] },
+    ]);
     setInput("");
     setLoading(true);
 
     try {
-      const res = await axios.post(
-        `${API_URL}/api/ai/ask`,
-        { question },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      setMessages((prev) => [
-        ...prev,
-        { role: "ai", text: res.data.answer, sources: res.data.sources || [] },
-      ]);
+      for await (const { event, data } of streamAsk(question, token)) {
+        if (event === "sources") {
+          updateLastMessage((m) => ({ ...m, sources: data.sources }));
+        } else if (event === "chunk") {
+          updateLastMessage((m) => ({ ...m, text: m.text + data.text }));
+        } else if (event === "error") {
+          updateLastMessage((m) => ({ ...m, text: data.message || "Something went wrong." }));
+        }
+      }
     } catch {
-      setMessages((prev) => [
-        ...prev,
-        { role: "ai", text: "Something went wrong — please try again.", sources: [] },
-      ]);
+      updateLastMessage((m) => ({
+        ...m,
+        text: m.text || "Something went wrong — please try again.",
+      }));
     } finally {
       setLoading(false);
     }
@@ -90,60 +101,62 @@ function ChatWidget() {
               </div>
             )}
 
-            {messages.map((m, i) => (
-              <div key={i} className={`flex gap-2 ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-                {m.role === "ai" && (
-                  <div className="w-6 h-6 rounded-full bg-green-500/10 border border-green-500/30 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <Bot size={12} className="text-green-400" />
+            {messages.map((m, i) => {
+              const isLast = i === messages.length - 1;
+              const isStreamingEmpty = m.role === "ai" && isLast && loading && !m.text;
+              return (
+                <div key={i} className={`flex gap-2 ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                  {m.role === "ai" && (
+                    <div className="w-6 h-6 rounded-full bg-green-500/10 border border-green-500/30 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <Bot size={12} className="text-green-400" />
+                    </div>
+                  )}
+                  <div className="max-w-[82%]">
+                    <div
+                      className={`rounded-2xl px-3 py-2 text-xs leading-relaxed whitespace-pre-wrap ${
+                        m.role === "user"
+                          ? "bg-green-500 text-slate-950 font-medium"
+                          : "bg-slate-800 text-slate-200"
+                      }`}
+                    >
+                      {isStreamingEmpty ? (
+                        <div className="flex gap-1 py-0.5">
+                          <span className="w-1.5 h-1.5 bg-slate-500 rounded-full animate-bounce [animation-delay:-0.3s]" />
+                          <span className="w-1.5 h-1.5 bg-slate-500 rounded-full animate-bounce [animation-delay:-0.15s]" />
+                          <span className="w-1.5 h-1.5 bg-slate-500 rounded-full animate-bounce" />
+                        </div>
+                      ) : (
+                        <>
+                          {m.text}
+                          {m.role === "ai" && isLast && loading && (
+                            <span className="inline-block w-1 h-3 bg-green-400 ml-0.5 align-middle animate-pulse" />
+                          )}
+                        </>
+                      )}
+                    </div>
+                    {m.sources?.length > 0 && (
+                      <div className="mt-1.5 flex flex-wrap gap-1">
+                        {m.sources.slice(0, 4).map((s, si) => (
+                          <span
+                            key={si}
+                            title={s.snippet}
+                            className="inline-flex items-center gap-1 text-[10px] bg-slate-800/70 border border-slate-700 text-slate-500 px-1.5 py-0.5 rounded"
+                          >
+                            {SOURCE_ICONS[s.source] || <BookOpen size={11} />}
+                            {s.label}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                )}
-                <div className="max-w-[82%]">
-                  <div
-                    className={`rounded-2xl px-3 py-2 text-xs leading-relaxed whitespace-pre-wrap ${
-                      m.role === "user"
-                        ? "bg-green-500 text-slate-950 font-medium"
-                        : "bg-slate-800 text-slate-200"
-                    }`}
-                  >
-                    {m.text}
-                  </div>
-                  {m.sources?.length > 0 && (
-                    <div className="mt-1.5 flex flex-wrap gap-1">
-                      {m.sources.slice(0, 4).map((s, si) => (
-                        <span
-                          key={si}
-                          title={s.snippet}
-                          className="inline-flex items-center gap-1 text-[10px] bg-slate-800/70 border border-slate-700 text-slate-500 px-1.5 py-0.5 rounded"
-                        >
-                          {SOURCE_ICONS[s.source] || <BookOpen size={11} />}
-                          {s.label}
-                        </span>
-                      ))}
+                  {m.role === "user" && (
+                    <div className="w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <User size={12} className="text-slate-400" />
                     </div>
                   )}
                 </div>
-                {m.role === "user" && (
-                  <div className="w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <User size={12} className="text-slate-400" />
-                  </div>
-                )}
-              </div>
-            ))}
-
-            {loading && (
-              <div className="flex gap-2 justify-start">
-                <div className="w-6 h-6 rounded-full bg-green-500/10 border border-green-500/30 flex items-center justify-center flex-shrink-0">
-                  <Bot size={12} className="text-green-400" />
-                </div>
-                <div className="bg-slate-800 rounded-2xl px-3 py-2.5">
-                  <div className="flex gap-1">
-                    <span className="w-1.5 h-1.5 bg-slate-500 rounded-full animate-bounce [animation-delay:-0.3s]" />
-                    <span className="w-1.5 h-1.5 bg-slate-500 rounded-full animate-bounce [animation-delay:-0.15s]" />
-                    <span className="w-1.5 h-1.5 bg-slate-500 rounded-full animate-bounce" />
-                  </div>
-                </div>
-              </div>
-            )}
+              );
+            })}
             <div ref={bottomRef} />
           </div>
 

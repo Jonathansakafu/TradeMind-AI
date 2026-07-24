@@ -1,7 +1,8 @@
 const router = require("express").Router();
 const {
   analyzeTrade, detectPatterns, getTradeSuggestion,
-  analyzeDocument, analyzeScreenshot, getBooks, deleteBook, askQuestion,
+  analyzeDocument, analyzeScreenshot, getBooks, deleteBook,
+  askQuestion, askQuestionStream,
 } = require("../controllers/aiController");
 const { protect } = require("../middleware/authMiddleware");
 const multer = require("multer");
@@ -29,5 +30,6 @@ router.post("/screenshot", upload.single("screenshot"), analyzeScreenshot);
 router.get("/books", getBooks);
 router.delete("/books/:id", deleteBook);
 router.post("/ask", askQuestion);
+router.post("/ask/stream", askQuestionStream);
 
 module.exports = router;

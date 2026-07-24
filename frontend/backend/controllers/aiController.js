@@ -222,3 +222,50 @@ exports.askQuestion = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
+// Ask AI (streaming) — same as askQuestion but sends the answer as
+// Server-Sent Events so the UI can render it token-by-token instead of
+// waiting for the full response.
+exports.askQuestionStream = async (req, res) => {
+  const { question } = req.body;
+  if (!question || !question.trim()) {
+    return res.status(400).json({ message: "Question is required" });
+  }
+
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache",
+    Connection: "keep-alive",
+    "X-Accel-Buffering": "no",
+  });
+
+  const send = (event, data) => {
+    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  };
+
+  let closed = false;
+  req.on("close", () => { closed = true; });
+
+  try {
+    const retrievedChunks = await ragService.retrieve(req.user._id, question, {
+      topK: 8,
+      sources: ["book", "trade", "guide"],
+    });
+    if (closed) return res.end();
+
+    send("sources", { sources: claudeAI.answerSourcesFor(retrievedChunks) });
+
+    for await (const delta of claudeAI.streamAnswer(question, retrievedChunks)) {
+      if (closed) return res.end();
+      send("chunk", { text: delta });
+    }
+
+    send("done", {});
+    res.end();
+  } catch (err) {
+    if (!closed) {
+      send("error", { message: err.message });
+      res.end();
+    }
+  }
+};

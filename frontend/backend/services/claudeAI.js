@@ -30,6 +30,22 @@ const askGroq = async (prompt) => {
   return completion.choices[0]?.message?.content || "";
 };
 
+// Yields text deltas as they arrive from Groq instead of waiting for the
+// full completion — lets the chat UI render the answer as it's written.
+async function* askGroqStream(prompt) {
+  const stream = await groq.chat.completions.create({
+    messages: [{ role: "user", content: prompt }],
+    model: "llama-3.3-70b-versatile",
+    temperature: 0.3,
+    max_tokens: 1500,
+    stream: true,
+  });
+  for await (const chunk of stream) {
+    const delta = chunk.choices[0]?.delta?.content;
+    if (delta) yield delta;
+  }
+}
+
 // Analyze single trade
 exports.analyzeTrade = async (trade, history = [], retrievedChunks = []) => {
   const cacheKey = `trade_${trade._id}_${retrievedChunks.map((c) => c.sourceId).join(",")}`;
@@ -320,36 +336,37 @@ exports.analyzeLiveMarket = async (pair, currentPrice, historicalPrices, pastTra
   return exports.analyzeMarketSmart(pair, currentPrice, historicalPrices, pastTrades, [], []);
 };
 
+const buildAnswerPrompt = (question, ragCtx) => ragCtx
+  ? `You are TradeMind AI, an assistant embedded in a forex/crypto trading journal app. Answer the trader's question. Prefer the retrieved context below when it's relevant (cite sources by label) — it may include their own trades, their uploaded books, or the app's own user guide. If the context isn't relevant to the question, ignore it and answer from your own general trading/market knowledge instead. Never claim something is in their data if it isn't.
+
+${ragCtx}
+
+Question: ${question}`
+  : `You are TradeMind AI, an assistant embedded in a forex/crypto trading journal app. Answer the trader's question using your general trading and market knowledge. Nothing specific to their own trades, books, or the app guide was found for this question, so answer generally and helpfully — do not refuse just because there's no personal data to cite.
+
+Question: ${question}`;
+
+const chunksToSources = (retrievedChunks) => retrievedChunks.map((c) => ({
+  label: c.label || c.source,
+  source: c.source,
+  snippet: c.text.slice(0, 220),
+  score: c.score,
+}));
+
 // RAG Q&A — answer any trading or app-usage question, grounded in
 // retrieved context (books/trades/guide) when there's relevant context,
 // falling back to general forex/trading knowledge otherwise.
 exports.answerQuestion = async (question, retrievedChunks = []) => {
   const ragCtx = ragService.formatContext(retrievedChunks);
-
-  const prompt = ragCtx
-    ? `You are TradeMind AI, an assistant embedded in a forex/crypto trading journal app. Answer the trader's question. Prefer the retrieved context below when it's relevant (cite sources by label) — it may include their own trades, their uploaded books, or the app's own user guide. If the context isn't relevant to the question, ignore it and answer from your own general trading/market knowledge instead. Never claim something is in their data if it isn't.
-
-${ragCtx}
-
-Question: ${question}`
-    : `You are TradeMind AI, an assistant embedded in a forex/crypto trading journal app. Answer the trader's question using your general trading and market knowledge. Nothing specific to their own trades, books, or the app guide was found for this question, so answer generally and helpfully — do not refuse just because there's no personal data to cite.
-
-Question: ${question}`;
-
-  const suffix = `
+  const prompt = buildAnswerPrompt(question, ragCtx) + `
 
 Respond ONLY in JSON with no markdown:
 {
   "answer": ""
 }`;
 
-  const text = await askGroq(prompt + suffix);
-  const sources = retrievedChunks.map((c) => ({
-    label: c.label || c.source,
-    source: c.source,
-    snippet: c.text.slice(0, 220),
-    score: c.score,
-  }));
+  const text = await askGroq(prompt);
+  const sources = chunksToSources(retrievedChunks);
 
   try {
     const result = JSON.parse(text.replace(/```json|```/g, "").trim());
@@ -358,3 +375,17 @@ Respond ONLY in JSON with no markdown:
     return { answer: text, sources };
   }
 };
+
+// Same as answerQuestion but yields plain-text deltas as they're
+// generated, for the streaming (SSE) chat endpoint. No JSON wrapper here
+// -- partial JSON can't be rendered progressively, so this asks for and
+// streams plain prose directly.
+exports.streamAnswer = async function* (question, retrievedChunks = []) {
+  const ragCtx = ragService.formatContext(retrievedChunks);
+  const prompt = buildAnswerPrompt(question, ragCtx) +
+    "\n\nRespond with plain prose only — no JSON, no markdown code fences.";
+
+  yield* askGroqStream(prompt);
+};
+
+exports.answerSourcesFor = chunksToSources;
