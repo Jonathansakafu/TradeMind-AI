@@ -4,7 +4,7 @@ import MainLayout from "../layouts/MainLayout";
 import {
   Zap, CheckCircle, XCircle, Clock,
   TrendingUp, TrendingDown, Copy, ExternalLink,
-  RefreshCw, AlertTriangle, Info, ShieldCheck, ShieldAlert
+  RefreshCw, ShieldCheck, ShieldAlert, ChevronDown, ChevronUp, Info
 } from "lucide-react";
 import { API_URL } from "../config/api";
 import BrokerModal from "../components/BrokerModal";
@@ -16,6 +16,7 @@ function MT5() {
   const [lotSize, setLotSize] = useState("0.01");
   const [copied, setCopied] = useState(false);
   const [showBrokers, setShowBrokers] = useState(false);
+  const [showCode, setShowCode] = useState(false);
   const [accountType, setAccountType] = useState(
     localStorage.getItem("mt5AccountType") || "demo"
   );
@@ -343,43 +344,43 @@ void OnDeinit(const int reason) {
             </div>
           </div>
 
-          {/* Step 3 */}
+          {/* Step 3 — EA install + WebRequest allow-list, both done inside MT5 at the same time */}
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center text-slate-950 font-bold text-sm flex-shrink-0">
                 3
               </div>
-              <h3 className="font-bold text-white">Copy EA to MT5</h3>
+              <h3 className="font-bold text-white">Install the EA in MT5</h3>
             </div>
-            <p className="text-slate-400 text-sm mb-4">
-              Copy this Expert Advisor code and paste it in MT5 MetaEditor
+
+            <p className="text-slate-400 text-sm mb-3">
+              Paste this into MT5's MetaEditor (File → New → Expert Advisor, then replace the contents)
             </p>
-            <div className="bg-slate-950 border border-slate-700 rounded-xl p-4 max-h-48 overflow-y-auto mb-3">
-              <pre className="text-xs text-green-400 font-mono whitespace-pre-wrap">
-                {eaCode.slice(0, 500)}...
-              </pre>
-            </div>
             <button
               onClick={() => copyToClipboard(eaCode)}
-              className="flex items-center gap-2 bg-green-500 hover:bg-green-600 text-slate-950 font-bold px-4 py-2.5 rounded-xl text-sm transition w-full justify-center"
+              className="flex items-center gap-2 bg-green-500 hover:bg-green-600 text-slate-950 font-bold px-4 py-2.5 rounded-xl text-sm transition w-full justify-center mb-2"
             >
               <Copy size={14} />
-              {copied ? "Copied! ✓" : "Copy Full EA Code"}
+              {copied ? "Copied! ✓" : "Copy EA Code"}
             </button>
-          </div>
-
-          {/* Step 4 */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center text-slate-950 font-bold text-sm flex-shrink-0">
-                4
+            <button
+              onClick={() => setShowCode(!showCode)}
+              className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-300 transition mb-4"
+            >
+              {showCode ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+              {showCode ? "Hide code" : "View code"}
+            </button>
+            {showCode && (
+              <div className="bg-slate-950 border border-slate-700 rounded-xl p-4 max-h-48 overflow-y-auto mb-4">
+                <pre className="text-xs text-green-400 font-mono whitespace-pre-wrap">
+                  {eaCode}
+                </pre>
               </div>
-              <h3 className="font-bold text-white">Allow WebRequests in MT5</h3>
-            </div>
-            <div className="space-y-2 text-sm text-slate-400">
-              <p>In MT5: <span className="text-white">Tools → Options → Expert Advisors</span></p>
-              <p>Check: <span className="text-green-400">✅ Allow WebRequest for listed URL</span></p>
-              <p>Add URL:</p>
+            )}
+
+            <div className="border-t border-slate-800 pt-4 space-y-2 text-sm text-slate-400">
+              <p>Then in MT5: <span className="text-white">Tools → Options → Expert Advisors</span></p>
+              <p>Check: <span className="text-green-400">✅ Allow WebRequest for listed URL</span>, and add:</p>
               <div className="bg-slate-800 border border-slate-700 rounded-xl p-3 flex items-center justify-between">
                 <code className="text-green-400 text-xs font-mono break-all">
                   {SERVER_URL}
@@ -394,18 +395,18 @@ void OnDeinit(const int reason) {
             </div>
           </div>
 
-          {/* Step 5 */}
+          {/* Step 4 */}
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center text-slate-950 font-bold text-sm flex-shrink-0">
-                5
+                4
               </div>
               <h3 className="font-bold text-white">Your MT5 Signal URL</h3>
             </div>
             <p className="text-slate-400 text-sm mb-3">
-              This URL is configured in the EA — MT5 polls it every 10 seconds
+              Already built into the EA code above — MT5 polls this every 10 seconds for new signals
             </p>
-            <div className="bg-slate-800 border border-slate-700 rounded-xl p-3 flex items-center justify-between mb-2">
+            <div className="bg-slate-800 border border-slate-700 rounded-xl p-3 flex items-center justify-between">
               <code className="text-green-400 text-xs font-mono break-all">
                 {MT5_ENDPOINT}
               </code>
@@ -415,12 +416,6 @@ void OnDeinit(const int reason) {
               >
                 <Copy size={12} />
               </button>
-            </div>
-            <div className="flex items-start gap-2 bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-3">
-              <AlertTriangle size={14} className="text-yellow-400 flex-shrink-0 mt-0.5" />
-              <p className="text-xs text-yellow-300">
-                For live trading, deploy backend to internet (Railway/Render) and use production URL
-              </p>
             </div>
           </div>
 
@@ -520,21 +515,22 @@ void OnDeinit(const int reason) {
         </div>
       </div>
 
-      {/* Info Box */}
+      {/* Info Box — the ongoing runtime flow, distinct from the one-time setup steps above */}
       <div className="mt-6 bg-blue-500/10 border border-blue-500/20 rounded-2xl p-5">
         <div className="flex items-start gap-3">
           <Info size={18} className="text-blue-400 flex-shrink-0 mt-0.5" />
           <div>
             <p className="text-blue-400 font-semibold text-sm mb-1">
-              How Auto Trading Works
+              Once set up, here's what happens on every signal
             </p>
-            <div className="text-slate-300 text-sm space-y-1">
-              <p>1. TradeMind AI generates a signal (from Live Analysis or Notifications)</p>
-              <p>2. You click "Send to MT5" — signal is saved to database</p>
-              <p>3. MT5 EA checks for new signals every 10 seconds</p>
-              <p>4. EA executes the trade automatically with your configured lot size</p>
-              <p>5. EA reports back — status updates to "Executed" here</p>
-            </div>
+            <p className="text-slate-300 text-sm leading-relaxed">
+              Send a signal (Live Analysis or Notifications) → it's saved and your EA picks it up within
+              10 seconds → the EA executes it with your configured lot size on your{" "}
+              <span className={accountType === "real" ? "text-red-400 font-semibold" : "text-green-400 font-semibold"}>
+                {accountType}
+              </span>{" "}
+              account → it reports back here as Executed or Failed.
+            </p>
           </div>
         </div>
       </div>
