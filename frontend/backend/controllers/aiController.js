@@ -201,6 +201,16 @@ exports.analyzeScreenshot = async (req, res) => {
     const result = await geminiVision.analyzeChartImage(
       base64Image, mimeType, retrievedChunks
     );
+
+    const analysisRecord = await Analysis.create({
+      user: req.user._id,
+      type: "screenshot",
+      response: JSON.stringify(result),
+    });
+
+    ragService.indexScreenshotAnalysis(req.user._id, analysisRecord._id, result.pair, result)
+      .catch((err) => console.error("Screenshot RAG indexing failed:", err.message));
+
     res.json({ analysis: result });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -217,7 +227,7 @@ exports.askQuestion = async (req, res) => {
 
     const retrievedChunks = await ragService.retrieve(req.user._id, question, {
       topK: 8,
-      sources: ["book", "trade", "guide"],
+      sources: ["book", "trade", "guide", "screenshot"],
     });
     const result = await claudeAI.answerQuestion(question, retrievedChunks);
 
@@ -253,7 +263,7 @@ exports.askQuestionStream = async (req, res) => {
   try {
     const retrievedChunks = await ragService.retrieve(req.user._id, question, {
       topK: 8,
-      sources: ["book", "trade", "guide"],
+      sources: ["book", "trade", "guide", "screenshot"],
     });
     if (closed) return res.end();
 

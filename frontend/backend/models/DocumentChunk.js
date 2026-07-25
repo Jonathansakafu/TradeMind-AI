@@ -10,7 +10,7 @@ const documentChunkSchema = new mongoose.Schema(
     },
     source: {
       type: String,
-      enum: ["book", "trade", "guide"],
+      enum: ["book", "trade", "guide", "screenshot"],
       required: true,
     },
     sourceId: {

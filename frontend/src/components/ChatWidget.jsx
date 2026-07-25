@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect } from "react";
-import { Sparkles, X, Send, Bot, User, BookOpen, History, HelpCircle } from "lucide-react";
+import { Sparkles, X, Send, Bot, User, BookOpen, History, HelpCircle, Image } from "lucide-react";
 import { streamAsk } from "../utils/streamAsk";
 
 const SOURCE_ICONS = {
   book: <BookOpen size={11} className="text-purple-400" />,
   trade: <History size={11} className="text-blue-400" />,
   guide: <HelpCircle size={11} className="text-yellow-400" />,
+  screenshot: <Image size={11} className="text-green-400" />,
 };
 
 function ChatWidget() {

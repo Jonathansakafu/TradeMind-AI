@@ -22,6 +22,7 @@ ${ragCtx ? `\nApply this retrieved context from the trader's own uploaded books 
 
 Respond ONLY in JSON with no markdown:
 {
+  "pair": "",
   "trend": "bullish|bearish|sideways",
   "supportResistance": [{"level": 0, "type": "support|resistance"}],
   "patterns": [""],
@@ -34,7 +35,7 @@ Respond ONLY in JSON with no markdown:
   "reasoning": ""
 }
 
-Be specific with price levels where visible on the chart. If a level isn't visible/determinable, use 0 and say so in reasoning.${
+If the instrument/pair is identifiable on the chart (symbol label, watermark, etc.) put it in "pair" (e.g. "EURUSD"), otherwise leave it empty. Be specific with price levels where visible on the chart. If a level isn't visible/determinable, use 0 and say so in reasoning.${
     ragCtx ? " Note which retrieved source (cite by label) applies to this chart, in bookAlignment." : ""
   }`;
 
@@ -48,7 +49,7 @@ Be specific with price levels where visible on the chart. If a level isn't visib
     return JSON.parse(text.replace(/```json|```/g, "").trim());
   } catch {
     return {
-      trend: "unknown", supportResistance: [], patterns: [],
+      pair: "", trend: "unknown", supportResistance: [], patterns: [],
       recommendedSetup: "wait", entry: 0, stopLoss: 0, takeProfit: 0,
       riskLevel: "medium", bookAlignment: "", reasoning: text,
     };

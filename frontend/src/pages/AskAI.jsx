@@ -1,12 +1,13 @@
 import { useState, useRef, useEffect } from "react";
 import MainLayout from "../layouts/MainLayout";
-import { Sparkles, Send, BookOpen, History, HelpCircle, User, Bot } from "lucide-react";
+import { Sparkles, Send, BookOpen, History, HelpCircle, Image, User, Bot } from "lucide-react";
 import { streamAsk } from "../utils/streamAsk";
 
 const SOURCE_ICONS = {
   book: <BookOpen size={12} className="text-purple-400" />,
   trade: <History size={12} className="text-blue-400" />,
   guide: <HelpCircle size={12} className="text-yellow-400" />,
+  screenshot: <Image size={12} className="text-green-400" />,
 };
 
 function AskAI() {

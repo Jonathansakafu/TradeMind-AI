@@ -10,10 +10,10 @@ const analysisSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId, 
     ref: "Trade" 
   },
-  type: { 
-    type: String, 
-    enum: ["trade", "pattern", "suggestion", "document"], 
-    required: true 
+  type: {
+    type: String,
+    enum: ["trade", "pattern", "suggestion", "document", "screenshot"],
+    required: true
   },
   response: { type: String, required: true },
   patterns: [{ name: String, description: String, confidence: Number }],

@@ -98,6 +98,42 @@ exports.removeTrade = async (tradeId) => {
   await DocumentChunk.deleteMany({ sourceId: tradeId, source: "trade" });
 };
 
+const screenshotAnalysisToText = (pair, analysis) => {
+  const parts = [
+    `Chart screenshot analysis${pair ? ` for ${pair}` : ""}`,
+    analysis.trend ? `trend: ${analysis.trend}` : null,
+    analysis.recommendedSetup ? `recommended setup: ${analysis.recommendedSetup}` : null,
+    analysis.entry ? `entry ${analysis.entry}` : null,
+    analysis.stopLoss ? `stop loss ${analysis.stopLoss}` : null,
+    analysis.takeProfit ? `take profit ${analysis.takeProfit}` : null,
+    analysis.riskLevel ? `risk: ${analysis.riskLevel}` : null,
+    analysis.patterns?.length ? `patterns: ${analysis.patterns.join(", ")}` : null,
+    analysis.supportResistance?.length
+      ? `levels: ${analysis.supportResistance.map((sr) => `${sr.type} ${sr.level}`).join(", ")}`
+      : null,
+    analysis.reasoning ? `reasoning: ${analysis.reasoning}` : null,
+  ].filter(Boolean);
+  return parts.join(", ");
+};
+
+exports.indexScreenshotAnalysis = async (userId, analysisId, pair, analysis) => {
+  const text = screenshotAnalysisToText(pair, analysis);
+  const embedding = await embeddingService.embed(text);
+  await DocumentChunk.findOneAndUpdate(
+    { sourceId: analysisId, source: "screenshot" },
+    {
+      user: userId,
+      source: "screenshot",
+      sourceId: analysisId,
+      label: `Chart analysis${pair ? ` — ${pair}` : ""} (${new Date().toLocaleDateString()})`,
+      text,
+      embedding,
+      chunkIndex: 0,
+    },
+    { upsert: true }
+  );
+};
+
 // Global content (e.g. the user guide) that every user can retrieve,
 // re-indexed on each boot so edits to userGuide.js take effect on deploy.
 exports.indexGuideChunks = async (guideId, rawText) => {
