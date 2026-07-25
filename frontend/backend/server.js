@@ -1,4 +1,13 @@
 require("dotenv").config();
+const dns = require("dns");
+// Some hosts (observed on Render) have incomplete outbound IPv6 routing --
+// Node's fetch tries AAAA records first by default, which then hangs for
+// tens of seconds before ever falling back to IPv4. Only affected calls
+// using global fetch (e.g. the Gemini SDK); axios-based calls elsewhere
+// in this app were unaffected, which is what pointed at DNS ordering
+// rather than a broader outbound network problem.
+dns.setDefaultResultOrder("ipv4first");
+
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
