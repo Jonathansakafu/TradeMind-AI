@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
 import MainLayout from "../layouts/MainLayout";
-import { Upload, X, CheckCircle, Calculator } from "lucide-react";
+import { Upload, X, CheckCircle, Calculator, Camera, Sparkles } from "lucide-react";
 import { API_URL } from "../config/api";
 
 const PAIRS = [
@@ -67,6 +67,10 @@ function AddTrade() {
   const [screenshot, setScreenshot] = useState(null);
   const [preview, setPreview] = useState(null);
   const [calculated, setCalculated] = useState(null);
+  const [capturing, setCapturing] = useState(false);
+  const [detecting, setDetecting] = useState(false);
+  const [detectedSetup, setDetectedSetup] = useState(null);
+  const screenCaptureSupported = typeof navigator !== "undefined" && !!navigator.mediaDevices?.getDisplayMedia;
 
   // Get signal data from navigation state or sessionStorage
   const getSignalData = () => {
@@ -109,16 +113,83 @@ function AddTrade() {
   const handleChange = (e) =>
     setForm({ ...form, [e.target.name]: e.target.value });
 
+  // Sends the screenshot to Gemini to identify which setup it shows, and
+  // pre-fills the Setup field with the result -- the trader can still
+  // change it, this just removes the "which strategy was this again"
+  // friction that leads to it being left blank.
+  const detectStrategy = async (file) => {
+    setDetecting(true);
+    setDetectedSetup(null);
+    try {
+      const fd = new FormData();
+      fd.append("screenshot", file);
+      const res = await axios.post(`${API_URL}/api/ai/detect-strategy`, fd, {
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "multipart/form-data" },
+      });
+      setDetectedSetup(res.data);
+      if (res.data.setup) {
+        setForm((f) => ({ ...f, setup: res.data.setup }));
+      }
+    } catch {
+      // Non-critical path -- trader can still pick a setup manually
+    } finally {
+      setDetecting(false);
+    }
+  };
+
+  const applyScreenshot = (file) => {
+    setScreenshot(file);
+    setPreview(URL.createObjectURL(file));
+    detectStrategy(file);
+  };
+
   const handleScreenshot = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    setScreenshot(file);
-    setPreview(URL.createObjectURL(file));
+    applyScreenshot(file);
+  };
+
+  // Captures a single frame of whatever the trader shares (their MT5/
+  // TradingView window) via the browser's native screen-share picker.
+  // Browsers require this explicit permission prompt every time -- there
+  // is no way for a website to silently screenshot another app, by design.
+  const captureScreen = async () => {
+    setCapturing(true);
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+      const track = stream.getVideoTracks()[0];
+      const video = document.createElement("video");
+      video.srcObject = stream;
+      await video.play();
+      await new Promise((resolve) => setTimeout(resolve, 200));
+
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext("2d").drawImage(video, 0, 0);
+      track.stop();
+
+      canvas.toBlob((blob) => {
+        if (!blob) return;
+        const file = new File([blob], `screen-capture-${Date.now()}.png`, { type: "image/png" });
+        applyScreenshot(file);
+      }, "image/png");
+    } catch (err) {
+      if (err.name !== "AbortError" && err.name !== "NotAllowedError") {
+        alert("Screen capture failed — you can upload a screenshot instead.");
+      }
+    } finally {
+      setCapturing(false);
+    }
   };
 
   const handleSubmit = async () => {
     if (!form.pair || !form.direction || !form.entryPrice || !form.lotSize) {
       alert("Please fill required fields: Pair, Direction, Entry Price, Lot Size");
+      return;
+    }
+    if (!screenshot) {
+      alert("Please attach a chart screenshot — capture your screen or upload one, so this trade has entry/SL/TP/result visible for future review.");
       return;
     }
     setLoading(true);
@@ -129,7 +200,7 @@ function AddTrade() {
         formData.append("profitLoss", calculated.pl);
         formData.append("outcome", calculated.outcome);
       }
-      if (screenshot) formData.append("screenshot", screenshot);
+      formData.append("screenshot", screenshot);
       await axios.post(`${API_URL}/api/trades`, formData, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -301,8 +372,94 @@ function AddTrade() {
             </div>
           </div>
 
-          {/* Setup — Optional */}
-          <Select label="Trading Setup" name="setup" options={SETUPS} optional />
+          {/* Screenshot — required: capture from screen or upload a file.
+              Attaching one auto-triggers AI strategy detection below. */}
+          <div>
+            <label className="text-sm text-slate-400 mb-2 block">
+              Chart Screenshot <span className="text-red-400">*</span>
+              <span className="text-slate-600 ml-1 font-normal">
+                (entry, SL, TP, and result should be visible)
+              </span>
+            </label>
+            {preview ? (
+              <div className="relative">
+                <img
+                  src={preview} alt="preview"
+                  className="w-full rounded-xl object-cover max-h-52 border border-slate-700"
+                />
+                <button
+                  onClick={() => {
+                    setScreenshot(null);
+                    setPreview(null);
+                    setDetectedSetup(null);
+                  }}
+                  className="absolute top-2 right-2 bg-slate-900 border border-slate-700 rounded-full p-1.5 hover:bg-red-500/20 transition"
+                >
+                  <X size={14} className="text-red-400" />
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={captureScreen}
+                  disabled={!screenCaptureSupported || capturing}
+                  className="flex flex-col items-center justify-center border-2 border-dashed border-slate-700 rounded-xl p-8 hover:border-green-500/50 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                  title={screenCaptureSupported ? "Capture your MT5/TradingView screen" : "Screen capture isn't supported in this browser"}
+                >
+                  {capturing ? (
+                    <div className="w-6 h-6 border-2 border-green-500 border-t-transparent rounded-full animate-spin mb-2" />
+                  ) : (
+                    <Camera size={26} className="text-slate-600 mb-2" />
+                  )}
+                  <p className="text-slate-500 text-sm text-center">
+                    {capturing ? "Capturing..." : "Capture screen"}
+                  </p>
+                  <p className="text-slate-600 text-xs mt-1">Share your trading platform</p>
+                </button>
+                <label className="flex flex-col items-center justify-center border-2 border-dashed border-slate-700 rounded-xl p-8 cursor-pointer hover:border-green-500/50 transition">
+                  <Upload size={26} className="text-slate-600 mb-2" />
+                  <p className="text-slate-500 text-sm text-center">Upload file</p>
+                  <p className="text-slate-600 text-xs mt-1">PNG, JPG up to 10MB</p>
+                  <input
+                    type="file" accept="image/*"
+                    onChange={handleScreenshot} className="hidden"
+                  />
+                </label>
+              </div>
+            )}
+          </div>
+
+          {/* Setup — auto-filled from the screenshot when possible */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-sm text-slate-400">
+                Trading Setup <span className="text-slate-600">(optional)</span>
+              </label>
+              {detecting && (
+                <span className="flex items-center gap-1.5 text-xs text-green-400">
+                  <div className="w-3 h-3 border-2 border-green-400 border-t-transparent rounded-full animate-spin" />
+                  AI detecting strategy...
+                </span>
+              )}
+              {!detecting && detectedSetup && detectedSetup.confidence > 0 && (
+                <span className="flex items-center gap-1 text-xs text-purple-300" title={detectedSetup.reasoning}>
+                  <Sparkles size={12} />
+                  AI suggested ({detectedSetup.confidence}%)
+                </span>
+              )}
+            </div>
+            <select
+              name="setup" value={form.setup} onChange={handleChange}
+              className="w-full bg-slate-800 border border-slate-700 p-3 rounded-xl outline-none focus:border-green-500 transition text-white"
+            >
+              <option value="">Select...</option>
+              {SETUPS.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+            {detectedSetup?.reasoning && (
+              <p className="text-xs text-slate-500 mt-1.5">{detectedSetup.reasoning}</p>
+            )}
+          </div>
 
           {/* Date */}
           <Field label="Date & Time" name="openedAt" type="datetime-local" />
@@ -318,37 +475,6 @@ function AddTrade() {
               placeholder="Trade setup, reasons, emotions..."
               className="w-full bg-slate-800 border border-slate-700 p-3 rounded-xl outline-none focus:border-green-500 transition text-white resize-none"
             />
-          </div>
-
-          {/* Screenshot */}
-          <div>
-            <label className="text-sm text-slate-400 mb-2 block">
-              Chart Screenshot <span className="text-slate-600">(optional)</span>
-            </label>
-            {preview ? (
-              <div className="relative">
-                <img
-                  src={preview} alt="preview"
-                  className="w-full rounded-xl object-cover max-h-52 border border-slate-700"
-                />
-                <button
-                  onClick={() => { setScreenshot(null); setPreview(null); }}
-                  className="absolute top-2 right-2 bg-slate-900 border border-slate-700 rounded-full p-1.5 hover:bg-red-500/20 transition"
-                >
-                  <X size={14} className="text-red-400" />
-                </button>
-              </div>
-            ) : (
-              <label className="flex flex-col items-center justify-center border-2 border-dashed border-slate-700 rounded-xl p-10 cursor-pointer hover:border-green-500/50 transition">
-                <Upload size={30} className="text-slate-600 mb-2" />
-                <p className="text-slate-500 text-sm">Click to upload chart screenshot</p>
-                <p className="text-slate-600 text-xs mt-1">PNG, JPG up to 10MB</p>
-                <input
-                  type="file" accept="image/*"
-                  onChange={handleScreenshot} className="hidden"
-                />
-              </label>
-            )}
           </div>
 
           {/* Submit */}

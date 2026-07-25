@@ -55,3 +55,46 @@ If the instrument/pair is identifiable on the chart (symbol label, watermark, et
     };
   }
 };
+
+// Trades logged without a screenshot or a chosen setup lose exactly the
+// context that would make them useful to review later. This looks at the
+// screenshot attached when recording a trade and identifies which setup
+// from the app's own dropdown it most resembles, so a trader doesn't have
+// to correctly self-label their own strategy every time.
+const KNOWN_SETUPS = [
+  "Break of Structure", "Order Block", "Fair Value Gap",
+  "Support/Resistance", "Trend Follow", "Reversal",
+  "Breakout", "ICT Concept", "Supply & Demand", "Other",
+];
+
+exports.detectTradeSetup = async (base64Image, mimeType) => {
+  const model = genAI.getGenerativeModel({ model: MODEL_NAME });
+
+  const prompt = `You are TradeMind AI. Look at this trade chart screenshot and identify which trading setup/strategy it shows.
+
+Choose the closest match from exactly this list: ${KNOWN_SETUPS.join(", ")}.
+Use "Other" only if genuinely none of the rest fit.
+
+Respond ONLY in JSON with no markdown:
+{
+  "setup": "",
+  "confidence": 0,
+  "reasoning": ""
+}
+
+"confidence" is 0-100. "reasoning" is one short sentence explaining what you saw that indicates this setup (e.g. a visible order block, a clean support bounce, structure break, etc). If the image isn't a readable trading chart at all, set "setup" to "Other", "confidence" to 0, and say so in reasoning.`;
+
+  const result = await model.generateContent([
+    prompt,
+    { inlineData: { data: base64Image, mimeType } },
+  ]);
+
+  const text = result.response.text();
+  try {
+    const parsed = JSON.parse(text.replace(/```json|```/g, "").trim());
+    if (!KNOWN_SETUPS.includes(parsed.setup)) parsed.setup = "Other";
+    return parsed;
+  } catch {
+    return { setup: "Other", confidence: 0, reasoning: text };
+  }
+};

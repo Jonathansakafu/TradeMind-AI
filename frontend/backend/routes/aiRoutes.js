@@ -2,7 +2,7 @@ const router = require("express").Router();
 const {
   analyzeTrade, detectPatterns, getTradeSuggestion,
   analyzeDocument, analyzeScreenshot, getBooks, deleteBook,
-  askQuestion, askQuestionStream,
+  askQuestion, askQuestionStream, detectStrategy,
 } = require("../controllers/aiController");
 const { protect } = require("../middleware/authMiddleware");
 const multer = require("multer");
@@ -27,6 +27,7 @@ router.post("/patterns", detectPatterns);
 router.post("/suggest", getTradeSuggestion);
 router.post("/document", upload.single("document"), analyzeDocument);
 router.post("/screenshot", upload.single("screenshot"), analyzeScreenshot);
+router.post("/detect-strategy", upload.single("screenshot"), detectStrategy);
 router.get("/books", getBooks);
 router.delete("/books/:id", deleteBook);
 router.post("/ask", askQuestion);

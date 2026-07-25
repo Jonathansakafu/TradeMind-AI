@@ -217,6 +217,25 @@ exports.analyzeScreenshot = async (req, res) => {
   }
 };
 
+// Detect which setup/strategy a trade screenshot shows, so Add Trade can
+// pre-fill it instead of leaving it to guesswork or getting skipped
+exports.detectStrategy = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: "Please provide a screenshot" });
+    }
+    const imageBuffer = fs.readFileSync(req.file.path);
+    const base64Image = imageBuffer.toString("base64");
+    const mimeType = req.file.mimetype;
+    fs.unlinkSync(req.file.path);
+
+    const result = await geminiVision.detectTradeSetup(base64Image, mimeType);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
 // Ask AI — RAG Q&A grounded in the trader's uploaded books + trade history
 exports.askQuestion = async (req, res) => {
   try {
