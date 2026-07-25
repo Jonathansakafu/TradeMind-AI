@@ -4,7 +4,8 @@ import MainLayout from "../layouts/MainLayout";
 import {
   Zap, CheckCircle, XCircle, Clock,
   TrendingUp, TrendingDown, Copy, ExternalLink,
-  RefreshCw, ShieldCheck, ShieldAlert, ChevronDown, ChevronUp, Info
+  RefreshCw, ShieldCheck, ShieldAlert, ChevronDown, ChevronUp, Info,
+  Download
 } from "lucide-react";
 import { API_URL } from "../config/api";
 import BrokerModal from "../components/BrokerModal";
@@ -58,6 +59,18 @@ function MT5() {
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  // Ships the EA as a real .mq5 file (not just clipboard text) so it can be
+  // dropped straight into MT5's MQL5/Experts folder and compiled from there.
+  const downloadEA = () => {
+    const blob = new Blob([eaCode], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "TradeMind_AI_EA.mq5";
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const getStatusColor = (status) => {
@@ -354,15 +367,30 @@ void OnDeinit(const int reason) {
             </div>
 
             <p className="text-slate-400 text-sm mb-3">
-              Paste this into MT5's MetaEditor (File → New → Expert Advisor, then replace the contents)
+              Download the file into MT5's <code className="text-green-400">MQL5\Experts</code> folder, or paste the code manually into MetaEditor (File → New → Expert Advisor)
             </p>
-            <button
-              onClick={() => copyToClipboard(eaCode)}
-              className="flex items-center gap-2 bg-green-500 hover:bg-green-600 text-slate-950 font-bold px-4 py-2.5 rounded-xl text-sm transition w-full justify-center mb-2"
-            >
-              <Copy size={14} />
-              {copied ? "Copied! ✓" : "Copy EA Code"}
-            </button>
+            <div className="grid grid-cols-2 gap-2 mb-2">
+              <button
+                onClick={downloadEA}
+                className="flex items-center gap-2 bg-green-500 hover:bg-green-600 text-slate-950 font-bold px-4 py-2.5 rounded-xl text-sm transition justify-center"
+              >
+                <Download size={14} />
+                Download .mq5
+              </button>
+              <button
+                onClick={() => copyToClipboard(eaCode)}
+                className="flex items-center gap-2 bg-slate-800 border border-slate-700 hover:border-green-500/50 text-slate-300 hover:text-white font-semibold px-4 py-2.5 rounded-xl text-sm transition justify-center"
+              >
+                <Copy size={14} />
+                {copied ? "Copied! ✓" : "Copy Code"}
+              </button>
+            </div>
+            <div className="flex items-start gap-2 bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 mb-3">
+              <Info size={14} className="text-blue-400 flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-slate-400">
+                In MT5: <span className="text-white">File → Open Data Folder → MQL5 → Experts</span>, save the downloaded file there, then restart MT5 (or right-click <span className="text-white">Expert Advisors</span> in the Navigator panel → Refresh).
+              </p>
+            </div>
             <button
               onClick={() => setShowCode(!showCode)}
               className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-300 transition mb-4"
