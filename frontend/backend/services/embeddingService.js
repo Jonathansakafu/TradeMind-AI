@@ -25,10 +25,19 @@ const embed = async (text) => {
   return Array.from(output.data);
 };
 
+// Node is single-threaded for JS execution -- back-to-back CPU-bound
+// inference calls with nothing awaited in between can starve the event
+// loop, leaving the whole server unable to handle any other request
+// (including ones with nothing to do with this batch) until the batch
+// finishes. Yielding via setImmediate after each embedding lets pending
+// I/O/requests get a turn before the next one starts.
+const yieldToEventLoop = () => new Promise((resolve) => setImmediate(resolve));
+
 const embedBatch = async (texts) => {
   const results = [];
   for (const text of texts) {
     results.push(await embed(text));
+    await yieldToEventLoop();
   }
   return results;
 };

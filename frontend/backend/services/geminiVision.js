@@ -2,7 +2,12 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 const ragService = require("./ragService");
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const MODEL_NAME = "gemini-2.5-flash";
+// An alias, not a pinned version -- verified working directly against this
+// project's API key (several pinned versions, including gemini-2.5-flash
+// despite being listed as available, returned 404 "no longer available to
+// new users"). Staying on an alias avoids re-breaking when Google rotates
+// which concrete model backs it.
+const MODEL_NAME = "gemini-flash-latest";
 
 // Groq (used everywhere else in this app) has no vision model -- chart
 // screenshot analysis needs an actual multimodal model, so this one
