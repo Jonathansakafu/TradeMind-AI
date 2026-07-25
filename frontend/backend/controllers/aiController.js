@@ -3,6 +3,7 @@ const Analysis = require("../models/Analysis");
 const BookConcept = require("../models/BookConcept");
 const claudeAI = require("../services/claudeAI");
 const ragService = require("../services/ragService");
+const geminiVision = require("../services/geminiVision");
 const fs = require("fs");
 
 // Analyze single trade
@@ -140,15 +141,18 @@ exports.analyzeDocument = async (req, res) => {
       rawSummary: extracted.rawSummary || "",
     });
 
-    const chunkCount = await ragService.indexBookChunks(
-      req.user._id, bookConcept._id, bookConcept.bookName, content
-    );
+    // Chunking + embedding hundreds of passages on this server's CPU can
+    // take minutes -- don't block the response on it. The concepts
+    // already extracted above are the immediate value; full-text RAG
+    // retrieval over this book becomes available a little afterward.
+    ragService.indexBookChunks(req.user._id, bookConcept._id, bookConcept.bookName, content)
+      .then((count) => console.log(`Indexed ${count} chunks for book "${bookConcept.bookName}"`))
+      .catch((err) => console.error("Book RAG indexing failed:", err.message));
 
     res.json({
       analysis: extracted.rawSummary,
       bookConcept,
-      chunksIndexed: chunkCount,
-      message: `"${bookConcept.bookName}" saved — ${chunkCount} passages indexed for retrieval and will be used in all future AI analysis!`,
+      message: `"${bookConcept.bookName}" saved and will be used in all future AI analysis! Full-text search indexing is finishing in the background.`,
     });
   } catch (err) {
     console.error("Document analysis error:", err);
@@ -194,7 +198,7 @@ exports.analyzeScreenshot = async (req, res) => {
     fs.unlinkSync(req.file.path);
 
     const retrievedChunks = await ragService.retrieve(req.user._id, "chart pattern analysis", { topK: 6, sources: ["book"] });
-    const result = await claudeAI.analyzeScreenshot(
+    const result = await geminiVision.analyzeChartImage(
       base64Image, mimeType, retrievedChunks
     );
     res.json({ analysis: result });

@@ -46,7 +46,7 @@ function Analytics() {
         `${API_URL}/api/ai/patterns`, {}, { headers }
       );
       setAnalysis(res.data.result);
-    } catch (err) {
+    } catch {
       // Kama trades hazitoshi — bado endelea na AI auto
       setAnalysis({
         bestSession: "london",
@@ -73,7 +73,7 @@ function Analytics() {
         { headers }
       );
       setSuggestion(res.data);
-    } catch (err) {
+    } catch {
       alert("Suggestion failed");
     } finally {
       setSuggestLoading(false);
@@ -97,7 +97,7 @@ function Analytics() {
       // Refresh books list
       const booksRes = await axios.get(`${API_URL}/api/ai/books`, { headers });
       setBooks(booksRes.data || []);
-    } catch (err) {
+    } catch {
       alert("Document analysis failed");
     } finally {
       setDocLoading(false);
@@ -126,7 +126,7 @@ function Analytics() {
         { headers: { ...headers, "Content-Type": "multipart/form-data" } }
       );
       setScreenshotResult(res.data.analysis);
-    } catch (err) {
+    } catch {
       alert("Screenshot analysis failed");
     } finally {
       setScreenshotLoading(false);
@@ -338,8 +338,70 @@ function Analytics() {
               : <><Brain size={18} /> Analyze Chart</>}
           </button>
           {screenshotResult && (
-            <div className="bg-slate-800 rounded-xl p-4 text-sm text-slate-300 whitespace-pre-wrap leading-relaxed max-h-64 overflow-y-auto">
-              {screenshotResult}
+            <div className={`rounded-2xl p-5 border max-h-96 overflow-y-auto ${
+              screenshotResult.recommendedSetup === "buy" ? "bg-green-500/10 border-green-500/30"
+              : screenshotResult.recommendedSetup === "sell" ? "bg-red-500/10 border-red-500/30"
+              : "bg-yellow-500/10 border-yellow-500/30"}`}>
+              <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                <p className={`text-xl font-bold ${
+                  screenshotResult.recommendedSetup === "buy" ? "text-green-400"
+                  : screenshotResult.recommendedSetup === "sell" ? "text-red-400"
+                  : "text-yellow-400"}`}>
+                  {screenshotResult.recommendedSetup === "buy" ? "🟢 BUY SETUP"
+                    : screenshotResult.recommendedSetup === "sell" ? "🔴 SELL SETUP"
+                    : "⚠️ WAIT"}
+                </p>
+                <span className="text-xs font-semibold text-slate-400 uppercase">
+                  {screenshotResult.trend} · {screenshotResult.riskLevel} risk
+                </span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3 mb-4">
+                <div className="bg-slate-800 rounded-xl p-3 text-center">
+                  <p className="text-xs text-slate-500 mb-1">Entry</p>
+                  <p className="font-mono font-bold text-white text-sm">{screenshotResult.entry || "—"}</p>
+                </div>
+                <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-center">
+                  <p className="text-xs text-slate-500 mb-1">Stop Loss</p>
+                  <p className="font-mono font-bold text-red-400 text-sm">{screenshotResult.stopLoss || "—"}</p>
+                </div>
+                <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-3 text-center">
+                  <p className="text-xs text-slate-500 mb-1">Take Profit</p>
+                  <p className="font-mono font-bold text-green-400 text-sm">{screenshotResult.takeProfit || "—"}</p>
+                </div>
+              </div>
+
+              {screenshotResult.supportResistance?.length > 0 && (
+                <div className="mb-3">
+                  <p className="text-xs text-slate-500 font-semibold mb-1.5">SUPPORT / RESISTANCE</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {screenshotResult.supportResistance.map((sr, i) => (
+                      <span key={i} className={`text-xs font-mono px-2 py-1 rounded-lg ${
+                        sr.type === "support" ? "bg-green-500/10 text-green-400" : "bg-red-500/10 text-red-400"
+                      }`}>
+                        {sr.type}: {sr.level}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {screenshotResult.patterns?.length > 0 && (
+                <div className="mb-3">
+                  <p className="text-xs text-slate-500 font-semibold mb-1.5">PATTERNS</p>
+                  {screenshotResult.patterns.map((p, i) => (
+                    <p key={i} className="text-xs text-slate-300 mb-0.5">• {p}</p>
+                  ))}
+                </div>
+              )}
+
+              <p className="text-slate-300 text-sm leading-relaxed">{screenshotResult.reasoning}</p>
+
+              {screenshotResult.bookAlignment && (
+                <p className="text-xs text-purple-300 mt-3 pt-3 border-t border-slate-700/50">
+                  📖 {screenshotResult.bookAlignment}
+                </p>
+              )}
             </div>
           )}
         </div>

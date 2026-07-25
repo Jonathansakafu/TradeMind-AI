@@ -184,29 +184,6 @@ Extract practical trading concepts, strategies, and rules that can improve tradi
   }
 };
 
-// Analyze screenshot with retrieved book context
-exports.analyzeScreenshot = async (base64Image, mimeType, retrievedChunks = []) => {
-  const ragCtx = ragService.formatContext(retrievedChunks);
-
-  const prompt = `You are TradeMind AI, a professional forex chart analyst. Analyze this chart and provide detailed trading analysis.
-${ragCtx ? `\nApply this retrieved context in your analysis:\n${ragCtx}` : ""}
-
-Provide:
-1. Trend direction (bullish/bearish/sideways)
-2. Key support and resistance levels
-3. Chart patterns visible
-4. Recommended trade setup (buy/sell/wait)
-5. Entry price suggestion
-6. Stop loss placement
-7. Take profit target
-8. Risk assessment (low/medium/high)
-${ragCtx ? "9. Which retrieved source (cite by label) applies to this chart setup" : ""}
-
-Be specific with price levels where visible.`;
-
-  return prompt + "\n\n[Note: Groq does not support image analysis. Please use the chart description to manually input trade details, or upgrade to a vision-capable AI model.]";
-};
-
 // Smart Market Analysis
 exports.analyzeMarketSmart = async (pair, currentPrice, historicalPrices, pastTrades, retrievedChunks = [], newsArticles = []) => {
   const cacheKey = `market_${pair}_${Math.floor(Date.now() / (30 * 60 * 1000))}`;

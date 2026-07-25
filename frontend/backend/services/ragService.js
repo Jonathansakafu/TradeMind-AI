@@ -4,7 +4,11 @@ const { chunkText } = require("../utils/chunkText");
 const embeddingService = require("./embeddingService");
 
 const VECTOR_INDEX_NAME = "vector_index";
-const MAX_CHUNKS_PER_BOOK = 400;
+// Each chunk needs its own local (CPU-bound) embedding computation, run
+// sequentially, on a free-tier server with very limited CPU -- keeping
+// this bounded matters for how long book indexing takes in the
+// background, not just correctness.
+const MAX_CHUNKS_PER_BOOK = 200;
 
 // Atlas $vectorSearch scores cosine similarity as (1 + cos) / 2, i.e. a
 // 0-1 range rather than raw -1..1 cosine. Below this, a chunk is close
