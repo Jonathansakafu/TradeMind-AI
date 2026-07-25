@@ -2,8 +2,9 @@ import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
 import MainLayout from "../layouts/MainLayout";
-import { Upload, X, CheckCircle, Calculator, Camera, Sparkles } from "lucide-react";
+import { Upload, X, CheckCircle, Calculator, Camera, Sparkles, LineChart } from "lucide-react";
 import { API_URL } from "../config/api";
+import SnapshotCaptureModal from "../components/SnapshotCaptureModal";
 
 const PAIRS = [
   "EURUSD","GBPUSD","USDJPY","USDCHF","AUDUSD",
@@ -70,6 +71,7 @@ function AddTrade() {
   const [capturing, setCapturing] = useState(false);
   const [detecting, setDetecting] = useState(false);
   const [detectedSetup, setDetectedSetup] = useState(null);
+  const [showSnapshotModal, setShowSnapshotModal] = useState(false);
   const screenCaptureSupported = typeof navigator !== "undefined" && !!navigator.mediaDevices?.getDisplayMedia;
 
   // Get signal data from navigation state or sessionStorage
@@ -147,6 +149,23 @@ function AddTrade() {
     const file = e.target.files[0];
     if (!file) return;
     applyScreenshot(file);
+  };
+
+  // The generated snapshot is a data visual (price levels), not a real
+  // chart image, so skipping AI strategy detection avoids wasting a call
+  // on an image it can't meaningfully read patterns from.
+  const applyGeneratedSnapshot = (file) => {
+    setScreenshot(file);
+    setPreview(URL.createObjectURL(file));
+    setDetectedSetup(null);
+  };
+
+  const openSnapshotModal = () => {
+    if (!form.pair || !form.direction || !form.entryPrice) {
+      alert("Fill in Pair, Direction and Entry Price first so the chart snapshot can be generated.");
+      return;
+    }
+    setShowSnapshotModal(true);
   };
 
   // Captures a single frame of whatever the trader shares (their MT5/
@@ -399,26 +418,36 @@ function AddTrade() {
                 </button>
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
+                <button
+                  type="button"
+                  onClick={openSnapshotModal}
+                  className="flex flex-col items-center justify-center border-2 border-dashed border-green-500/40 rounded-xl p-6 hover:border-green-500 transition"
+                  title="Generate a chart snapshot from your entry/SL/TP — recommended"
+                >
+                  <LineChart size={24} className="text-green-500 mb-2" />
+                  <p className="text-slate-400 text-sm text-center">Generate chart</p>
+                  <p className="text-slate-600 text-xs mt-1">Preview entry/SL/TP</p>
+                </button>
                 <button
                   type="button"
                   onClick={captureScreen}
                   disabled={!screenCaptureSupported || capturing}
-                  className="flex flex-col items-center justify-center border-2 border-dashed border-slate-700 rounded-xl p-8 hover:border-green-500/50 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="flex flex-col items-center justify-center border-2 border-dashed border-slate-700 rounded-xl p-6 hover:border-green-500/50 transition disabled:opacity-40 disabled:cursor-not-allowed"
                   title={screenCaptureSupported ? "Capture your MT5/TradingView screen" : "Screen capture isn't supported in this browser"}
                 >
                   {capturing ? (
                     <div className="w-6 h-6 border-2 border-green-500 border-t-transparent rounded-full animate-spin mb-2" />
                   ) : (
-                    <Camera size={26} className="text-slate-600 mb-2" />
+                    <Camera size={24} className="text-slate-600 mb-2" />
                   )}
                   <p className="text-slate-500 text-sm text-center">
                     {capturing ? "Capturing..." : "Capture screen"}
                   </p>
-                  <p className="text-slate-600 text-xs mt-1">Share your trading platform</p>
+                  <p className="text-slate-600 text-xs mt-1">Share trading platform</p>
                 </button>
-                <label className="flex flex-col items-center justify-center border-2 border-dashed border-slate-700 rounded-xl p-8 cursor-pointer hover:border-green-500/50 transition">
-                  <Upload size={26} className="text-slate-600 mb-2" />
+                <label className="flex flex-col items-center justify-center border-2 border-dashed border-slate-700 rounded-xl p-6 cursor-pointer hover:border-green-500/50 transition">
+                  <Upload size={24} className="text-slate-600 mb-2" />
                   <p className="text-slate-500 text-sm text-center">Upload file</p>
                   <p className="text-slate-600 text-xs mt-1">PNG, JPG up to 10MB</p>
                   <input
@@ -429,6 +458,20 @@ function AddTrade() {
               </div>
             )}
           </div>
+
+          <SnapshotCaptureModal
+            open={showSnapshotModal}
+            onClose={() => setShowSnapshotModal(false)}
+            onCaptured={applyGeneratedSnapshot}
+            title="Chart Snapshot Preview"
+            pair={form.pair}
+            direction={form.direction}
+            entry={form.entryPrice}
+            stopLoss={form.stopLoss}
+            takeProfit={form.takeProfit}
+            markerPrice={form.entryPrice}
+            markerLabel="Entry"
+          />
 
           {/* Setup — auto-filled from the screenshot when possible */}
           <div>

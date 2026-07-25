@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { API_URL } from "../config/api";
 import PriceTicker from "../components/PriceTicker";
+import SnapshotCaptureModal from "../components/SnapshotCaptureModal";
 
 const PIP_DECIMALS = {
   USDJPY: 100, GBPJPY: 100, EURJPY: 100,
@@ -38,6 +39,7 @@ function TradeHistory() {
   const [closingTrade, setClosingTrade] = useState(null);
   const [exitPrice, setExitPrice] = useState("");
   const [closeLoading, setCloseLoading] = useState(false);
+  const [showCloseSnapshot, setShowCloseSnapshot] = useState(false);
   const [livePrices, setLivePrices] = useState({});
   const [fetchingCurrentPrice, setFetchingCurrentPrice] = useState(false);
   const token = localStorage.getItem("token");
@@ -138,25 +140,28 @@ function TradeHistory() {
     };
   };
 
-  const closeTrade = async () => {
+  const closeTrade = async (screenshotFile) => {
     if (!exitPrice || !closingTrade) return;
     const calc = calculateClosePL(closingTrade, exitPrice);
     if (!calc) return alert("Invalid exit price");
     setCloseLoading(true);
     try {
+      const formData = new FormData();
+      formData.append("exitPrice", exitPrice);
+      formData.append("profitLoss", calc.pl);
+      formData.append("outcome", calc.outcome);
+      formData.append("status", "closed");
+      formData.append("closedAt", new Date().toISOString());
+      if (screenshotFile) formData.append("screenshot", screenshotFile);
+
       await axios.put(
         `${API_URL}/api/trades/${closingTrade._id}`,
-        {
-          exitPrice: parseFloat(exitPrice),
-          profitLoss: parseFloat(calc.pl),
-          outcome: calc.outcome,
-          status: "closed",
-          closedAt: new Date(),
-        },
-        { headers }
+        formData,
+        { headers: { ...headers, "Content-Type": "multipart/form-data" } }
       );
       setClosingTrade(null);
       setExitPrice("");
+      setShowCloseSnapshot(false);
       await fetchTrades();
     } catch {
       alert("Failed to close trade");
@@ -570,7 +575,7 @@ function TradeHistory() {
                 </p>
               </div>
               <button
-                onClick={() => { setClosingTrade(null); setExitPrice(""); }}
+                onClick={() => { setClosingTrade(null); setExitPrice(""); setShowCloseSnapshot(false); }}
                 className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition"
               >
                 <X size={18} />
@@ -657,7 +662,7 @@ function TradeHistory() {
                   step="any"
                   value={exitPrice}
                   onChange={(e) => setExitPrice(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && closeTrade()}
+                  onKeyDown={(e) => e.key === "Enter" && setShowCloseSnapshot(true)}
                   placeholder="Enter exit price manually"
                   className="w-full bg-slate-800 border border-slate-700 focus:border-green-500 p-3.5 rounded-xl outline-none transition text-white font-mono text-sm"
                 />
@@ -720,9 +725,11 @@ function TradeHistory() {
                 </div>
               )}
 
-              {/* Confirm Button */}
+              {/* Confirm Button — opens the chart snapshot popup first,
+                  so the trade's close-out record has entry/SL/TP/result
+                  visible before the request is actually sent */}
               <button
-                onClick={closeTrade}
+                onClick={() => setShowCloseSnapshot(true)}
                 disabled={!exitPrice || closeLoading}
                 className="w-full bg-green-500 hover:bg-green-600 disabled:opacity-40 text-slate-950 font-bold py-4 rounded-xl transition flex items-center justify-center gap-2 text-base"
               >
@@ -736,6 +743,31 @@ function TradeHistory() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Close-trade chart snapshot popup — shows the market chart with
+          entry/SL/TP lines and the exit result, then submits the close
+          with that image attached as the trade's screenshot */}
+      {closingTrade && previewClose && (
+        <SnapshotCaptureModal
+          open={showCloseSnapshot}
+          onClose={() => setShowCloseSnapshot(false)}
+          onCaptured={(file) => closeTrade(file)}
+          title="Confirm Close — Chart Snapshot"
+          buttonLabel="Confirm & Close Trade"
+          busy={closeLoading}
+          pair={closingTrade.pair}
+          direction={closingTrade.direction}
+          entry={closingTrade.entryPrice}
+          stopLoss={closingTrade.stopLoss}
+          takeProfit={closingTrade.takeProfit}
+          markerPrice={exitPrice}
+          markerLabel="Exit"
+          isClosing
+          pnl={previewClose.pl}
+          pips={previewClose.pips}
+          outcome={previewClose.outcome}
+        />
       )}
 
     </MainLayout>

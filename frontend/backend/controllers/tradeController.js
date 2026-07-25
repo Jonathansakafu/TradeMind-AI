@@ -63,9 +63,19 @@ exports.createTrade = async (req, res) => {
 // UPDATE trade
 exports.updateTrade = async (req, res) => {
   try {
+    const updateData = { ...req.body };
+
+    // Handle screenshot if uploaded (e.g. close-trade snapshot)
+    if (req.file) {
+      updateData.screenshot = {
+        url: req.file.path,
+        publicId: req.file.filename,
+      };
+    }
+
     const trade = await Trade.findOneAndUpdate(
       { _id: req.params.id, user: req.user._id },
-      req.body,
+      updateData,
       { new: true, runValidators: true }
     );
     if (!trade) return res.status(404).json({ message: "Trade not found" });

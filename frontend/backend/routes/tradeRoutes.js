@@ -17,7 +17,7 @@ router.get("/stats", getStats);
 router.get("/", getTrades);
 router.post("/", upload.single("screenshot"), createTrade);
 router.get("/:id", getTrade);
-router.put("/:id", updateTrade);
+router.put("/:id", upload.single("screenshot"), updateTrade);
 router.delete("/:id", deleteTrade);
 
 module.exports = router;
