@@ -2,10 +2,13 @@
 // (once we have real selectors from the live site) stay localized and never
 // touch the polling/safety/reporting logic in content.js.
 //
-// STATUS: placeholder. Pocket Option's trading UI is behind login, so its
-// real markup can't be researched from outside a live, authenticated
-// session — these selectors are unverified guesses and are expected to be
-// wrong until corrected against the real page. Every function below fails
+// STATUS: demo-mode detection, Buy/Sell, and expiry presets are confirmed
+// against real markup from the user's live Pocket Option account. Amount
+// entry is a best-effort first attempt (a real <input>, direct value-set
+// not yet verified live) with a documented on-screen-keypad fallback if it
+// doesn't work. Pair selection is still unconfirmed/placeholder — trading
+// will refuse to run until that's filled in, since trading the wrong pair
+// silently would be worse than not trading at all. Every function fails
 // closed (returns null/false) rather than guessing, and content.js reports
 // "failed" with a clear reason whenever that happens instead of pretending
 // to have placed or read a trade.
@@ -75,22 +78,41 @@
     return null;
   }
 
-  // NOT yet confirmed — the small trigger box on the main trading panel
-  // that opens the expiry dropdown (".expiration-inputs-list-modal") in
-  // the first place. Everything captured so far was the dropdown's
-  // *contents* once already open, not the button that opens it.
-  function findExpiryTrigger() {
-    return firstMatch([".expiry-trigger", "[data-testid='trade-expiry']"]);
+  // Confirmed from a live screenshot: the main trading panel has a row
+  // labelled exactly "Time" whose value is a ".value__val" div (e.g.
+  // "00:03:00"), and a row labelled exactly "Amount" whose value is a
+  // real <input type="text"> (e.g. "1,020.1"). Neither row's own wrapping
+  // container has a confirmed class name, so both are found the same way
+  // Buy/Sell are — anchored to real, visible label text rather than a
+  // guessed class — by finding the label, then searching a few levels of
+  // ancestors for the value element.
+  function findRowValue(labelText, valueSelector) {
+    const candidates = document.querySelectorAll("div, span");
+    for (const el of candidates) {
+      if (el.children.length === 0 && el.textContent?.trim() === labelText) {
+        let container = el.parentElement;
+        for (let i = 0; i < 3 && container; i++) {
+          const valueEl = container.querySelector(valueSelector);
+          if (valueEl) return valueEl;
+          container = container.parentElement;
+        }
+      }
+    }
+    return null;
   }
 
-  // NOT yet confirmed — same gap as findExpiryTrigger, but for the Amount
-  // dropdown (".amount-list-modal"). Also still missing: how a typed
-  // digit actually lands in ".amount-field" — Pocket Option uses a custom
-  // on-screen keypad (".virtual-keyboard__input", one div per digit) for
-  // this, not a plain fillable <input>, so setting a value directly like
-  // findExpiryOption below won't work here even once the trigger is known.
-  function findAmountTrigger() {
-    return firstMatch([".amount-trigger", "[data-testid='trade-amount']"]);
+  function findExpiryTrigger() {
+    return findRowValue("Time", ".value__val");
+  }
+
+  // The main-panel Amount box is a real <input>, not just a display div —
+  // worth trying to set its value directly (focus + set .value + dispatch
+  // "input") before assuming the on-screen keypad inside the dropdown
+  // modal is required. Not yet confirmed whether Pocket Option's Vue app
+  // actually reacts to a programmatic value change here; that's the next
+  // thing to verify live.
+  function findAmountInput() {
+    return findRowValue("Amount", "input[type='text']");
   }
 
   function findPairSearch() {
@@ -134,15 +156,29 @@
     if (!expiryOption) return { ok: false, reason: `No ${expiresInMinutes}-minute expiry preset available` };
     await humanClick(expiryOption);
 
-    const amountTrigger = findAmountTrigger();
-    if (!amountTrigger) return { ok: false, reason: "Amount dropdown trigger not found (selectors.js needs updating for this site)" };
-    await humanClick(amountTrigger);
+    const amountEl = findAmountInput();
+    if (!amountEl) return { ok: false, reason: "Amount input not found (selectors.js needs updating for this site)" };
+    amountEl.focus();
+    amountEl.value = String(stake);
+    amountEl.dispatchEvent(new Event("input", { bubbles: true }));
+    amountEl.dispatchEvent(new Event("change", { bubbles: true }));
+    amountEl.blur();
+    // TODO Phase 2, verify live: if Pocket Option's Vue app doesn't pick
+    // up this programmatic value change, fall back to clicking the
+    // on-screen keypad digits (.virtual-keyboard__input, inside the
+    // ".amount-list-modal" opened by clicking this same input) instead.
+    await new Promise((r) => setTimeout(r, 300));
+    if (amountEl.value.replace(/,/g, "") !== String(stake)) {
+      return { ok: false, reason: `Amount field shows "${amountEl.value}" instead of ${stake} — direct value-set didn't take, needs the on-screen keypad fallback` };
+    }
 
-    // TODO Phase 2: Pocket Option's amount field is a custom on-screen
-    // keypad (.virtual-keyboard__input digits), not a fillable <input> —
-    // clicking Buy/Sell is deliberately left unimplemented until digit
-    // entry works, so a real trade is never placed with the wrong stake.
-    return { ok: false, reason: "Amount entry not yet implemented (custom keypad UI — see selectors.js TODO)" };
+    const targetButton = signal === "buy" ? findBuyButton() : findSellButton();
+    if (!targetButton) return { ok: false, reason: `${signal === "buy" ? "Buy" : "Sell"} button not found` };
+
+    const clicked = await humanClick(targetButton);
+    if (!clicked) return { ok: false, reason: "Click dispatch failed" };
+
+    return { ok: true };
   }
 
   // Attempts to read the outcome of the most recent trade. Returns
@@ -156,7 +192,7 @@
     isDemoMode,
     findExpiryOption,
     findExpiryTrigger,
-    findAmountTrigger,
+    findAmountInput,
     findPairSearch,
     findBuyButton,
     findSellButton,
