@@ -1,7 +1,14 @@
 const Groq = require("groq-sdk");
 const ragService = require("./ragService");
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+// Constructed lazily (not at module load) so the server doesn't crash on
+// startup if GROQ_API_KEY isn't set — it only throws when a request that
+// actually needs the AI is made, which callers already wrap in try/catch.
+let _groq = null;
+function getGroqClient() {
+  if (!_groq) _groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+  return _groq;
+}
 
 const cache = new Map();
 const CACHE_DURATION = 2 * 60 * 60 * 1000;
@@ -21,7 +28,7 @@ const setCache = (key, data) => {
 };
 
 const askGroq = async (prompt) => {
-  const completion = await groq.chat.completions.create({
+  const completion = await getGroqClient().chat.completions.create({
     messages: [{ role: "user", content: prompt }],
     model: "llama-3.3-70b-versatile",
     temperature: 0.3,
@@ -33,7 +40,7 @@ const askGroq = async (prompt) => {
 // Yields text deltas as they arrive from Groq instead of waiting for the
 // full completion — lets the chat UI render the answer as it's written.
 async function* askGroqStream(prompt) {
-  const stream = await groq.chat.completions.create({
+  const stream = await getGroqClient().chat.completions.create({
     messages: [{ role: "user", content: prompt }],
     model: "llama-3.3-70b-versatile",
     temperature: 0.3,
@@ -272,6 +279,48 @@ Respond ONLY in JSON with no markdown:
       entry: currentPrice, stopLoss: 0, takeProfit: 0,
       source, sourceLabel, warnings: [],
     };
+  }
+};
+
+// Quick Trade signal — short-duration up/down call for binary-style
+// platforms (Pocket Option, Expert Option). No entry/SL/TP: the trader
+// executes on the platform themselves, so all that matters is direction,
+// confidence, and a suggested expiry window.
+exports.analyzeQuickSignal = async (pair, currentPrice, historicalPrices, newsArticles = []) => {
+  const cacheKey = `quick_${pair}_${Math.floor(Date.now() / (5 * 60 * 1000))}`;
+  const cached = getCached(cacheKey);
+  if (cached) return cached;
+
+  const recentCandles = historicalPrices
+    ? historicalPrices.slice(0, 10).map((p) => ({
+        time: p.datetime, open: p.open, high: p.high, low: p.low, close: p.close,
+      }))
+    : [];
+
+  const newsContext = newsArticles && newsArticles.length > 0
+    ? `\nRecent news: ${newsArticles.slice(0, 3).map((a) => `- ${a.title}`).join("\n")}`
+    : "";
+
+  const prompt = `You are TradeMind AI, expert short-term market analyst. Predict the next short-term price direction for ${pair} for a quick up/down (binary-style) trade.
+
+Current ${pair} price: ${currentPrice}
+Recent candles (1H): ${JSON.stringify(recentCandles)}${newsContext}
+
+Respond ONLY in JSON with no markdown:
+{
+  "direction": "buy|sell|wait",
+  "confidence": 0,
+  "reasoning": "",
+  "expiresInMinutes": 5
+}`;
+
+  const text = await askGroq(prompt);
+  try {
+    const result = JSON.parse(text.replace(/```json|```/g, "").trim());
+    setCache(cacheKey, result);
+    return result;
+  } catch {
+    return { direction: "wait", confidence: 0, reasoning: text, expiresInMinutes: 5 };
   }
 };
 

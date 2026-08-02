@@ -1,14 +1,16 @@
 const Trade = require("../models/Trade");
 const ragService = require("../services/ragService");
+const { checkAndUpdateSession } = require("../utils/sessionLimits");
 
 // GET all trades
 exports.getTrades = async (req, res) => {
   try {
-    const { status, outcome, pair, limit = 20, page = 1 } = req.query;
+    const { status, outcome, pair, tradingSessionId, limit = 20, page = 1 } = req.query;
     const filter = { user: req.user._id };
     if (status) filter.status = status;
     if (outcome) filter.outcome = outcome;
     if (pair) filter.pair = pair.toUpperCase();
+    if (tradingSessionId) filter.tradingSessionId = tradingSessionId;
 
     const trades = await Trade.find(filter)
       .sort({ openedAt: -1 })
@@ -54,6 +56,13 @@ exports.createTrade = async (req, res) => {
     ragService.indexTrade(req.user._id, trade).catch((err) =>
       console.error("RAG index trade failed:", err.message)
     );
+    // Quick Trade results are created already-closed (win/loss reported in
+    // one tap), so a session's progress can move on create, not just update.
+    if (trade.tradingSessionId) {
+      checkAndUpdateSession(trade.tradingSessionId).catch((err) =>
+        console.error("Session limit check failed:", err.message)
+      );
+    }
     res.status(201).json(trade);
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -82,6 +91,11 @@ exports.updateTrade = async (req, res) => {
     ragService.indexTrade(req.user._id, trade).catch((err) =>
       console.error("RAG index trade failed:", err.message)
     );
+    if (trade.tradingSessionId) {
+      checkAndUpdateSession(trade.tradingSessionId).catch((err) =>
+        console.error("Session limit check failed:", err.message)
+      );
+    }
     res.json(trade);
   } catch (err) {
     res.status(400).json({ message: err.message });

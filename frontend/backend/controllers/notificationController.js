@@ -1,5 +1,6 @@
 const Notification = require("../models/Notification");
 const Trade = require("../models/Trade");
+const TradingSession = require("../models/TradingSession");
 const marketService = require("../services/marketService");
 const newsService = require("../services/newsService");
 const claudeAI = require("../services/claudeAI");
@@ -9,9 +10,84 @@ const ragService = require("../services/ragService");
 const CRYPTO_PAIRS = ["BTCUSD", "ETHUSD", "XRPUSD"];
 // Forex zitatumika kama zinapatikana tu
 const FOREX_PAIRS = ["EURUSD", "GBPUSD", "XAUUSD"];
+const LIMIT_STOPPED_STATUSES = ["stopped_profit", "stopped_risk", "stopped_trades"];
+
+// Quick Trade signals — direction + confidence only, no entry/SL/TP, since
+// the trader executes on Pocket Option/Expert Option themselves. Mirrors
+// the forex loop below but calls analyzeQuickSignal instead.
+async function generateQuickTradeSignals(userId, session) {
+  const prices = await marketService.getAllPrices();
+  const candidatePairs = session.pairs?.length ? session.pairs : [...CRYPTO_PAIRS, ...FOREX_PAIRS];
+  const availablePairs = candidatePairs.filter((p) => prices[p]).slice(0, 2);
+
+  let created = 0;
+  for (const pair of availablePairs) {
+    try {
+      const currentPrice = prices[pair];
+      const formattedPair = pair.slice(0, 3) + "/" + pair.slice(3);
+
+      let historical = [];
+      try {
+        historical = await marketService.getHistoricalData(formattedPair, "1h", 10);
+      } catch (err) {
+        console.error(`Historical data failed for ${pair}:`, err.message);
+      }
+
+      const analysis = await claudeAI.analyzeQuickSignal(formattedPair, currentPrice, historical);
+
+      if (analysis.direction && analysis.direction !== "wait") {
+        const existingRecent = await Notification.findOne({
+          user: userId,
+          pair,
+          type: "quick_trade",
+          createdAt: { $gte: new Date(Date.now() - 10 * 60 * 1000) },
+        });
+
+        if (!existingRecent) {
+          await Notification.create({
+            user: userId,
+            pair,
+            signal: analysis.direction,
+            reasoning: analysis.reasoning || "AI generated quick trade signal",
+            confidence: analysis.confidence || 60,
+            source: "ai_auto",
+            sourceLabel: "Quick Trade Signal",
+            type: "quick_trade",
+            expiresInMinutes: analysis.expiresInMinutes || 5,
+            tradingSessionId: session._id,
+            read: false,
+          });
+          created++;
+        }
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    } catch (err) {
+      console.error(`Error analyzing quick trade ${pair}:`, err.message);
+    }
+  }
+  return created;
+}
 
 exports.autoGenerate = async (userId) => {
   try {
+    // A session (either mode) manages this user's signal budget once
+    // they've opted into one. If their most recent session hit a limit,
+    // stop suggesting new trades until they start a fresh session — users
+    // who've never used sessions are completely unaffected.
+    const latestSession = await TradingSession.findOne({ user: userId }).sort({ createdAt: -1 });
+    if (latestSession && LIMIT_STOPPED_STATUSES.includes(latestSession.status)) {
+      console.log(`⏸ Skipping signal generation for ${userId} — session limit reached`);
+      return 0;
+    }
+
+    const activeSession = latestSession?.status === "active" ? latestSession : null;
+    if (activeSession?.mode === "quick_trade") {
+      const created = await generateQuickTradeSignals(userId, activeSession);
+      console.log(`✅ Generated ${created} quick trade notifications for user ${userId}`);
+      return created;
+    }
+
     const [pastTrades, prices] = await Promise.all([
       Trade.find({ user: userId }).sort({ openedAt: -1 }).limit(50),
       marketService.getAllPrices(),

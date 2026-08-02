@@ -20,6 +20,16 @@ const notificationSchema = new mongoose.Schema({
   },
   sourceLabel: { type: String },
   read: { type: Boolean, default: false },
+  type: {
+    type: String,
+    enum: ["forex", "quick_trade"],
+    default: "forex",
+  },
+  expiresInMinutes: { type: Number },
+  tradingSessionId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "TradingSession",
+  },
 }, { timestamps: true });
 
 module.exports = mongoose.model("Notification", notificationSchema);

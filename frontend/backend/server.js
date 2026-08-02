@@ -38,6 +38,7 @@ app.use("/api/market", require("./routes/marketRoutes"));
 app.use("/api/notifications", require("./routes/notificationRoutes"));
 app.use("/api/mt5", require("./routes/mt5Routes"));
 app.use("/api/mt5", require("./routes/mt5PublicRoutes"));
+app.use("/api/sessions", require("./routes/sessionRoutes"));
 
 app.get("/api/health", (req, res) =>
   res.json({ status: "ok", app: "TradeMind AI" })

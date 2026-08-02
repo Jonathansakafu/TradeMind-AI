@@ -4,9 +4,11 @@ import axios from "axios";
 import MainLayout from "../layouts/MainLayout";
 import {
   Bell, RefreshCw, BookOpen, Brain,
-  History, X, CheckCheck, PlusCircle, Zap
+  History, X, CheckCheck, PlusCircle, Zap,
+  TrendingUp, TrendingDown, Clock,
 } from "lucide-react";
 import { API_URL } from "../config/api";
+import SessionBanner from "../components/SessionBanner";
 
 const SOURCE_ICONS = {
   past_trades: <History size={14} className="text-blue-400" />,
@@ -28,6 +30,8 @@ function Notifications() {
   const [generating, setGenerating] = useState(false);
   const [filter, setFilter] = useState("all");
   const [sendingId, setSendingId] = useState(null);
+  const [reportingId, setReportingId] = useState(null);
+  const [activeSession, setActiveSession] = useState(null);
   const token = localStorage.getItem("token");
   const headers = { Authorization: `Bearer ${token}` };
 
@@ -47,7 +51,19 @@ function Notifications() {
     }
   };
 
-  useEffect(() => { fetchNotifications(); }, []);
+  const fetchActiveSession = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/api/sessions/active`, { headers });
+      setActiveSession(res.data.session);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  useEffect(() => {
+    fetchNotifications();
+    fetchActiveSession();
+  }, []);
 
   const generateAlerts = async () => {
     setGenerating(true);
@@ -153,6 +169,40 @@ function Notifications() {
     }
   };
 
+  // Won/Lost is a single tap — P&L is computed from the session's stake +
+  // payout % (set once at session start) rather than typed in each time.
+  const reportQuickTradeResult = async (notification, outcome) => {
+    if (!activeSession || activeSession.mode !== "quick_trade") return;
+    setReportingId(notification._id);
+    try {
+      const profitLoss = outcome === "win"
+        ? activeSession.stake * (activeSession.payoutPercent / 100)
+        : -activeSession.stake;
+
+      await axios.post(
+        `${API_URL}/api/trades`,
+        {
+          pair: notification.pair,
+          direction: notification.signal,
+          type: "quick_trade",
+          tradingSessionId: activeSession._id,
+          entryPrice: notification.entry || 0,
+          outcome,
+          profitLoss,
+          status: "closed",
+          closedAt: new Date().toISOString(),
+        },
+        { headers }
+      );
+      await markAsRead(notification._id);
+      await fetchActiveSession();
+    } catch {
+      alert("Failed to log trade result");
+    } finally {
+      setReportingId(null);
+    }
+  };
+
   const filtered = notifications.filter((n) => {
     if (filter === "unread") return !n.read;
     if (filter === "buy") return n.signal === "buy";
@@ -194,6 +244,8 @@ function Notifications() {
           </button>
         </div>
       </div>
+
+      <SessionBanner className="mb-6" />
 
       {/* Filters */}
       <div className="flex gap-2 mb-6 flex-wrap">
@@ -286,27 +338,44 @@ function Notifications() {
                 </div>
               </div>
 
-              {/* Entry SL TP */}
-              <div className="grid grid-cols-3 gap-3 mb-4">
-                <div className="bg-slate-100 dark:bg-slate-800 rounded-xl p-3 text-center">
-                  <p className="text-xs text-slate-400 dark:text-slate-500 mb-1">Entry</p>
-                  <p className="font-mono font-bold text-slate-900 dark:text-white text-sm">
-                    {n.entry || "—"}
+              {/* Entry SL TP (forex) / Direction + expiry (Quick Trade) */}
+              {n.type === "quick_trade" ? (
+                <div className="flex items-center gap-3 mb-4 bg-slate-100 dark:bg-slate-800 rounded-xl p-3">
+                  {n.signal === "buy"
+                    ? <TrendingUp size={18} className="text-green-500 flex-shrink-0" />
+                    : <TrendingDown size={18} className="text-red-500 flex-shrink-0" />
+                  }
+                  <p className="text-sm text-slate-700 dark:text-slate-300 flex-1">
+                    Predicted <span className="font-bold">{n.signal === "buy" ? "UP" : "DOWN"}</span> — place this trade on your platform now
                   </p>
+                  {n.expiresInMinutes && (
+                    <span className="flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500 flex-shrink-0">
+                      <Clock size={12} /> {n.expiresInMinutes}m
+                    </span>
+                  )}
                 </div>
-                <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-center">
-                  <p className="text-xs text-slate-400 dark:text-slate-500 mb-1">Stop Loss</p>
-                  <p className="font-mono font-bold text-red-400 text-sm">
-                    {n.stopLoss || "—"}
-                  </p>
+              ) : (
+                <div className="grid grid-cols-3 gap-3 mb-4">
+                  <div className="bg-slate-100 dark:bg-slate-800 rounded-xl p-3 text-center">
+                    <p className="text-xs text-slate-400 dark:text-slate-500 mb-1">Entry</p>
+                    <p className="font-mono font-bold text-slate-900 dark:text-white text-sm">
+                      {n.entry || "—"}
+                    </p>
+                  </div>
+                  <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-center">
+                    <p className="text-xs text-slate-400 dark:text-slate-500 mb-1">Stop Loss</p>
+                    <p className="font-mono font-bold text-red-400 text-sm">
+                      {n.stopLoss || "—"}
+                    </p>
+                  </div>
+                  <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-3 text-center">
+                    <p className="text-xs text-slate-400 dark:text-slate-500 mb-1">Take Profit</p>
+                    <p className="font-mono font-bold text-green-400 text-sm">
+                      {n.takeProfit || "—"}
+                    </p>
+                  </div>
                 </div>
-                <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-3 text-center">
-                  <p className="text-xs text-slate-400 dark:text-slate-500 mb-1">Take Profit</p>
-                  <p className="font-mono font-bold text-green-400 text-sm">
-                    {n.takeProfit || "—"}
-                  </p>
-                </div>
-              </div>
+              )}
 
               {/* Reasoning */}
               <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed mb-4 bg-slate-100/70 dark:bg-slate-800/50 rounded-xl p-3 line-clamp-3">
@@ -330,24 +399,47 @@ function Notifications() {
                       <CheckCheck size={12} /> Read
                     </button>
                   )}
-                  {n.signal !== "wait" && (
-                    <button
-                      onClick={() => sendSignalToMT5(n)}
-                      disabled={sendingId === n._id}
-                      className="flex items-center gap-1.5 text-xs bg-yellow-500/10 border border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/20 disabled:opacity-50 px-3 py-1.5 rounded-lg transition font-semibold"
-                    >
-                      <Zap size={12} className={sendingId === n._id ? "animate-pulse" : ""} />
-                      {sendingId === n._id ? "Sending..." : "MT5"}
-                    </button>
-                  )}
-                  {n.signal !== "wait" && (
-                    <button
-                      onClick={() => addTradeFromSignal(n)}
-                      className="flex items-center gap-1.5 text-xs bg-green-500/10 border border-green-500/30 text-green-400 hover:bg-green-500/20 px-3 py-1.5 rounded-lg transition font-semibold"
-                    >
-                      <PlusCircle size={12} />
-                      Add Trade
-                    </button>
+                  {n.type === "quick_trade" ? (
+                    <>
+                      <button
+                        onClick={() => reportQuickTradeResult(n, "win")}
+                        disabled={reportingId === n._id || !activeSession}
+                        className="flex items-center gap-1.5 text-xs bg-green-500/10 border border-green-500/30 text-green-400 hover:bg-green-500/20 disabled:opacity-50 px-3 py-1.5 rounded-lg transition font-semibold"
+                      >
+                        <CheckCheck size={12} />
+                        {reportingId === n._id ? "Logging..." : "Won"}
+                      </button>
+                      <button
+                        onClick={() => reportQuickTradeResult(n, "loss")}
+                        disabled={reportingId === n._id || !activeSession}
+                        className="flex items-center gap-1.5 text-xs bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 disabled:opacity-50 px-3 py-1.5 rounded-lg transition font-semibold"
+                      >
+                        <X size={12} />
+                        {reportingId === n._id ? "Logging..." : "Lost"}
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      {n.signal !== "wait" && (
+                        <button
+                          onClick={() => sendSignalToMT5(n)}
+                          disabled={sendingId === n._id}
+                          className="flex items-center gap-1.5 text-xs bg-yellow-500/10 border border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/20 disabled:opacity-50 px-3 py-1.5 rounded-lg transition font-semibold"
+                        >
+                          <Zap size={12} className={sendingId === n._id ? "animate-pulse" : ""} />
+                          {sendingId === n._id ? "Sending..." : "MT5"}
+                        </button>
+                      )}
+                      {n.signal !== "wait" && (
+                        <button
+                          onClick={() => addTradeFromSignal(n)}
+                          className="flex items-center gap-1.5 text-xs bg-green-500/10 border border-green-500/30 text-green-400 hover:bg-green-500/20 px-3 py-1.5 rounded-lg transition font-semibold"
+                        >
+                          <PlusCircle size={12} />
+                          Add Trade
+                        </button>
+                      )}
+                    </>
                   )}
                 </div>
               </div>

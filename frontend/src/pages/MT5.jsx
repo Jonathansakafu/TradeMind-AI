@@ -10,6 +10,7 @@ import {
 import { Clipboard } from "@capacitor/clipboard";
 import { API_URL } from "../config/api";
 import BrokerModal from "../components/BrokerModal";
+import SessionBanner from "../components/SessionBanner";
 import { downloadFile } from "../utils/nativeDownload";
 
 function MT5() {
@@ -217,6 +218,8 @@ void OnDeinit(const int reason) {
 
   return (
     <MainLayout>
+
+      <SessionBanner className="mb-6" />
 
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 mb-8">

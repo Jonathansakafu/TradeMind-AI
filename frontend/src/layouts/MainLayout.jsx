@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, PlusCircle, History,
   BarChart2, LineChart, Settings, LogOut,
-  Zap, Menu, X, Newspaper, Bell, Bot, Sparkles, BookOpen
+  Zap, Menu, X, Newspaper, Bell, Bot, Sparkles, BookOpen, Target
 } from "lucide-react";
 import NotificationBell from "../components/NotificationBell";
 import ChatWidget from "../components/ChatWidget";
@@ -17,6 +17,7 @@ const navItems = [
   { path: "/ask-ai", label: "Ask AI", icon: Sparkles },
   { path: "/live", label: "Live Analysis", icon: Zap },
   { path: "/mt5", label: "MT5 Auto Trade", icon: Bot },
+  { path: "/session", label: "Trading Robot", icon: Target },
   { path: "/news", label: "Forex News", icon: Newspaper },
   { path: "/notifications", label: "Notifications", icon: Bell },
   { path: "/charts", label: "Live Charts", icon: LineChart },

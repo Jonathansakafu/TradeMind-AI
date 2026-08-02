@@ -11,16 +11,29 @@ const tradeSchema = new mongoose.Schema({
     required: true, 
     uppercase: true 
   },
-  direction: { 
-    type: String, 
-    enum: ["buy", "sell"], 
-    required: true 
+  direction: {
+    type: String,
+    enum: ["buy", "sell"],
+    required: true
+  },
+  type: {
+    type: String,
+    enum: ["forex", "quick_trade"],
+    default: "forex",
+  },
+  tradingSessionId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "TradingSession",
   },
   entryPrice: { type: Number, required: true },
   exitPrice: { type: Number },
   stopLoss: { type: Number },
   takeProfit: { type: Number },
-  lotSize: { type: Number, required: true },
+  lotSize: {
+    type: Number,
+    required: function () { return this.type !== "quick_trade"; },
+    default: 0,
+  },
   session: { 
     type: String, 
     enum: ["london", "new_york", "tokyo", "sydney", "overlap"] 

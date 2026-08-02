@@ -9,6 +9,7 @@ import {
 import { API_URL } from "../config/api";
 import PriceTicker from "../components/PriceTicker";
 import BrokerModal from "../components/BrokerModal";
+import SessionBanner from "../components/SessionBanner";
 
 function Dashboard() {
   const navigate = useNavigate();
@@ -49,6 +50,8 @@ function Dashboard() {
 
   return (
     <MainLayout>
+
+      <SessionBanner className="mb-6" />
 
       {/* HEADER */}
       <div className="flex flex-wrap justify-between items-center mb-8 gap-4">

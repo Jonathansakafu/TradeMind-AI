@@ -1,4 +1,5 @@
 const MT5Signal = require("../models/MT5Signal");
+const TradingSession = require("../models/TradingSession");
 const crypto = require("crypto");
 
 // Send signal to MT5
@@ -12,6 +13,20 @@ exports.sendSignal = async (req, res) => {
 
     if (!pair || !action || !entry) {
       return res.status(400).json({ message: "pair, action, entry are required" });
+    }
+
+    // If this user's most recent MT5 session hit a profit/risk/trade-count
+    // limit, block further signals until they start a new session. A manual
+    // stop or "never used sessions" doesn't restrict ad-hoc signal sending.
+    const latestMt5Session = await TradingSession.findOne({
+      user: req.user._id,
+      mode: "mt5",
+    }).sort({ createdAt: -1 });
+    const limitStoppedStatuses = ["stopped_profit", "stopped_risk", "stopped_trades"];
+    if (latestMt5Session && limitStoppedStatuses.includes(latestMt5Session.status)) {
+      return res.status(403).json({
+        message: "Your trading session limit was reached — start a new session to keep sending signals",
+      });
     }
 
     // Generate unique token for MT5 verification
