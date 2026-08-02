@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
+import { Link } from "react-router-dom";
 import axios from "axios";
 import MainLayout from "../layouts/MainLayout";
 import {
   Bot, Target, ShieldAlert, Hash, Zap, LineChart,
-  CheckCircle, XCircle, StopCircle, TrendingUp, TrendingDown,
+  CheckCircle, XCircle, StopCircle, TrendingUp, TrendingDown, ShieldCheck,
 } from "lucide-react";
 import { API_URL } from "../config/api";
 
@@ -28,6 +29,7 @@ function TradingSession() {
   const [starting, setStarting] = useState(false);
   const [stopping, setStopping] = useState(false);
   const [error, setError] = useState(null);
+  const [errorCode, setErrorCode] = useState(null);
 
   const [mode, setMode] = useState("mt5");
   const [profitTarget, setProfitTarget] = useState("50");
@@ -36,6 +38,8 @@ function TradingSession() {
   const [selectedPairs, setSelectedPairs] = useState([]);
   const [stake, setStake] = useState("10");
   const [payoutPercent, setPayoutPercent] = useState("85");
+  const [accountType, setAccountType] = useState("demo");
+  const [accountReady, setAccountReady] = useState(false);
 
   const togglePair = (pair) => {
     setSelectedPairs((prev) =>
@@ -71,12 +75,17 @@ function TradingSession() {
 
   const startSession = async () => {
     setError(null);
+    setErrorCode(null);
     if (!profitTarget || !riskLimit || !maxTrades) {
       setError("Please fill in profit target, risk limit, and max trades");
       return;
     }
     if (mode === "quick_trade" && (!stake || !payoutPercent)) {
       setError("Please fill in stake and payout % for Quick Trade sessions");
+      return;
+    }
+    if (mode === "quick_trade" && !accountReady) {
+      setError("Please confirm your Pocket Option/Expert Option account is ready");
       return;
     }
     setStarting(true);
@@ -89,6 +98,8 @@ function TradingSession() {
           riskLimit: Number(riskLimit),
           maxTrades: Number(maxTrades),
           pairs: selectedPairs,
+          accountType,
+          accountReady,
           stake: mode === "quick_trade" ? Number(stake) : undefined,
           payoutPercent: mode === "quick_trade" ? Number(payoutPercent) : undefined,
         },
@@ -97,6 +108,7 @@ function TradingSession() {
       await fetchActiveSession();
     } catch (err) {
       setError(err.response?.data?.message || "Failed to start session");
+      setErrorCode(err.response?.data?.code || null);
     } finally {
       setStarting(false);
     }
@@ -178,6 +190,50 @@ function TradingSession() {
                 <p className="text-xs mt-1 opacity-80">AI signals for Pocket Option/Expert Option — you tap Won/Lost</p>
               </button>
             </div>
+          </div>
+
+          {/* Account */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6">
+            <h3 className="font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+              <ShieldCheck size={18} /> Account
+            </h3>
+            <div className="flex items-center bg-slate-100 dark:bg-slate-950/50 rounded-xl p-1 mb-4">
+              <button
+                onClick={() => setAccountType("demo")}
+                className={`flex-1 px-4 py-2 rounded-lg text-sm font-semibold transition ${
+                  accountType === "demo" ? "bg-green-500 text-slate-950" : "text-slate-500 dark:text-slate-400"
+                }`}
+              >
+                Demo
+              </button>
+              <button
+                onClick={() => setAccountType("real")}
+                className={`flex-1 px-4 py-2 rounded-lg text-sm font-semibold transition ${
+                  accountType === "real" ? "bg-red-500 text-white" : "text-slate-500 dark:text-slate-400"
+                }`}
+              >
+                Real
+              </button>
+            </div>
+
+            {mode === "quick_trade" ? (
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={accountReady}
+                  onChange={(e) => setAccountReady(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 accent-green-500 flex-shrink-0"
+                />
+                <span className="text-sm text-slate-600 dark:text-slate-300">
+                  I have a Pocket Option or Expert Option account open and ready to trade
+                </span>
+              </label>
+            ) : (
+              <p className="text-xs text-slate-400 dark:text-slate-500">
+                Requires your MT5 EA to have connected at least once — set it up on the{" "}
+                <Link to="/mt5" className="text-green-600 dark:text-green-400 hover:underline">MT5 page</Link> first if you haven't.
+              </p>
+            )}
           </div>
 
           {/* Goal */}
@@ -270,6 +326,12 @@ function TradingSession() {
           {error && (
             <div className="bg-red-500/10 text-red-400 border border-red-500/20 rounded-xl p-3 text-sm">
               {error}
+              {errorCode === "mt5_not_connected" && (
+                <>
+                  {" "}
+                  <Link to="/mt5" className="underline font-semibold">Go to MT5 setup →</Link>
+                </>
+              )}
             </div>
           )}
 

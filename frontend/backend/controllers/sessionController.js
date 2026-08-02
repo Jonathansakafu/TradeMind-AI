@@ -1,10 +1,14 @@
 const TradingSession = require("../models/TradingSession");
+const MT5Signal = require("../models/MT5Signal");
 const { getSessionProgress } = require("../utils/sessionLimits");
 
 // START SESSION
 const startSession = async (req, res) => {
   try {
-    const { mode, profitTarget, riskLimit, maxTrades, pairs, stake, payoutPercent } = req.body;
+    const {
+      mode, profitTarget, riskLimit, maxTrades, pairs,
+      stake, payoutPercent, accountType, accountReady,
+    } = req.body;
 
     if (!mode || !profitTarget || !riskLimit || !maxTrades) {
       return res.status(400).json({
@@ -16,6 +20,28 @@ const startSession = async (req, res) => {
       return res.status(400).json({
         message: "stake and payoutPercent are required for Quick Trade sessions",
       });
+    }
+
+    // Gate: this can't be a real broker-account connection (Pocket
+    // Option/Expert Option have no third-party trade-execution API), so
+    // Quick Trade requires the trader to confirm they're actually ready.
+    if (mode === "quick_trade" && !accountReady) {
+      return res.status(400).json({
+        message: "Please confirm you have a Pocket Option or Expert Option account open and ready to trade",
+      });
+    }
+
+    // Gate: for MT5, we CAN check something real — has this user's EA ever
+    // successfully reached the backend at all. If not, sending signals
+    // would just go nowhere, so send them to finish the MT5 setup guide first.
+    if (mode === "mt5") {
+      const everConnected = await MT5Signal.findOne({ user: req.user._id });
+      if (!everConnected) {
+        return res.status(400).json({
+          message: "Your MT5 EA hasn't connected yet — finish the setup guide first",
+          code: "mt5_not_connected",
+        });
+      }
     }
 
     const existing = await TradingSession.findOne({ user: req.user._id, status: "active" });
@@ -32,6 +58,7 @@ const startSession = async (req, res) => {
       riskLimit,
       maxTrades,
       pairs: pairs || [],
+      accountType: accountType === "real" ? "real" : "demo",
       stake: mode === "quick_trade" ? stake : undefined,
       payoutPercent: mode === "quick_trade" ? payoutPercent : undefined,
     });

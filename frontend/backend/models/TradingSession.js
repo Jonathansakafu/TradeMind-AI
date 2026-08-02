@@ -34,6 +34,12 @@ const tradingSessionSchema = new mongoose.Schema(
       default: [],
     },
 
+    accountType: {
+      type: String,
+      enum: ["demo", "real"],
+      default: "demo",
+    },
+
     // Quick Trade only — lets Won/Lost be a single tap instead of asking
     // for the exact amount every time.
     stake: {
