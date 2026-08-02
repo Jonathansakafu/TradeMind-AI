@@ -12,19 +12,33 @@ const CRYPTO_PAIRS = ["BTCUSD", "ETHUSD", "XRPUSD"];
 const FOREX_PAIRS = ["EURUSD", "GBPUSD", "XAUUSD"];
 const LIMIT_STOPPED_STATUSES = ["stopped_profit", "stopped_risk", "stopped_trades"];
 
+// Pocket Option/Expert Option OTC instruments (e.g. "EUR/USD OTC") are
+// broker-generated synthetic prices with no independent public data feed —
+// there's no third-party API for them. We look up quotes using the
+// underlying real pair as the closest honest proxy, while keeping the OTC
+// label for display so it matches what the trader sees in their broker app.
+function toMarketSymbol(pair) {
+  const base = pair.replace(/\s*OTC$/i, "").trim();
+  if (/^gold$/i.test(base)) return "XAUUSD";
+  return base.replace(/\//g, "").toUpperCase();
+}
+
 // Quick Trade signals — direction + confidence only, no entry/SL/TP, since
 // the trader executes on Pocket Option/Expert Option themselves. Mirrors
 // the forex loop below but calls analyzeQuickSignal instead.
 async function generateQuickTradeSignals(userId, session) {
   const prices = await marketService.getAllPrices();
   const candidatePairs = session.pairs?.length ? session.pairs : [...CRYPTO_PAIRS, ...FOREX_PAIRS];
-  const availablePairs = candidatePairs.filter((p) => prices[p]).slice(0, 2);
+  const availablePairs = candidatePairs.filter((p) => prices[toMarketSymbol(p)]).slice(0, 2);
 
   let created = 0;
   for (const pair of availablePairs) {
     try {
-      const currentPrice = prices[pair];
-      const formattedPair = pair.slice(0, 3) + "/" + pair.slice(3);
+      const marketSymbol = toMarketSymbol(pair);
+      const currentPrice = prices[marketSymbol];
+      const formattedPair = pair.includes("/")
+        ? pair.replace(/\s*OTC$/i, "").trim()
+        : marketSymbol.slice(0, 3) + "/" + marketSymbol.slice(3);
 
       let historical = [];
       try {
