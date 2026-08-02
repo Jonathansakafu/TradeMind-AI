@@ -1,0 +1,29 @@
+{
+  "title": "Mipangilio",
+  "subtitle": "Simamia akaunti yako",
+  "appearance": "Muonekano",
+  "language": "Lugha",
+  "profile": {
+    "title": "Wasifu",
+    "name": "Jina",
+    "email": "Barua Pepe",
+    "saveProfile": "Hifadhi Wasifu",
+    "updated": "Wasifu umesasishwa!",
+    "failed": "Imeshindikana"
+  },
+  "password": {
+    "title": "Badilisha Nenosiri",
+    "current": "Nenosiri la Sasa",
+    "new": "Nenosiri Jipya",
+    "confirm": "Thibitisha Nenosiri Jipya",
+    "update": "Sasisha Nenosiri",
+    "noMatch": "Manenosiri hayafanani",
+    "tooShort": "Nenosiri liwe na herufi 6 au zaidi",
+    "updated": "Nenosiri limebadilishwa!",
+    "failed": "Imeshindikana"
+  },
+  "account": {
+    "title": "Akaunti",
+    "logout": "Toka"
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "title": "Settings",
+  "subtitle": "Manage your account",
+  "appearance": "Appearance",
+  "language": "Language",
+  "profile": {
+    "title": "Profile",
+    "name": "Name",
+    "email": "Email",
+    "saveProfile": "Save Profile",
+    "updated": "Profile updated!",
+    "failed": "Failed"
+  },
+  "password": {
+    "title": "Change Password",
+    "current": "Current Password",
+    "new": "New Password",
+    "confirm": "Confirm New Password",
+    "update": "Update Password",
+    "noMatch": "Passwords do not match",
+    "tooShort": "Password must be at least 6 characters",
+    "updated": "Password updated!",
+    "failed": "Failed"
+  },
+  "account": {
+    "title": "Account",
+    "logout": "Logout"
+  }
+}

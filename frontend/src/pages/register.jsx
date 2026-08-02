@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import axios from "axios";
 import { API_URL } from "../config/api";
 
 function Register() {
-
+  const { t } = useTranslation(["auth", "common"]);
   const navigate = useNavigate();
 
   const [username, setUsername] =
@@ -25,12 +26,12 @@ function Register() {
   const handleRegister = async () => {
 
     if (!username || !email || !password) {
-      setMessage({ type: "error", text: "Please fill all fields" });
+      setMessage({ type: "error", text: t("login.fillAllFields", { ns: "auth" }) });
       return;
     }
 
     setLoading(true);
-    setMessage({ type: "info", text: "Creating account — first request after inactivity can take up to a minute..." });
+    setMessage({ type: "info", text: t("register.creatingAccount", { ns: "auth" }) });
 
     try {
 
@@ -55,7 +56,7 @@ function Register() {
         JSON.stringify(res.data.user)
       );
 
-      setMessage({ type: "success", text: "Account created successfully" });
+      setMessage({ type: "success", text: t("register.success", { ns: "auth" }) });
 
       navigate("/dashboard");
 
@@ -63,7 +64,7 @@ function Register() {
 
       setMessage({
         type: "error",
-        text: error.response?.data?.message || "Registration failed",
+        text: error.response?.data?.message || t("register.failed", { ns: "auth" }),
       });
 
     } finally {
@@ -77,18 +78,18 @@ function Register() {
       <div className="bg-white dark:bg-slate-900 p-10 rounded-2xl w-full max-w-md shadow-xl">
 
         <h1 className="text-4xl font-bold text-center text-green-600 dark:text-green-400 mb-8">
-          TradeMind AI
+          {t("appName", { ns: "common" })}
         </h1>
 
         <h2 className="text-2xl font-semibold mb-6 text-center">
-          Register
+          {t("register.title", { ns: "auth" })}
         </h2>
 
         <div className="space-y-4">
 
           <input
             type="text"
-            placeholder="Username"
+            placeholder={t("register.usernamePlaceholder", { ns: "auth" })}
             value={username}
             onChange={(e) =>
               setUsername(e.target.value)
@@ -98,7 +99,7 @@ function Register() {
 
           <input
             type="email"
-            placeholder="Email"
+            placeholder={t("fields.email", { ns: "common" })}
             value={email}
             onChange={(e) =>
               setEmail(e.target.value)
@@ -108,7 +109,7 @@ function Register() {
 
           <input
             type="password"
-            placeholder="Password"
+            placeholder={t("fields.password", { ns: "common" })}
             value={password}
             onChange={(e) =>
               setPassword(e.target.value)
@@ -137,7 +138,7 @@ function Register() {
           >
             {loading
               ? <div className="w-5 h-5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
-              : "Create Account"
+              : t("register.createAccount", { ns: "auth" })
             }
           </button>
 
@@ -145,13 +146,13 @@ function Register() {
 
         <p className="text-slate-500 dark:text-slate-400 mt-6 text-center">
 
-          Already have an account?{" "}
+          {t("register.haveAccount", { ns: "auth" })}{" "}
 
           <Link
             to="/login"
             className="text-green-600 dark:text-green-400"
           >
-            Login
+            {t("register.loginLink", { ns: "auth" })}
           </Link>
 
         </p>

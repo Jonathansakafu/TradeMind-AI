@@ -1,0 +1,28 @@
+{
+  "title": "Dashibodi ya Biashara",
+  "subtitle": "Simamia biashara zako za forex kwa AI",
+  "openMT5": "Fungua MT5",
+  "addTrade": "Ongeza Biashara",
+  "stats": {
+    "totalTrades": "Jumla ya Biashara",
+    "wins": "Ushindi",
+    "losses": "Hasara",
+    "winRate": "Kiwango cha Ushindi"
+  },
+  "totalPL": "Jumla ya Faida / Hasara",
+  "hidePL": "Ficha Faida/Hasara",
+  "showPL": "Onyesha Faida/Hasara",
+  "recentTrades": "Biashara za Hivi Karibuni",
+  "viewAll": "Ona zote →",
+  "noTradesYet": "Hakuna biashara bado",
+  "addFirstTrade": "Ongeza biashara yako ya kwanza →",
+  "table": {
+    "pair": "Jozi",
+    "direction": "Mwelekeo",
+    "entry": "Kiingilio",
+    "exit": "Kutoka",
+    "result": "Matokeo",
+    "pl": "Faida/Hasara",
+    "open": "WAZI"
+  }
+}

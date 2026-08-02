@@ -1,0 +1,58 @@
+{
+  "nav": {
+    "dashboard": "Dashboard",
+    "addTrade": "Add Trade",
+    "tradeHistory": "Trade History",
+    "aiAnalytics": "AI Analytics",
+    "askAI": "Ask AI",
+    "liveAnalysis": "Live Analysis",
+    "mt5AutoTrade": "MT5 Auto Trade",
+    "tradingRobot": "Trading Robot",
+    "forexNews": "Forex News",
+    "notifications": "Notifications",
+    "liveCharts": "Live Charts",
+    "userGuide": "User Guide",
+    "settings": "Settings",
+    "logout": "Logout",
+    "live": "LIVE",
+    "auto": "AUTO"
+  },
+  "buttons": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "login": "Login",
+    "register": "Register",
+    "logout": "Logout",
+    "confirm": "Confirm",
+    "delete": "Delete",
+    "edit": "Edit",
+    "close": "Close",
+    "search": "Search",
+    "refresh": "Refresh",
+    "generate": "Generate"
+  },
+  "fields": {
+    "email": "Email",
+    "password": "Password",
+    "name": "Name",
+    "confidence": "Confidence",
+    "reasoning": "Reasoning"
+  },
+  "errors": {
+    "somethingWrong": "Something went wrong"
+  },
+  "status": {
+    "loading": "Loading...",
+    "win": "Win",
+    "loss": "Loss",
+    "buy": "Buy",
+    "sell": "Sell",
+    "wait": "Wait",
+    "entry": "Entry",
+    "stopLoss": "Stop Loss",
+    "takeProfit": "Take Profit",
+    "demo": "Demo",
+    "real": "Real"
+  },
+  "appName": "TradeMind AI"
+}

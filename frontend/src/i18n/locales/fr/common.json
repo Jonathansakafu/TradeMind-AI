@@ -1,0 +1,58 @@
+{
+  "nav": {
+    "dashboard": "Tableau de bord",
+    "addTrade": "Ajouter une transaction",
+    "tradeHistory": "Historique des transactions",
+    "aiAnalytics": "Analyses IA",
+    "askAI": "Demander à l'IA",
+    "liveAnalysis": "Analyse en direct",
+    "mt5AutoTrade": "Trading automatique MT5",
+    "tradingRobot": "Robot de trading",
+    "forexNews": "Actualités Forex",
+    "notifications": "Notifications",
+    "liveCharts": "Graphiques en direct",
+    "userGuide": "Guide d'utilisation",
+    "settings": "Paramètres",
+    "logout": "Déconnexion",
+    "live": "LIVE",
+    "auto": "AUTO"
+  },
+  "buttons": {
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "login": "Connexion",
+    "register": "S'inscrire",
+    "logout": "Déconnexion",
+    "confirm": "Confirmer",
+    "delete": "Supprimer",
+    "edit": "Modifier",
+    "close": "Fermer",
+    "search": "Rechercher",
+    "refresh": "Actualiser",
+    "generate": "Générer"
+  },
+  "fields": {
+    "email": "E-mail",
+    "password": "Mot de passe",
+    "name": "Nom",
+    "confidence": "Confiance",
+    "reasoning": "Raisonnement"
+  },
+  "errors": {
+    "somethingWrong": "Une erreur s'est produite"
+  },
+  "status": {
+    "loading": "Chargement...",
+    "win": "Gain",
+    "loss": "Perte",
+    "buy": "Achat",
+    "sell": "Vente",
+    "wait": "Attendre",
+    "entry": "Entrée",
+    "stopLoss": "Stop Loss",
+    "takeProfit": "Take Profit",
+    "demo": "Démo",
+    "real": "Réel"
+  },
+  "appName": "TradeMind AI"
+}

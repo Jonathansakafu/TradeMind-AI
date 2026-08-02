@@ -1,0 +1,28 @@
+{
+  "title": "Tableau de bord de trading",
+  "subtitle": "Gérez vos transactions forex avec l'IA",
+  "openMT5": "Ouvrir MT5",
+  "addTrade": "Ajouter une transaction",
+  "stats": {
+    "totalTrades": "Transactions totales",
+    "wins": "Gains",
+    "losses": "Pertes",
+    "winRate": "Taux de réussite"
+  },
+  "totalPL": "Profit / Perte total",
+  "hidePL": "Masquer le P&L",
+  "showPL": "Afficher le P&L",
+  "recentTrades": "Transactions récentes",
+  "viewAll": "Voir tout →",
+  "noTradesYet": "Aucune transaction pour l'instant",
+  "addFirstTrade": "Ajoutez votre première transaction →",
+  "table": {
+    "pair": "Paire",
+    "direction": "Direction",
+    "entry": "Entrée",
+    "exit": "Sortie",
+    "result": "Résultat",
+    "pl": "P&L",
+    "open": "OUVERT"
+  }
+}

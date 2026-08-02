@@ -1,0 +1,28 @@
+{
+  "title": "Trading Dashboard",
+  "subtitle": "Manage your forex trades with AI",
+  "openMT5": "Open MT5",
+  "addTrade": "Add Trade",
+  "stats": {
+    "totalTrades": "Total Trades",
+    "wins": "Wins",
+    "losses": "Losses",
+    "winRate": "Win Rate"
+  },
+  "totalPL": "Total Profit / Loss",
+  "hidePL": "Hide P&L",
+  "showPL": "Show P&L",
+  "recentTrades": "Recent Trades",
+  "viewAll": "View all →",
+  "noTradesYet": "No trades yet",
+  "addFirstTrade": "Add your first trade →",
+  "table": {
+    "pair": "Pair",
+    "direction": "Direction",
+    "entry": "Entry",
+    "exit": "Exit",
+    "result": "Result",
+    "pl": "P&L",
+    "open": "OPEN"
+  }
+}

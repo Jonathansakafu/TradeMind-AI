@@ -1,0 +1,58 @@
+{
+  "nav": {
+    "dashboard": "Dashibodi",
+    "addTrade": "Ongeza Biashara",
+    "tradeHistory": "Historia ya Biashara",
+    "aiAnalytics": "Uchambuzi wa AI",
+    "askAI": "Uliza AI",
+    "liveAnalysis": "Uchambuzi wa Moja kwa Moja",
+    "mt5AutoTrade": "MT5 Biashara Kiotomatiki",
+    "tradingRobot": "Roboti ya Biashara",
+    "forexNews": "Habari za Forex",
+    "notifications": "Arifa",
+    "liveCharts": "Chati za Moja kwa Moja",
+    "userGuide": "Mwongozo wa Mtumiaji",
+    "settings": "Mipangilio",
+    "logout": "Toka",
+    "live": "LIVE",
+    "auto": "AUTO"
+  },
+  "buttons": {
+    "save": "Hifadhi",
+    "cancel": "Ghairi",
+    "login": "Ingia",
+    "register": "Jisajili",
+    "logout": "Toka",
+    "confirm": "Thibitisha",
+    "delete": "Futa",
+    "edit": "Hariri",
+    "close": "Funga",
+    "search": "Tafuta",
+    "refresh": "Onyesha Upya",
+    "generate": "Zalisha"
+  },
+  "fields": {
+    "email": "Barua Pepe",
+    "password": "Nenosiri",
+    "name": "Jina",
+    "confidence": "Uhakika",
+    "reasoning": "Sababu"
+  },
+  "errors": {
+    "somethingWrong": "Hitilafu imetokea"
+  },
+  "status": {
+    "loading": "Inapakia...",
+    "win": "Ushindi",
+    "loss": "Hasara",
+    "buy": "Nunua",
+    "sell": "Uza",
+    "wait": "Subiri",
+    "entry": "Kiingilio",
+    "stopLoss": "Zuia Hasara",
+    "takeProfit": "Chukua Faida",
+    "demo": "Jaribio",
+    "real": "Halisi"
+  },
+  "appName": "TradeMind AI"
+}

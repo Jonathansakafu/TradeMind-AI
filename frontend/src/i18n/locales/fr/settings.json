@@ -1,0 +1,29 @@
+{
+  "title": "Paramètres",
+  "subtitle": "Gérez votre compte",
+  "appearance": "Apparence",
+  "language": "Langue",
+  "profile": {
+    "title": "Profil",
+    "name": "Nom",
+    "email": "E-mail",
+    "saveProfile": "Enregistrer le profil",
+    "updated": "Profil mis à jour !",
+    "failed": "Échec"
+  },
+  "password": {
+    "title": "Changer le mot de passe",
+    "current": "Mot de passe actuel",
+    "new": "Nouveau mot de passe",
+    "confirm": "Confirmer le nouveau mot de passe",
+    "update": "Mettre à jour le mot de passe",
+    "noMatch": "Les mots de passe ne correspondent pas",
+    "tooShort": "Le mot de passe doit contenir au moins 6 caractères",
+    "updated": "Mot de passe mis à jour !",
+    "failed": "Échec"
+  },
+  "account": {
+    "title": "Compte",
+    "logout": "Déconnexion"
+  }
+}

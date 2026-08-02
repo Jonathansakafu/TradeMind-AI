@@ -1,0 +1,58 @@
+{
+  "nav": {
+    "dashboard": "لوحة التحكم",
+    "addTrade": "إضافة صفقة",
+    "tradeHistory": "سجل الصفقات",
+    "aiAnalytics": "تحليلات الذكاء الاصطناعي",
+    "askAI": "اسأل الذكاء الاصطناعي",
+    "liveAnalysis": "التحليل المباشر",
+    "mt5AutoTrade": "التداول الآلي MT5",
+    "tradingRobot": "روبوت التداول",
+    "forexNews": "أخبار الفوركس",
+    "notifications": "الإشعارات",
+    "liveCharts": "الرسوم البيانية المباشرة",
+    "userGuide": "دليل المستخدم",
+    "settings": "الإعدادات",
+    "logout": "تسجيل الخروج",
+    "live": "مباشر",
+    "auto": "آلي"
+  },
+  "buttons": {
+    "save": "حفظ",
+    "cancel": "إلغاء",
+    "login": "تسجيل الدخول",
+    "register": "التسجيل",
+    "logout": "تسجيل الخروج",
+    "confirm": "تأكيد",
+    "delete": "حذف",
+    "edit": "تعديل",
+    "close": "إغلاق",
+    "search": "بحث",
+    "refresh": "تحديث",
+    "generate": "إنشاء"
+  },
+  "fields": {
+    "email": "البريد الإلكتروني",
+    "password": "كلمة المرور",
+    "name": "الاسم",
+    "confidence": "الثقة",
+    "reasoning": "السبب"
+  },
+  "errors": {
+    "somethingWrong": "حدث خطأ ما"
+  },
+  "status": {
+    "loading": "جارٍ التحميل...",
+    "win": "ربح",
+    "loss": "خسارة",
+    "buy": "شراء",
+    "sell": "بيع",
+    "wait": "انتظار",
+    "entry": "الدخول",
+    "stopLoss": "وقف الخسارة",
+    "takeProfit": "جني الأرباح",
+    "demo": "تجريبي",
+    "real": "حقيقي"
+  },
+  "appName": "TradeMind AI"
+}

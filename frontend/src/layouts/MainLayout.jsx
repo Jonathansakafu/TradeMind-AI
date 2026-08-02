@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import {
   LayoutDashboard, PlusCircle, History,
   BarChart2, LineChart, Settings, LogOut,
@@ -10,28 +11,29 @@ import ChatWidget from "../components/ChatWidget";
 import ThemeToggle from "../components/ThemeToggle";
 
 const navItems = [
-  { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { path: "/add-trade", label: "Add Trade", icon: PlusCircle },
-  { path: "/history", label: "Trade History", icon: History },
-  { path: "/analytics", label: "AI Analytics", icon: BarChart2 },
-  { path: "/ask-ai", label: "Ask AI", icon: Sparkles },
-  { path: "/live", label: "Live Analysis", icon: Zap },
-  { path: "/mt5", label: "MT5 Auto Trade", icon: Bot },
-  { path: "/session", label: "Trading Robot", icon: Target },
-  { path: "/news", label: "Forex News", icon: Newspaper },
-  { path: "/notifications", label: "Notifications", icon: Bell },
-  { path: "/charts", label: "Live Charts", icon: LineChart },
-  { path: "/guide", label: "User Guide", icon: BookOpen },
-  { path: "/settings", label: "Settings", icon: Settings },
+  { path: "/dashboard", labelKey: "nav.dashboard", icon: LayoutDashboard },
+  { path: "/add-trade", labelKey: "nav.addTrade", icon: PlusCircle },
+  { path: "/history", labelKey: "nav.tradeHistory", icon: History },
+  { path: "/analytics", labelKey: "nav.aiAnalytics", icon: BarChart2 },
+  { path: "/ask-ai", labelKey: "nav.askAI", icon: Sparkles },
+  { path: "/live", labelKey: "nav.liveAnalysis", icon: Zap },
+  { path: "/mt5", labelKey: "nav.mt5AutoTrade", icon: Bot },
+  { path: "/session", labelKey: "nav.tradingRobot", icon: Target },
+  { path: "/news", labelKey: "nav.forexNews", icon: Newspaper },
+  { path: "/notifications", labelKey: "nav.notifications", icon: Bell },
+  { path: "/charts", labelKey: "nav.liveCharts", icon: LineChart },
+  { path: "/guide", labelKey: "nav.userGuide", icon: BookOpen },
+  { path: "/settings", labelKey: "nav.settings", icon: Settings },
 ];
 
 // Hoisted out of MainLayout so it isn't redefined (and its two instances
 // aren't recreated from scratch) on every MainLayout render.
 function SidebarContent({ pathname, onNavigate, onClose, user, onLogout }) {
+  const { t } = useTranslation();
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between mb-8 px-2">
-        <h1 className="text-xl font-bold text-green-500 dark:text-green-400">TradeMind AI</h1>
+        <h1 className="text-xl font-bold text-green-500 dark:text-green-400">{t("appName")}</h1>
         <button
           onClick={onClose}
           aria-label="Close menu"
@@ -42,7 +44,7 @@ function SidebarContent({ pathname, onNavigate, onClose, user, onLogout }) {
       </div>
 
       <nav className="flex flex-col gap-1 flex-1">
-        {navItems.map(({ path, label, icon: Icon }) => {
+        {navItems.map(({ path, labelKey, icon: Icon }) => {
           const isActive = pathname === path;
           return (
             <Link
@@ -56,15 +58,15 @@ function SidebarContent({ pathname, onNavigate, onClose, user, onLogout }) {
               }`}
             >
               <Icon size={18} />
-              {label}
+              {t(labelKey)}
               {path === "/live" && (
                 <span className="ml-auto text-xs bg-green-500 text-slate-950 px-1.5 py-0.5 rounded-md font-bold">
-                  LIVE
+                  {t("nav.live")}
                 </span>
               )}
               {path === "/mt5" && (
                 <span className="ml-auto text-xs bg-yellow-500 text-slate-950 px-1.5 py-0.5 rounded-md font-bold">
-                  AUTO
+                  {t("nav.auto")}
                 </span>
               )}
             </Link>
@@ -87,7 +89,7 @@ function SidebarContent({ pathname, onNavigate, onClose, user, onLogout }) {
           onClick={onLogout}
           className="flex items-center gap-3 w-full px-4 py-3 rounded-xl text-sm text-slate-500 dark:text-slate-400 hover:text-red-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
         >
-          <LogOut size={18} /> Logout
+          <LogOut size={18} /> {t("nav.logout")}
         </button>
       </div>
     </div>
@@ -95,6 +97,7 @@ function SidebarContent({ pathname, onNavigate, onClose, user, onLogout }) {
 }
 
 function MainLayout({ children }) {
+  const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -153,7 +156,7 @@ function MainLayout({ children }) {
           >
             <Menu size={22} />
           </button>
-          <h1 className="text-lg font-bold text-green-500 dark:text-green-400">TradeMind AI</h1>
+          <h1 className="text-lg font-bold text-green-500 dark:text-green-400">{t("appName")}</h1>
           <span className="w-[22px]" aria-hidden="true" />
         </div>
 

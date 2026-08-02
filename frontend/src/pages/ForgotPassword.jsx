@@ -1,16 +1,18 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import axios from "axios";
 import { API_URL } from "../config/api";
 
 function ForgotPassword() {
+  const { t } = useTranslation(["auth", "common"]);
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
 
   const handleSubmit = async () => {
     if (!email) {
-      setMessage({ type: "error", text: "Please enter your email" });
+      setMessage({ type: "error", text: t("forgotPassword.enterEmail", { ns: "auth" }) });
       return;
     }
     setLoading(true);
@@ -19,7 +21,7 @@ function ForgotPassword() {
       const res = await axios.post(`${API_URL}/api/auth/forgot-password`, { email });
       setMessage({ type: "success", text: res.data.message });
     } catch (error) {
-      setMessage({ type: "error", text: error.response?.data?.message || "Something went wrong" });
+      setMessage({ type: "error", text: error.response?.data?.message || t("errors.somethingWrong", { ns: "common" }) });
     } finally {
       setLoading(false);
     }
@@ -33,16 +35,16 @@ function ForgotPassword() {
     <div className="min-h-screen bg-white dark:bg-slate-950 flex items-center justify-center text-slate-900 dark:text-white px-4">
       <div className="bg-white dark:bg-slate-900 p-10 rounded-2xl w-full max-w-md shadow-xl">
         <h1 className="text-4xl font-bold text-center text-green-600 dark:text-green-400 mb-8">
-          TradeMind AI
+          {t("appName", { ns: "common" })}
         </h1>
-        <h2 className="text-2xl font-semibold mb-2 text-center">Forgot Password</h2>
+        <h2 className="text-2xl font-semibold mb-2 text-center">{t("forgotPassword.title", { ns: "auth" })}</h2>
         <p className="text-slate-500 dark:text-slate-400 text-sm text-center mb-6">
-          Enter your email and we'll send you a link to reset your password.
+          {t("forgotPassword.subtitle", { ns: "auth" })}
         </p>
         <div className="space-y-4">
           <input
             type="email"
-            placeholder="Email"
+            placeholder={t("fields.email", { ns: "common" })}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -67,14 +69,14 @@ function ForgotPassword() {
           >
             {loading
               ? <div className="w-5 h-5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
-              : "Send Reset Link"
+              : t("forgotPassword.sendLink", { ns: "auth" })
             }
           </button>
         </div>
         <p className="text-slate-500 dark:text-slate-400 mt-6 text-center">
-          Remembered your password?{" "}
+          {t("forgotPassword.rememberedPassword", { ns: "auth" })}{" "}
           <Link to="/login" className="text-green-600 dark:text-green-400 hover:underline">
-            Login
+            {t("login.title", { ns: "auth" })}
           </Link>
         </p>
       </div>
