@@ -105,5 +105,31 @@ async function pollCycle() {
   }
 }
 
-setInterval(pollCycle, POLL_INTERVAL_MS);
-pollCycle();
+// If the extension gets reloaded (e.g. after a fix ships) while this tab
+// is already open, this content script becomes orphaned — every chrome.*
+// call it makes (storage included, not just messaging) starts throwing
+// "Extension context invalidated", forever, silently. Our own
+// storage-based status log can't be trusted to report that (it's built on
+// the very API that just broke), so this falls back to a plain
+// console.warn — visible via the extension's "Errors" page — and stops
+// the loop outright instead of retrying a connection that can never work
+// again. Refreshing this tab (not just reloading the extension) fixes it.
+let pollTimer = null;
+
+async function safePollCycle() {
+  try {
+    await pollCycle();
+  } catch (err) {
+    if (String(err?.message).includes("Extension context invalidated")) {
+      console.warn(
+        "[TradeMind AI] Extension was reloaded — this tab's connection is stale. Refresh this Pocket Option tab to reconnect."
+      );
+      if (pollTimer) clearInterval(pollTimer);
+      return;
+    }
+    console.error("[TradeMind AI] Unexpected error in poll cycle:", err);
+  }
+}
+
+pollTimer = setInterval(safePollCycle, POLL_INTERVAL_MS);
+safePollCycle();

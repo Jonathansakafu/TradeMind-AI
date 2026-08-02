@@ -15,6 +15,8 @@ Sideloaded Chrome/Edge extension that auto-executes Quick Trade signals on a **P
 4. Click the extension's icon, paste the Session ID and Bot Token shown on the app's Trading Robot page (only appears when you start a Quick Trade session with "Auto-Execute" checked), click Connect.
 5. Keep the Pocket Option tab open and visible/focused — Chrome throttles timers in hidden/backgrounded tabs to about once a minute, which is too slow relative to trade expiries.
 
+**After updating the extension** (Reload in `chrome://extensions`), also **refresh any already-open Pocket Option tab** (F5) — the old content script left running in that tab doesn't get the update and becomes unable to talk to the extension at all ("Extension context invalidated" in the console), which otherwise fails silently.
+
 ## File map
 
 - `manifest.json` — MV3 config.

@@ -580,6 +580,7 @@ function TradingSession() {
                 <li>Open your Pocket Option demo account in a tab and log in.</li>
                 <li>Click the extension icon, paste the Session ID and Bot Token above, then Connect.</li>
                 <li>Keep the Pocket Option tab open and visible while the session runs.</li>
+                <li>If you re-download and reload the extension later, also refresh the Pocket Option tab itself (F5) — otherwise it silently stops working.</li>
               </ol>
             </div>
           )}
