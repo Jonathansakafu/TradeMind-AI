@@ -87,6 +87,10 @@ app.listen(PORT, async () => {
   // Anza mara moja baada ya sekunde 30
   setTimeout(runAutoGenerate, 30 * 1000);
 
-  // Kisha kila masaa 2
-  setInterval(runAutoGenerate, 2 * 60 * 60 * 1000);
+  // Kisha kila dakika 15 — shortened from 2h while there's a single user
+  // (testing the Quick Trade auto-execute extension). Revisit before this
+  // app has multiple users: every-15-min generation for every user
+  // multiplies AI (Groq) and market-data (Twelve Data/CoinGecko) API calls
+  // accordingly and could hit rate limits or run up costs at real scale.
+  setInterval(runAutoGenerate, 15 * 60 * 1000);
 });
