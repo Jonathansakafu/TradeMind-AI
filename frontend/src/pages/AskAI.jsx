@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import MainLayout from "../layouts/MainLayout";
 import { Sparkles, Send, BookOpen, History, HelpCircle, Image, User, Bot } from "lucide-react";
 import { streamAsk } from "../utils/streamAsk";
+import SpeakButton from "../components/SpeakButton";
 
 const SOURCE_ICONS = {
   book: <BookOpen size={12} className="text-purple-400" />,
@@ -69,6 +70,7 @@ function AskAI() {
           <h2 className="text-3xl md:text-4xl font-bold flex items-center gap-3">
             <Sparkles className="text-green-600 dark:text-green-400" size={32} />
             Ask AI
+            <SpeakButton text="Ask AI. Ask questions grounded in your uploaded books and trade history — powered by retrieval-augmented generation" />
           </h2>
           <p className="text-slate-500 dark:text-slate-400 mt-2">
             Ask questions grounded in your uploaded books and trade history — powered by retrieval-augmented generation
@@ -134,6 +136,11 @@ function AskAI() {
                           {s.label}
                         </span>
                       ))}
+                    </div>
+                  )}
+                  {m.role === "ai" && !isStreamingEmpty && m.text && (
+                    <div className="mt-1">
+                      <SpeakButton text={m.text} />
                     </div>
                   )}
                 </div>
