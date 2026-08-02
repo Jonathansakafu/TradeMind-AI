@@ -31,6 +31,7 @@ async function handleNotification(config, notification) {
     pair: notification.pair,
     signal: notification.signal,
     stake: notification.stake,
+    expiresInMinutes: notification.expiresInMinutes,
   });
 
   if (!result.ok) {

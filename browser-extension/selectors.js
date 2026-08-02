@@ -58,15 +58,39 @@
     return findButtonByLabel("Sell");
   }
 
-  // Not yet confirmed against the live site — only the section title divs
-  // ("Amount", "Time") were captured so far, not the actual input/selector
-  // controls next to them. Placeholder until the real markup is provided.
-  function findAmountInput() {
-    return firstMatch(["input[name='amount']", ".amount-input input", "[data-testid='trade-amount']"]);
+  // Confirmed from the live site: expiry is chosen from a preset list
+  // (".dops__timeframes-item", inside ".expiration-inputs-list-modal")
+  // labelled S3/S15/S30/M1/M3/M5/M30/H1/H4 — not a free-typed value. Only
+  // whole-minute presets are mapped since that's what analyzeQuickSignal
+  // returns (expiresInMinutes).
+  const EXPIRY_MINUTE_LABELS = { 1: "M1", 3: "M3", 5: "M5", 30: "M30" };
+
+  function findExpiryOption(minutes) {
+    const label = EXPIRY_MINUTE_LABELS[minutes];
+    if (!label) return null;
+    const items = document.querySelectorAll(".dops__timeframes-item");
+    for (const item of items) {
+      if (item.textContent?.trim() === label) return item;
+    }
+    return null;
   }
 
-  function findExpirySelector() {
-    return firstMatch([".expiry-selector", "[data-testid='trade-expiry']"]);
+  // NOT yet confirmed — the small trigger box on the main trading panel
+  // that opens the expiry dropdown (".expiration-inputs-list-modal") in
+  // the first place. Everything captured so far was the dropdown's
+  // *contents* once already open, not the button that opens it.
+  function findExpiryTrigger() {
+    return firstMatch([".expiry-trigger", "[data-testid='trade-expiry']"]);
+  }
+
+  // NOT yet confirmed — same gap as findExpiryTrigger, but for the Amount
+  // dropdown (".amount-list-modal"). Also still missing: how a typed
+  // digit actually lands in ".amount-field" — Pocket Option uses a custom
+  // on-screen keypad (".virtual-keyboard__input", one div per digit) for
+  // this, not a plain fillable <input>, so setting a value directly like
+  // findExpiryOption below won't work here even once the trigger is known.
+  function findAmountTrigger() {
+    return firstMatch([".amount-trigger", "[data-testid='trade-amount']"]);
   }
 
   function findPairSearch() {
@@ -94,7 +118,7 @@
 
   // Attempts to place a trade. Returns { ok: true } or { ok: false, reason }
   // — never throws, never guesses success.
-  async function placeTrade({ pair, signal, stake }) {
+  async function placeTrade({ pair, signal, stake, expiresInMinutes }) {
     if (isDemoMode() !== true) {
       return { ok: false, reason: "Could not confirm Demo mode — refusing to trade" };
     }
@@ -103,19 +127,22 @@
     if (!pairEl) return { ok: false, reason: "Pair selector not found on page (selectors.js needs updating for this site)" };
     // TODO Phase 2: actually search/select `pair` once the real search UI is known.
 
-    const amountEl = findAmountInput();
-    if (!amountEl) return { ok: false, reason: "Amount input not found" };
-    amountEl.focus();
-    amountEl.value = String(stake);
-    amountEl.dispatchEvent(new Event("input", { bubbles: true }));
+    const expiryTrigger = findExpiryTrigger();
+    if (!expiryTrigger) return { ok: false, reason: "Expiry dropdown trigger not found (selectors.js needs updating for this site)" };
+    await humanClick(expiryTrigger);
+    const expiryOption = findExpiryOption(expiresInMinutes);
+    if (!expiryOption) return { ok: false, reason: `No ${expiresInMinutes}-minute expiry preset available` };
+    await humanClick(expiryOption);
 
-    const targetButton = signal === "buy" ? findBuyButton() : findSellButton();
-    if (!targetButton) return { ok: false, reason: `${signal === "buy" ? "Buy" : "Sell"} button not found` };
+    const amountTrigger = findAmountTrigger();
+    if (!amountTrigger) return { ok: false, reason: "Amount dropdown trigger not found (selectors.js needs updating for this site)" };
+    await humanClick(amountTrigger);
 
-    const clicked = await humanClick(targetButton);
-    if (!clicked) return { ok: false, reason: "Click dispatch failed" };
-
-    return { ok: true };
+    // TODO Phase 2: Pocket Option's amount field is a custom on-screen
+    // keypad (.virtual-keyboard__input digits), not a fillable <input> —
+    // clicking Buy/Sell is deliberately left unimplemented until digit
+    // entry works, so a real trade is never placed with the wrong stake.
+    return { ok: false, reason: "Amount entry not yet implemented (custom keypad UI — see selectors.js TODO)" };
   }
 
   // Attempts to read the outcome of the most recent trade. Returns
@@ -127,8 +154,9 @@
 
   window.TradeMindSelectors = {
     isDemoMode,
-    findAmountInput,
-    findExpirySelector,
+    findExpiryOption,
+    findExpiryTrigger,
+    findAmountTrigger,
     findPairSearch,
     findBuyButton,
     findSellButton,
