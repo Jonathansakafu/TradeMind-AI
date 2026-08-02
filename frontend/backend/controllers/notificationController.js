@@ -113,14 +113,14 @@ exports.autoGenerate = async (userId) => {
     const latestSession = await TradingSession.findOne({ user: userId }).sort({ createdAt: -1 });
     if (latestSession && LIMIT_STOPPED_STATUSES.includes(latestSession.status)) {
       console.log(`⏸ Skipping signal generation for ${userId} — session limit reached`);
-      return 0;
+      return { count: 0, reason: "session_limit_reached" };
     }
 
     const activeSession = latestSession?.status === "active" ? latestSession : null;
     if (activeSession?.mode === "quick_trade") {
       const created = await generateQuickTradeSignals(userId, activeSession);
       console.log(`✅ Generated ${created} quick trade notifications for user ${userId}`);
-      return created;
+      return { count: created, reason: created === 0 ? "quick_trade_no_signal" : null };
     }
 
     const [pastTrades, prices] = await Promise.all([
@@ -257,18 +257,27 @@ exports.autoGenerate = async (userId) => {
     }
 
     console.log(`✅ Generated ${notifications.length} notifications for user ${userId}`);
-    return notifications.length;
+    return { count: notifications.length, reason: notifications.length === 0 ? "forex_no_signal" : null };
   } catch (err) {
     console.error("Auto generate error:", err.message);
-    return 0;
+    return { count: 0, reason: `error: ${err.message}` };
   }
+};
+
+// Human-readable explanation for each "generated 0" reason — surfaced to
+// the user instead of one generic message, so a stopped session or an
+// exhausted cooldown doesn't look identical to "the AI saw nothing to do."
+const ZERO_RESULT_MESSAGES = {
+  session_limit_reached: "Your active session already hit its profit/risk/trade limit — start a new session to keep generating signals.",
+  quick_trade_no_signal: "No new Quick Trade signal — either every pair was generated recently (2-min cooldown) or the AI sees no clear setup right now.",
+  forex_no_signal: "No new signal — the AI sees no clear setup right now, or today's signal for these pairs already exists.",
 };
 
 // Manual generate — from button click
 exports.generateNotifications = async (req, res) => {
   try {
     console.log(`Manual generate triggered for user ${req.user._id}`);
-    const count = await exports.autoGenerate(req.user._id);
+    const { count, reason } = await exports.autoGenerate(req.user._id);
     const notifications = await Notification.find({ user: req.user._id })
       .sort({ createdAt: -1 }).limit(20);
     const unreadCount = await Notification.countDocuments({
@@ -278,9 +287,10 @@ exports.generateNotifications = async (req, res) => {
       notifications,
       unreadCount,
       generated: count,
+      reason,
       message: count > 0
         ? `${count} new signal(s) generated`
-        : "No new signals — market conditions suggest waiting",
+        : ZERO_RESULT_MESSAGES[reason] || (reason ? `No new signals (${reason})` : "No new signals right now"),
     });
   } catch (err) {
     res.status(500).json({ message: err.message });

@@ -28,6 +28,7 @@ function Notifications() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [generateMessage, setGenerateMessage] = useState(null);
   const [filter, setFilter] = useState("all");
   const [sendingId, setSendingId] = useState(null);
   const [reportingId, setReportingId] = useState(null);
@@ -67,15 +68,23 @@ function Notifications() {
 
   const generateAlerts = async () => {
     setGenerating(true);
+    setGenerateMessage(null);
     try {
-      await axios.post(
+      const res = await axios.post(
         `${API_URL}/api/notifications/generate`,
         {},
         { headers }
       );
+      setGenerateMessage({
+        type: res.data.generated > 0 ? "success" : "info",
+        text: res.data.message,
+      });
       await fetchNotifications();
     } catch (err) {
-      console.error(err);
+      setGenerateMessage({
+        type: "error",
+        text: err.response?.data?.message || "Failed to generate alerts",
+      });
     } finally {
       setGenerating(false);
     }
@@ -246,6 +255,21 @@ function Notifications() {
       </div>
 
       <SessionBanner className="mb-6" />
+
+      {generateMessage && (
+        <div className={`mb-6 rounded-xl p-3 text-sm border flex items-center justify-between gap-3 ${
+          generateMessage.type === "success"
+            ? "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20"
+            : generateMessage.type === "error"
+            ? "bg-red-500/10 text-red-500 dark:text-red-400 border-red-500/20"
+            : "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20"
+        }`}>
+          <span>{generateMessage.text}</span>
+          <button onClick={() => setGenerateMessage(null)} aria-label="Dismiss" className="flex-shrink-0 opacity-70 hover:opacity-100">
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex gap-2 mb-6 flex-wrap">
