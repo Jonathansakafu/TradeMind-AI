@@ -115,8 +115,18 @@
     return findRowValue("Amount", "input[type='text']");
   }
 
+  // Confirmed from the live site: the search box inside the pair picker is
+  // ".search__field". Still missing, and still blocking real trading:
+  // (1) the trigger that opens the pair picker in the first place (the
+  // "AUD/CAD OTC ▾"-style label at the top-left of the chart), (2) what a
+  // filtered result item looks like once you type into this box, and (3)
+  // a way to verify the chart actually switched to the intended pair
+  // before proceeding — without that verification, a wrong/failed pair
+  // switch could silently trade whatever pair was already open instead of
+  // the one the signal was actually about, which is worse than not
+  // trading at all.
   function findPairSearch() {
-    return firstMatch([".asset-search", "[data-testid='asset-select']"]);
+    return firstMatch([".search__field"]);
   }
 
   // Dispatches a realistic sequence of pointer events rather than a bare
