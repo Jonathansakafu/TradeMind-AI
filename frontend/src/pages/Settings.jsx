@@ -1,14 +1,22 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import MainLayout from "../layouts/MainLayout";
-import { Save, User, Lock, CheckCircle, Palette } from "lucide-react";
+import { Save, User, Lock, CheckCircle, Palette, LogOut } from "lucide-react";
 import { API_URL } from "../config/api";
 import ThemeToggle from "../components/ThemeToggle";
 
 function Settings() {
+  const navigate = useNavigate();
   const user = JSON.parse(localStorage.getItem("user") || "{}");
   const token = localStorage.getItem("token");
   const headers = { Authorization: `Bearer ${token}` };
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    navigate("/login");
+  };
 
   const [profile, setProfile] = useState({
     name: user.name || "",
@@ -151,6 +159,19 @@ function Settings() {
               <CheckCircle size={16} /> Update Password
             </button>
           </div>
+        </div>
+
+        {/* Account */}
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6">
+          <h3 className="text-xl font-bold flex items-center gap-2 mb-6 text-slate-900 dark:text-white">
+            <LogOut size={20} className="text-red-500 dark:text-red-400" /> Account
+          </h3>
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-500 dark:text-red-400 font-bold px-6 py-3 rounded-xl transition"
+          >
+            <LogOut size={16} /> Logout
+          </button>
         </div>
 
       </div>

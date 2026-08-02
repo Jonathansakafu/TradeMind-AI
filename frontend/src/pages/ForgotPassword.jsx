@@ -1,39 +1,32 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import axios from "axios";
 import { API_URL } from "../config/api";
 
-function Login() {
-  const navigate = useNavigate();
+function ForgotPassword() {
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
 
-  const handleLogin = async () => {
-    if (!email || !password) {
-      setMessage({ type: "error", text: "Please fill all fields" });
+  const handleSubmit = async () => {
+    if (!email) {
+      setMessage({ type: "error", text: "Please enter your email" });
       return;
     }
     setLoading(true);
-    setMessage({ type: "info", text: "Logging in — first request after inactivity can take up to a minute..." });
+    setMessage(null);
     try {
-      const res = await axios.post(
-        `${API_URL}/api/auth/login`,
-        { email, password }
-      );
-      localStorage.setItem("token", res.data.token);
-      localStorage.setItem("user", JSON.stringify(res.data.user));
-      navigate("/dashboard");
+      const res = await axios.post(`${API_URL}/api/auth/forgot-password`, { email });
+      setMessage({ type: "success", text: res.data.message });
     } catch (error) {
-      setMessage({ type: "error", text: error.response?.data?.message || "Login failed" });
+      setMessage({ type: "error", text: error.response?.data?.message || "Something went wrong" });
     } finally {
       setLoading(false);
     }
   };
 
   const handleKeyDown = (e) => {
-    if (e.key === "Enter") handleLogin();
+    if (e.key === "Enter") handleSubmit();
   };
 
   return (
@@ -42,7 +35,10 @@ function Login() {
         <h1 className="text-4xl font-bold text-center text-green-600 dark:text-green-400 mb-8">
           TradeMind AI
         </h1>
-        <h2 className="text-2xl font-semibold mb-6 text-center">Login</h2>
+        <h2 className="text-2xl font-semibold mb-2 text-center">Forgot Password</h2>
+        <p className="text-slate-500 dark:text-slate-400 text-sm text-center mb-6">
+          Enter your email and we'll send you a link to reset your password.
+        </p>
         <div className="space-y-4">
           <input
             type="email"
@@ -52,25 +48,12 @@ function Login() {
             onKeyDown={handleKeyDown}
             className="w-full bg-slate-100 dark:bg-slate-800 p-4 rounded-xl outline-none placeholder-slate-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-green-500 transition"
           />
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            onKeyDown={handleKeyDown}
-            className="w-full bg-slate-100 dark:bg-slate-800 p-4 rounded-xl outline-none placeholder-slate-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-green-500 transition"
-          />
-          <div className="text-right">
-            <Link to="/forgot-password" className="text-sm text-green-600 dark:text-green-400 hover:underline">
-              Forgot password?
-            </Link>
-          </div>
           {message && (
             <div
               className={`text-sm rounded-xl p-3 ${
                 message.type === "error"
                   ? "bg-red-500/10 text-red-400 border border-red-500/20"
-                  : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700"
+                  : "bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20"
               }`}
             >
               {message.text}
@@ -78,20 +61,20 @@ function Login() {
           )}
 
           <button
-            onClick={handleLogin}
+            onClick={handleSubmit}
             disabled={loading}
             className="w-full bg-green-500 hover:bg-green-600 disabled:opacity-50 p-4 rounded-xl font-semibold transition flex items-center justify-center gap-2"
           >
             {loading
               ? <div className="w-5 h-5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
-              : "Login"
+              : "Send Reset Link"
             }
           </button>
         </div>
         <p className="text-slate-500 dark:text-slate-400 mt-6 text-center">
-          Don't have an account?{" "}
-          <Link to="/register" className="text-green-600 dark:text-green-400 hover:underline">
-            Register
+          Remembered your password?{" "}
+          <Link to="/login" className="text-green-600 dark:text-green-400 hover:underline">
+            Login
           </Link>
         </p>
       </div>
@@ -99,4 +82,4 @@ function Login() {
   );
 }
 
-export default Login;
+export default ForgotPassword;

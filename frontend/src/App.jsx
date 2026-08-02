@@ -5,6 +5,8 @@ import { StatusBar, Style } from "@capacitor/status-bar";
 import { ThemeProvider, useTheme } from "./context/ThemeContext";
 import Login from "./pages/login";
 import Register from "./pages/register";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 import Dashboard from "./pages/dashboard";
 import AddTrade from "./pages/addtrade";
 import TradeHistory from "./pages/TradeHistory";
@@ -46,6 +48,8 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/add-trade" element={<ProtectedRoute><AddTrade /></ProtectedRoute>} />
           <Route path="/history" element={<ProtectedRoute><TradeHistory /></ProtectedRoute>} />
