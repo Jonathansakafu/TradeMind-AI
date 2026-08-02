@@ -41,11 +41,24 @@ const QUICK_TRADE_DEFAULT_PAIRS = [
 async function generateQuickTradeSignals(userId, session) {
   const prices = await marketService.getAllPrices();
   const candidatePairs = session.pairs?.length ? session.pairs : QUICK_TRADE_DEFAULT_PAIRS;
-  const availablePairs = candidatePairs.filter((p) => prices[toMarketSymbol(p)]).slice(0, 2);
+  const availablePairs = candidatePairs.filter((p) => prices[toMarketSymbol(p)]);
 
   let created = 0;
   for (const pair of availablePairs) {
+    if (created >= 2) break; // cap per cycle, but only counting pairs we actually generated for
     try {
+      // Checked before doing any AI work, and against every candidate pair
+      // (not just the first 2) — otherwise repeatedly generating within
+      // the same 10-minute window always re-tries the same leading pairs,
+      // finds them already deduped, and silently produces nothing new.
+      const existingRecent = await Notification.findOne({
+        user: userId,
+        pair,
+        type: "quick_trade",
+        createdAt: { $gte: new Date(Date.now() - 10 * 60 * 1000) },
+      });
+      if (existingRecent) continue;
+
       const marketSymbol = toMarketSymbol(pair);
       const currentPrice = prices[marketSymbol];
       const formattedPair = pair.includes("/")
@@ -62,29 +75,20 @@ async function generateQuickTradeSignals(userId, session) {
       const analysis = await claudeAI.analyzeQuickSignal(formattedPair, currentPrice, historical);
 
       if (analysis.direction && analysis.direction !== "wait") {
-        const existingRecent = await Notification.findOne({
+        await Notification.create({
           user: userId,
           pair,
+          signal: analysis.direction,
+          reasoning: analysis.reasoning || "AI generated quick trade signal",
+          confidence: analysis.confidence || 60,
+          source: "ai_auto",
+          sourceLabel: "Quick Trade Signal",
           type: "quick_trade",
-          createdAt: { $gte: new Date(Date.now() - 10 * 60 * 1000) },
+          expiresInMinutes: analysis.expiresInMinutes || 5,
+          tradingSessionId: session._id,
+          read: false,
         });
-
-        if (!existingRecent) {
-          await Notification.create({
-            user: userId,
-            pair,
-            signal: analysis.direction,
-            reasoning: analysis.reasoning || "AI generated quick trade signal",
-            confidence: analysis.confidence || 60,
-            source: "ai_auto",
-            sourceLabel: "Quick Trade Signal",
-            type: "quick_trade",
-            expiresInMinutes: analysis.expiresInMinutes || 5,
-            tradingSessionId: session._id,
-            read: false,
-          });
-          created++;
-        }
+        created++;
       }
 
       await new Promise((resolve) => setTimeout(resolve, 2000));
