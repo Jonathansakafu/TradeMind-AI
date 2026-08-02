@@ -170,6 +170,18 @@
     return base.split("/")[0];
   }
 
+  // Polls checkFn until it returns true or timeout elapses — used instead
+  // of one fixed delay since we don't know how long Pocket Option's Vue
+  // app actually takes to re-render after a selection.
+  async function waitForCondition(checkFn, { timeout = 3000, interval = 250 } = {}) {
+    const start = Date.now();
+    while (Date.now() - start < timeout) {
+      if (checkFn()) return true;
+      await new Promise((r) => setTimeout(r, interval));
+    }
+    return checkFn();
+  }
+
   // Opens the pair picker (if needed), searches for `pair`, clicks the
   // matching result, then re-reads .current-symbol to confirm the switch
   // actually took before returning ok — a wrong/failed switch must never
@@ -189,14 +201,22 @@
 
     const resultEl = findPairResult(pair);
     if (!resultEl) return { ok: false, reason: `No result found for "${pair}" in the pair picker (searched "${toSearchTerm(pair)}")` };
-    await humanClick(resultEl);
-    await new Promise((r) => setTimeout(r, 300));
 
-    const nowSelected = findPairTrigger()?.textContent?.trim();
-    if (nowSelected !== pair) {
-      return { ok: false, reason: `Pair switch didn't take — chart shows "${nowSelected}" instead of "${pair}"` };
+    const isSelected = () => findPairTrigger()?.textContent?.trim() === pair;
+
+    await humanClick(resultEl);
+    if (await waitForCondition(isSelected)) return { ok: true };
+
+    // The leaf text span we matched on might not be the actual click
+    // target Pocket Option's Vue app listens on — try again on its
+    // nearest likely-interactive ancestor before giving up.
+    const parentTarget = resultEl.closest("a, button, li, [role='option'], div") || resultEl.parentElement;
+    if (parentTarget && parentTarget !== resultEl) {
+      await humanClick(parentTarget);
+      if (await waitForCondition(isSelected, { timeout: 2000 })) return { ok: true };
     }
-    return { ok: true };
+
+    return { ok: false, reason: `Pair switch didn't take — chart shows "${findPairTrigger()?.textContent?.trim()}" instead of "${pair}"` };
   }
 
   // Dispatches a realistic sequence of pointer events rather than a bare
