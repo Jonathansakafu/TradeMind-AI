@@ -236,28 +236,28 @@ function AddTrade() {
 
   const Field = ({ label, name, type = "text", placeholder, step, required }) => (
     <div>
-      <label className="text-sm text-slate-400 mb-1 block">
+      <label className="text-sm text-slate-500 dark:text-slate-400 mb-1 block">
         {label} {required && <span className="text-red-400">*</span>}
       </label>
       <input
         type={type} name={name} step={step}
         placeholder={placeholder} value={form[name]}
         onChange={handleChange}
-        className="w-full bg-slate-800 border border-slate-700 p-3 rounded-xl outline-none focus:border-green-500 transition text-white"
+        className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-xl outline-none focus:border-green-500 transition text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500"
       />
     </div>
   );
 
   const Select = ({ label, name, options, required, optional }) => (
     <div>
-      <label className="text-sm text-slate-400 mb-1 block">
+      <label className="text-sm text-slate-500 dark:text-slate-400 mb-1 block">
         {label}
         {required && <span className="text-red-400 ml-1">*</span>}
-        {optional && <span className="text-slate-600 ml-1">(optional)</span>}
+        {optional && <span className="text-slate-400 dark:text-slate-600 ml-1">(optional)</span>}
       </label>
       <select
         name={name} value={form[name]} onChange={handleChange}
-        className="w-full bg-slate-800 border border-slate-700 p-3 rounded-xl outline-none focus:border-green-500 transition text-white"
+        className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-xl outline-none focus:border-green-500 transition text-slate-900 dark:text-white"
       >
         <option value="">Select...</option>
         {options.map((o) => (
@@ -277,7 +277,7 @@ function AddTrade() {
       <div className="max-w-2xl mx-auto">
         <div className="mb-8">
           <h2 className="text-3xl font-bold">Add Trade</h2>
-          <p className="text-slate-400 mt-2">
+          <p className="text-slate-500 dark:text-slate-400 mt-2">
             P&L calculated automatically · Session auto-detected
           </p>
         </div>
@@ -285,16 +285,16 @@ function AddTrade() {
         {/* Signal Banner */}
         {signalData && (
           <div className="bg-green-500/10 border border-green-500/30 rounded-2xl p-4 mb-6">
-            <p className="text-green-400 font-semibold text-sm">
+            <p className="text-green-600 dark:text-green-400 font-semibold text-sm">
               ✅ Trade pre-filled from AI Signal — {signalData.sourceLabel}
             </p>
-            <p className="text-slate-400 text-xs mt-1">
+            <p className="text-slate-500 dark:text-slate-400 text-xs mt-1">
               Review and adjust if needed before saving
             </p>
           </div>
         )}
 
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-5">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 space-y-5">
 
           {/* Pair + Direction */}
           <div className="grid grid-cols-2 gap-4">
@@ -332,15 +332,15 @@ function AddTrade() {
             <div className={`rounded-xl p-4 border ${
               calculated.outcome === "win" ? "bg-green-500/10 border-green-500/30"
               : calculated.outcome === "loss" ? "bg-red-500/10 border-red-500/30"
-              : "bg-slate-700 border-slate-600"
+              : "bg-slate-100 dark:bg-slate-700 border-slate-200 dark:border-slate-600"
             }`}>
               <div className="flex items-center gap-2 mb-3">
                 <Calculator size={16} className="text-green-400" />
-                <p className="text-sm font-semibold text-slate-300">Auto Calculation</p>
+                <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">Auto Calculation</p>
               </div>
               <div className="grid grid-cols-3 gap-4 text-center">
                 <div>
-                  <p className="text-xs text-slate-400 mb-1">Pips</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Pips</p>
                   <p className={`text-2xl font-bold ${
                     Number(calculated.pips) >= 0 ? "text-green-400" : "text-red-400"
                   }`}>
@@ -348,7 +348,7 @@ function AddTrade() {
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-slate-400 mb-1">Profit / Loss</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Profit / Loss</p>
                   <p className={`text-2xl font-bold ${
                     Number(calculated.pl) >= 0 ? "text-green-400" : "text-red-400"
                   }`}>
@@ -356,11 +356,11 @@ function AddTrade() {
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-slate-400 mb-1">Outcome</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Outcome</p>
                   <p className={`text-xl font-bold ${
                     calculated.outcome === "win" ? "text-green-400"
                     : calculated.outcome === "loss" ? "text-red-400"
-                    : "text-slate-400"
+                    : "text-slate-500 dark:text-slate-400"
                   }`}>
                     {calculated.outcome === "win" ? "✅ Win"
                       : calculated.outcome === "loss" ? "❌ Loss"
@@ -370,8 +370,8 @@ function AddTrade() {
               </div>
             </div>
           ) : (
-            <div className="rounded-xl p-4 border border-slate-700 bg-slate-800/50">
-              <div className="flex items-center gap-2 text-slate-500">
+            <div className="rounded-xl p-4 border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/50">
+              <div className="flex items-center gap-2 text-slate-400 dark:text-slate-500">
                 <Calculator size={16} />
                 <p className="text-sm">
                   Fill Pair, Direction, Entry, Exit and Lot Size — P&L auto-calculated
@@ -381,11 +381,11 @@ function AddTrade() {
           )}
 
           {/* Session — Auto detected */}
-          <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
-            <p className="text-xs text-slate-400 mb-1">Trading Session</p>
+          <div className="bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Trading Session</p>
             <div className="flex items-center justify-between">
-              <p className="text-white font-semibold capitalize">{form.session} Session</p>
-              <span className="text-xs text-green-400 bg-green-500/10 px-2 py-1 rounded-lg">
+              <p className="text-slate-900 dark:text-white font-semibold capitalize">{form.session} Session</p>
+              <span className="text-xs text-green-600 dark:text-green-400 bg-green-500/10 px-2 py-1 rounded-lg">
                 Auto-detected ✓
               </span>
             </div>
@@ -394,9 +394,9 @@ function AddTrade() {
           {/* Screenshot — required: capture from screen or upload a file.
               Attaching one auto-triggers AI strategy detection below. */}
           <div>
-            <label className="text-sm text-slate-400 mb-2 block">
+            <label className="text-sm text-slate-500 dark:text-slate-400 mb-2 block">
               Chart Screenshot <span className="text-red-400">*</span>
-              <span className="text-slate-600 ml-1 font-normal">
+              <span className="text-slate-400 dark:text-slate-600 ml-1 font-normal">
                 (entry, SL, TP, and result should be visible)
               </span>
             </label>
@@ -404,7 +404,7 @@ function AddTrade() {
               <div className="relative">
                 <img
                   src={preview} alt="preview"
-                  className="w-full rounded-xl object-cover max-h-52 border border-slate-700"
+                  className="w-full rounded-xl object-cover max-h-52 border border-slate-200 dark:border-slate-700"
                 />
                 <button
                   onClick={() => {
@@ -412,7 +412,8 @@ function AddTrade() {
                     setPreview(null);
                     setDetectedSetup(null);
                   }}
-                  className="absolute top-2 right-2 bg-slate-900 border border-slate-700 rounded-full p-1.5 hover:bg-red-500/20 transition"
+                  aria-label="Remove screenshot"
+                  className="absolute top-2 right-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-full p-2.5 hover:bg-red-500/20 transition"
                 >
                   <X size={14} className="text-red-400" />
                 </button>
@@ -426,30 +427,30 @@ function AddTrade() {
                   title="Generate a chart snapshot from your entry/SL/TP — recommended"
                 >
                   <LineChart size={24} className="text-green-500 mb-2" />
-                  <p className="text-slate-400 text-sm text-center">Generate chart</p>
-                  <p className="text-slate-600 text-xs mt-1">Preview entry/SL/TP</p>
+                  <p className="text-slate-500 dark:text-slate-400 text-sm text-center">Generate chart</p>
+                  <p className="text-slate-400 dark:text-slate-600 text-xs mt-1">Preview entry/SL/TP</p>
                 </button>
                 <button
                   type="button"
                   onClick={captureScreen}
                   disabled={!screenCaptureSupported || capturing}
-                  className="flex flex-col items-center justify-center border-2 border-dashed border-slate-700 rounded-xl p-6 hover:border-green-500/50 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="flex flex-col items-center justify-center border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl p-6 hover:border-green-500/50 transition disabled:opacity-40 disabled:cursor-not-allowed"
                   title={screenCaptureSupported ? "Capture your MT5/TradingView screen" : "Screen capture isn't supported in this browser"}
                 >
                   {capturing ? (
                     <div className="w-6 h-6 border-2 border-green-500 border-t-transparent rounded-full animate-spin mb-2" />
                   ) : (
-                    <Camera size={24} className="text-slate-600 mb-2" />
+                    <Camera size={24} className="text-slate-400 dark:text-slate-600 mb-2" />
                   )}
-                  <p className="text-slate-500 text-sm text-center">
+                  <p className="text-slate-400 dark:text-slate-500 text-sm text-center">
                     {capturing ? "Capturing..." : "Capture screen"}
                   </p>
-                  <p className="text-slate-600 text-xs mt-1">Share trading platform</p>
+                  <p className="text-slate-400 dark:text-slate-600 text-xs mt-1">Share trading platform</p>
                 </button>
-                <label className="flex flex-col items-center justify-center border-2 border-dashed border-slate-700 rounded-xl p-6 cursor-pointer hover:border-green-500/50 transition">
-                  <Upload size={24} className="text-slate-600 mb-2" />
-                  <p className="text-slate-500 text-sm text-center">Upload file</p>
-                  <p className="text-slate-600 text-xs mt-1">PNG, JPG up to 10MB</p>
+                <label className="flex flex-col items-center justify-center border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl p-6 cursor-pointer hover:border-green-500/50 transition">
+                  <Upload size={24} className="text-slate-400 dark:text-slate-600 mb-2" />
+                  <p className="text-slate-400 dark:text-slate-500 text-sm text-center">Upload file</p>
+                  <p className="text-slate-400 dark:text-slate-600 text-xs mt-1">PNG, JPG up to 10MB</p>
                   <input
                     type="file" accept="image/*"
                     onChange={handleScreenshot} className="hidden"
@@ -476,11 +477,11 @@ function AddTrade() {
           {/* Setup — auto-filled from the screenshot when possible */}
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label className="text-sm text-slate-400">
-                Trading Setup <span className="text-slate-600">(optional)</span>
+              <label className="text-sm text-slate-500 dark:text-slate-400">
+                Trading Setup <span className="text-slate-400 dark:text-slate-600">(optional)</span>
               </label>
               {detecting && (
-                <span className="flex items-center gap-1.5 text-xs text-green-400">
+                <span className="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400">
                   <div className="w-3 h-3 border-2 border-green-400 border-t-transparent rounded-full animate-spin" />
                   AI detecting strategy...
                 </span>
@@ -494,13 +495,13 @@ function AddTrade() {
             </div>
             <select
               name="setup" value={form.setup} onChange={handleChange}
-              className="w-full bg-slate-800 border border-slate-700 p-3 rounded-xl outline-none focus:border-green-500 transition text-white"
+              className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-xl outline-none focus:border-green-500 transition text-slate-900 dark:text-white"
             >
               <option value="">Select...</option>
               {SETUPS.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
             {detectedSetup?.reasoning && (
-              <p className="text-xs text-slate-500 mt-1.5">{detectedSetup.reasoning}</p>
+              <p className="text-xs text-slate-400 dark:text-slate-500 mt-1.5">{detectedSetup.reasoning}</p>
             )}
           </div>
 
@@ -509,14 +510,14 @@ function AddTrade() {
 
           {/* Notes */}
           <div>
-            <label className="text-sm text-slate-400 mb-1 block">
-              Notes <span className="text-slate-600">(optional)</span>
+            <label className="text-sm text-slate-500 dark:text-slate-400 mb-1 block">
+              Notes <span className="text-slate-400 dark:text-slate-600">(optional)</span>
             </label>
             <textarea
               name="notes" value={form.notes}
               onChange={handleChange} rows={3}
               placeholder="Trade setup, reasons, emotions..."
-              className="w-full bg-slate-800 border border-slate-700 p-3 rounded-xl outline-none focus:border-green-500 transition text-white resize-none"
+              className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-xl outline-none focus:border-green-500 transition text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 resize-none"
             />
           </div>
 

@@ -11,10 +11,10 @@ function Guide() {
     <MainLayout>
       <div className="mb-8">
         <h2 className="text-3xl md:text-4xl font-bold flex items-center gap-3">
-          <BookOpen className="text-green-400" size={32} />
+          <BookOpen className="text-green-600 dark:text-green-400" size={32} />
           User Guide
         </h2>
-        <p className="text-slate-400 mt-2">
+        <p className="text-slate-500 dark:text-slate-400 mt-2">
           Everything you need to know to use TradeMind AI
         </p>
       </div>
@@ -31,7 +31,7 @@ function Guide() {
                 className={`flex-shrink-0 text-left px-4 py-2.5 rounded-xl text-sm font-medium whitespace-nowrap lg:whitespace-normal transition ${
                   activeId === s.id
                     ? "bg-green-500 text-slate-950"
-                    : "bg-slate-900 border border-slate-800 text-slate-400 hover:text-white"
+                    : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                 }`}
               >
                 {s.title}
@@ -41,9 +41,9 @@ function Guide() {
         </nav>
 
         {/* Active section content */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 md:p-8 min-w-0">
-          <h3 className="text-2xl font-bold text-white mb-4">{active.title}</h3>
-          <p className="text-slate-300 leading-relaxed whitespace-pre-line">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 md:p-8 min-w-0">
+          <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">{active.title}</h3>
+          <p className="text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-line">
             {active.body}
           </p>
         </div>

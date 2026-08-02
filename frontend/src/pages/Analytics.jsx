@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import axios from "axios";
 import MainLayout from "../layouts/MainLayout";
@@ -144,19 +145,19 @@ function Analytics() {
     <MainLayout>
       <div className="mb-8">
         <h2 className="text-3xl md:text-4xl font-bold flex items-center gap-3">
-          <Brain className="text-green-400" size={32} />
+          <Brain className="text-green-600 dark:text-green-400" size={32} />
           AI Analysis
         </h2>
-        <p className="text-slate-400 mt-2">Powered by TradeMind AI with Groq </p>
+        <p className="text-slate-500 dark:text-slate-400 mt-2">Powered by TradeMind AI with Groq </p>
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
 
         {/* PATTERN DETECTION */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6">
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-lg font-bold flex items-center gap-2">
-              <TrendingUp size={18} className="text-green-400" />
+              <TrendingUp size={18} className="text-green-600 dark:text-green-400" />
               Pattern Detection
             </h3>
             <button
@@ -169,10 +170,10 @@ function Analytics() {
           </div>
 
           {!analysis ? (
-            <div className="text-center py-12 text-slate-500">
-              <Brain size={40} className="mx-auto mb-3 text-slate-700" />
+            <div className="text-center py-12 text-slate-400 dark:text-slate-500">
+              <Brain size={40} className="mx-auto mb-3 text-slate-300 dark:text-slate-700" />
               <p className="text-sm">Click "Run Analysis"</p>
-              <p className="text-xs text-slate-600 mt-1">
+              <p className="text-xs text-slate-400 dark:text-slate-600 mt-1">
                 AI works even no trades — AI Auto is generating signals based on market + news patterns and your saved books
               </p>
             </div>
@@ -186,11 +187,11 @@ function Analytics() {
               )}
               {analysis.strongestPairs?.length > 0 && (
                 <div>
-                  <p className="text-xs text-slate-400 mb-2 flex items-center gap-1">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-2 flex items-center gap-1">
                     <Star size={12} className="text-yellow-400" /> Strongest Pairs
                   </p>
                   {analysis.strongestPairs.slice(0, 3).map((p, i) => (
-                    <div key={i} className="flex justify-between bg-slate-800 px-4 py-3 rounded-xl mb-2">
+                    <div key={i} className="flex justify-between bg-slate-100 dark:bg-slate-800 px-4 py-3 rounded-xl mb-2">
                       <span className="font-bold">{p.pair}</span>
                       <span className="text-green-400">{p.winRate}% win</span>
                     </div>
@@ -199,14 +200,14 @@ function Analytics() {
               )}
               {analysis.riskBehaviors?.length > 0 && (
                 <div>
-                  <p className="text-xs text-slate-400 mb-2 flex items-center gap-1">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-2 flex items-center gap-1">
                     <AlertTriangle size={12} className="text-yellow-400" /> Risk Behaviors
                   </p>
                   {analysis.riskBehaviors.map((r, i) => (
                     <div key={i} className={`px-4 py-3 rounded-xl text-sm border mb-2
                       ${r.severity === "high" ? "bg-red-500/10 border-red-500/20 text-red-300"
                         : r.severity === "medium" ? "bg-yellow-500/10 border-yellow-500/20 text-yellow-300"
-                        : "bg-slate-800 border-slate-700 text-slate-300"}`}>
+                        : "bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300"}`}>
                       <p className="font-semibold">{r.type}</p>
                       <p className="text-xs opacity-75 mt-0.5">{r.description}</p>
                     </div>
@@ -215,9 +216,9 @@ function Analytics() {
               )}
               {analysis.recommendations?.length > 0 && (
                 <div>
-                  <p className="text-xs text-slate-400 mb-2">💡 Recommendations</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">💡 Recommendations</p>
                   {analysis.recommendations.map((r, i) => (
-                    <div key={i} className="flex gap-2 text-sm text-slate-300 bg-slate-800 px-4 py-3 rounded-xl mb-2">
+                    <div key={i} className="flex gap-2 text-sm text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-4 py-3 rounded-xl mb-2">
                       <span className="text-green-400 font-bold">→</span> {r}
                     </div>
                   ))}
@@ -228,40 +229,40 @@ function Analytics() {
         </div>
 
         {/* TRADE SUGGESTION */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6">
           <h3 className="text-lg font-bold flex items-center gap-2 mb-6">
-            <Brain size={18} className="text-green-400" />
+            <Brain size={18} className="text-green-600 dark:text-green-400" />
             Should I Take This Trade?
           </h3>
           <div className="space-y-4 mb-5">
             <div>
-              <label className="text-sm text-slate-400 mb-1 block">Pair</label>
+              <label className="text-sm text-slate-500 dark:text-slate-400 mb-1 block">Pair</label>
               <select
                 value={proposedTrade.pair}
                 onChange={(e) => setProposedTrade({ ...proposedTrade, pair: e.target.value })}
-                className="w-full bg-slate-800 border border-slate-700 p-3 rounded-xl text-white outline-none focus:border-green-500 transition"
+                className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-xl text-slate-900 dark:text-white outline-none focus:border-green-500 transition"
               >
                 {PAIRS.map((p) => <option key={p}>{p}</option>)}
               </select>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-sm text-slate-400 mb-1 block">Direction</label>
+                <label className="text-sm text-slate-500 dark:text-slate-400 mb-1 block">Direction</label>
                 <select
                   value={proposedTrade.direction}
                   onChange={(e) => setProposedTrade({ ...proposedTrade, direction: e.target.value })}
-                  className="w-full bg-slate-800 border border-slate-700 p-3 rounded-xl text-white outline-none focus:border-green-500 transition"
+                  className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-xl text-slate-900 dark:text-white outline-none focus:border-green-500 transition"
                 >
                   <option value="buy">Buy</option>
                   <option value="sell">Sell</option>
                 </select>
               </div>
               <div>
-                <label className="text-sm text-slate-400 mb-1 block">Session</label>
+                <label className="text-sm text-slate-500 dark:text-slate-400 mb-1 block">Session</label>
                 <select
                   value={proposedTrade.session}
                   onChange={(e) => setProposedTrade({ ...proposedTrade, session: e.target.value })}
-                  className="w-full bg-slate-800 border border-slate-700 p-3 rounded-xl text-white outline-none focus:border-green-500 transition"
+                  className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-xl text-slate-900 dark:text-white outline-none focus:border-green-500 transition"
                 >
                   {SESSIONS.map((s) => <option key={s}>{s}</option>)}
                 </select>
@@ -291,9 +292,9 @@ function Analytics() {
                     : suggestion.recommendation === "skip" ? "❌ SKIP IT"
                     : "⚠️ WAIT"}
                 </p>
-                <span className="font-semibold text-slate-300">{suggestion.confidence}%</span>
+                <span className="font-semibold text-slate-700 dark:text-slate-300">{suggestion.confidence}%</span>
               </div>
-              <p className="text-slate-300 text-sm mb-3">{suggestion.reasoning}</p>
+              <p className="text-slate-700 dark:text-slate-300 text-sm mb-3">{suggestion.reasoning}</p>
               {suggestion.risks?.map((r, i) => (
                 <p key={i} className="text-xs text-red-300 mb-0.5">• {r}</p>
               ))}
@@ -305,27 +306,28 @@ function Analytics() {
         </div>
 
         {/* SCREENSHOT ANALYSIS */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6">
           <h3 className="text-lg font-bold flex items-center gap-2 mb-6">
-            <Brain size={18} className="text-green-400" />
+            <Brain size={18} className="text-green-600 dark:text-green-400" />
             Chart Screenshot Analysis
           </h3>
           {screenshotPreview ? (
             <div className="relative mb-4">
               <img src={screenshotPreview} alt="chart"
-                className="w-full rounded-xl object-cover max-h-48 border border-slate-700" />
+                className="w-full rounded-xl object-cover max-h-48 border border-slate-200 dark:border-slate-700" />
               <button
                 onClick={() => { setScreenshotFile(null); setScreenshotPreview(null); setScreenshotResult(null); }}
-                className="absolute top-2 right-2 bg-slate-900 border border-slate-700 rounded-full p-1.5"
+                aria-label="Remove screenshot"
+                className="absolute top-2 right-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-full p-2.5"
               >
                 <X size={14} className="text-red-400" />
               </button>
             </div>
           ) : (
-            <label className="flex flex-col items-center justify-center border-2 border-dashed border-slate-700 rounded-xl p-8 cursor-pointer hover:border-green-500/50 transition mb-4">
-              <Upload size={28} className="text-slate-600 mb-2" />
-              <p className="text-slate-500 text-sm">Upload chart screenshot</p>
-              <p className="text-slate-600 text-xs mt-1">PNG, JPG</p>
+            <label className="flex flex-col items-center justify-center border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl p-8 cursor-pointer hover:border-green-500/50 transition mb-4">
+              <Upload size={28} className="text-slate-400 dark:text-slate-600 mb-2" />
+              <p className="text-slate-400 dark:text-slate-500 text-sm">Upload chart screenshot</p>
+              <p className="text-slate-400 dark:text-slate-600 text-xs mt-1">PNG, JPG</p>
               <input type="file" accept="image/*" onChange={handleScreenshotChange} className="hidden" />
             </label>
           )}
@@ -351,29 +353,29 @@ function Analytics() {
                     : screenshotResult.recommendedSetup === "sell" ? "🔴 SELL SETUP"
                     : "⚠️ WAIT"}
                 </p>
-                <span className="text-xs font-semibold text-slate-400 uppercase">
+                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">
                   {screenshotResult.trend} · {screenshotResult.riskLevel} risk
                 </span>
               </div>
 
               <div className="grid grid-cols-3 gap-3 mb-4">
-                <div className="bg-slate-800 rounded-xl p-3 text-center">
-                  <p className="text-xs text-slate-500 mb-1">Entry</p>
-                  <p className="font-mono font-bold text-white text-sm">{screenshotResult.entry || "—"}</p>
+                <div className="bg-slate-100 dark:bg-slate-800 rounded-xl p-3 text-center">
+                  <p className="text-xs text-slate-400 dark:text-slate-500 mb-1">Entry</p>
+                  <p className="font-mono font-bold text-slate-900 dark:text-white text-sm">{screenshotResult.entry || "—"}</p>
                 </div>
                 <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-center">
-                  <p className="text-xs text-slate-500 mb-1">Stop Loss</p>
+                  <p className="text-xs text-slate-400 dark:text-slate-500 mb-1">Stop Loss</p>
                   <p className="font-mono font-bold text-red-400 text-sm">{screenshotResult.stopLoss || "—"}</p>
                 </div>
                 <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-3 text-center">
-                  <p className="text-xs text-slate-500 mb-1">Take Profit</p>
+                  <p className="text-xs text-slate-400 dark:text-slate-500 mb-1">Take Profit</p>
                   <p className="font-mono font-bold text-green-400 text-sm">{screenshotResult.takeProfit || "—"}</p>
                 </div>
               </div>
 
               {screenshotResult.supportResistance?.length > 0 && (
                 <div className="mb-3">
-                  <p className="text-xs text-slate-500 font-semibold mb-1.5">SUPPORT / RESISTANCE</p>
+                  <p className="text-xs text-slate-400 dark:text-slate-500 font-semibold mb-1.5">SUPPORT / RESISTANCE</p>
                   <div className="flex flex-wrap gap-1.5">
                     {screenshotResult.supportResistance.map((sr, i) => (
                       <span key={i} className={`text-xs font-mono px-2 py-1 rounded-lg ${
@@ -388,17 +390,17 @@ function Analytics() {
 
               {screenshotResult.patterns?.length > 0 && (
                 <div className="mb-3">
-                  <p className="text-xs text-slate-500 font-semibold mb-1.5">PATTERNS</p>
+                  <p className="text-xs text-slate-400 dark:text-slate-500 font-semibold mb-1.5">PATTERNS</p>
                   {screenshotResult.patterns.map((p, i) => (
-                    <p key={i} className="text-xs text-slate-300 mb-0.5">• {p}</p>
+                    <p key={i} className="text-xs text-slate-700 dark:text-slate-300 mb-0.5">• {p}</p>
                   ))}
                 </div>
               )}
 
-              <p className="text-slate-300 text-sm leading-relaxed">{screenshotResult.reasoning}</p>
+              <p className="text-slate-700 dark:text-slate-300 text-sm leading-relaxed">{screenshotResult.reasoning}</p>
 
               {screenshotResult.bookAlignment && (
-                <p className="text-xs text-purple-300 mt-3 pt-3 border-t border-slate-700/50">
+                <p className="text-xs text-purple-300 mt-3 pt-3 border-t border-slate-200/50 dark:border-slate-700/50">
                   📖 {screenshotResult.bookAlignment}
                 </p>
               )}
@@ -407,30 +409,31 @@ function Analytics() {
         </div>
 
         {/* DOCUMENT UPLOAD + SAVED BOOKS */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6">
           <h3 className="text-lg font-bold flex items-center gap-2 mb-6">
-            <FileText size={18} className="text-green-400" />
+            <FileText size={18} className="text-green-600 dark:text-green-400" />
             Forex Books — AI can analyize and learn from them to give you better signals and insights based on the strategies and concepts in those books
           </h3>
 
           {/* Saved Books */}
           {books.length > 0 && (
             <div className="mb-5">
-              <p className="text-xs text-slate-400 mb-2 flex items-center gap-1">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-2 flex items-center gap-1">
                 <BookOpen size={12} /> Vitabu vilivyohifadhiwa ({books.length})
               </p>
               <div className="space-y-2 max-h-32 overflow-y-auto">
                 {books.map((b) => (
-                  <div key={b._id} className="flex items-center justify-between bg-slate-800 px-3 py-2 rounded-lg">
-                    <div>
-                      <p className="text-sm font-medium text-white">{b.bookName}</p>
-                      <p className="text-xs text-slate-500">
+                  <div key={b._id} className="flex items-center justify-between gap-2 bg-slate-100 dark:bg-slate-800 px-3 py-2 rounded-lg">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{b.bookName}</p>
+                      <p className="text-xs text-slate-400 dark:text-slate-500">
                         {b.concepts?.length} concepts · {b.strategies?.length} strategies
                       </p>
                     </div>
                     <button
                       onClick={() => deleteBook(b._id)}
-                      className="text-slate-600 hover:text-red-400 transition"
+                      aria-label="Delete book"
+                      className="p-2 -m-1 text-slate-400 dark:text-slate-600 hover:text-red-400 transition flex-shrink-0"
                     >
                       <Trash2 size={14} />
                     </button>
@@ -441,19 +444,19 @@ function Analytics() {
           )}
 
           {/* Upload New Book */}
-          <label className="flex flex-col items-center justify-center border-2 border-dashed border-slate-700 rounded-xl p-6 cursor-pointer hover:border-green-500/50 transition mb-4">
-            <FileText size={28} className="text-slate-600 mb-2" />
+          <label className="flex flex-col items-center justify-center border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl p-6 cursor-pointer hover:border-green-500/50 transition mb-4">
+            <FileText size={28} className="text-slate-400 dark:text-slate-600 mb-2" />
             {docFile ? (
               <div className="text-center">
                 <p className="text-green-400 text-sm font-semibold">{docFile.name}</p>
-                <p className="text-slate-500 text-xs mt-1">
+                <p className="text-slate-400 dark:text-slate-500 text-xs mt-1">
                   {(docFile.size / 1024 / 1024).toFixed(2)} MB
                 </p>
               </div>
             ) : (
               <>
-                <p className="text-slate-500 text-sm">Upload your trusted forex book PDF</p>
-                <p className="text-slate-600 text-xs mt-1">Max 15MB — it will be saved and be used always</p>
+                <p className="text-slate-400 dark:text-slate-500 text-sm">Upload your trusted forex book PDF</p>
+                <p className="text-slate-400 dark:text-slate-600 text-xs mt-1">Max 15MB — it will be saved and be used always</p>
               </>
             )}
             <input
@@ -487,7 +490,7 @@ function Analytics() {
                 ✅ {docResult.message}
               </p>
               {docResult.bookConcept && (
-                <div className="text-xs text-slate-400 mt-2">
+                <div className="text-xs text-slate-500 dark:text-slate-400 mt-2">
                   <p>📚 {docResult.bookConcept.concepts?.length} concepts extracted</p>
                   <p>📈 {docResult.bookConcept.strategies?.length} strategies saved</p>
                   <p>📋 {docResult.bookConcept.rules?.length} rules stored</p>

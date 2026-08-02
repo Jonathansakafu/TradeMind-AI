@@ -1,0 +1,17 @@
+{
+  "appId": "com.trademind.ai",
+  "appName": "TradeMind AI",
+  "webDir": "dist",
+  "plugins": {
+    "SplashScreen": {
+      "launchAutoHide": false,
+      "backgroundColor": "#020617",
+      "androidSplashResourceName": "splash",
+      "showSpinner": false
+    },
+    "StatusBar": {
+      "style": "dark",
+      "backgroundColor": "#020617"
+    }
+  }
+}

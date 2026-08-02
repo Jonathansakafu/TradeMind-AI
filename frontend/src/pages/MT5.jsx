@@ -3,19 +3,25 @@ import axios from "axios";
 import MainLayout from "../layouts/MainLayout";
 import {
   Zap, CheckCircle, XCircle, Clock,
-  TrendingUp, TrendingDown, Copy, ExternalLink,
+  TrendingUp, TrendingDown, Copy, Check, ExternalLink,
   RefreshCw, ShieldCheck, ShieldAlert, ChevronDown, ChevronUp, Info,
   Download
 } from "lucide-react";
+import { Clipboard } from "@capacitor/clipboard";
 import { API_URL } from "../config/api";
 import BrokerModal from "../components/BrokerModal";
+import { downloadFile } from "../utils/nativeDownload";
 
 function MT5() {
   const [signals, setSignals] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [lotSize, setLotSize] = useState("0.01");
-  const [copied, setCopied] = useState(false);
+  // Tracks which specific value was last copied so each copy button can show
+  // its own confirmation, instead of one flag that only the "Copy Code"
+  // button's label reflected (tapping the small URL copy icons gave no
+  // feedback at all).
+  const [copiedField, setCopiedField] = useState(null);
   const [showBrokers, setShowBrokers] = useState(false);
   const [showCode, setShowCode] = useState(false);
   const [accountType, setAccountType] = useState(
@@ -55,22 +61,16 @@ function MT5() {
     return () => clearInterval(interval);
   }, []);
 
-  const copyToClipboard = (text) => {
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const copyToClipboard = (text, field) => {
+    Clipboard.write({ string: text });
+    setCopiedField(field);
+    setTimeout(() => setCopiedField(null), 2000);
   };
 
   // Ships the EA as a real .mq5 file (not just clipboard text) so it can be
   // dropped straight into MT5's MQL5/Experts folder and compiled from there.
   const downloadEA = () => {
-    const blob = new Blob([eaCode], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "TradeMind_AI_EA.mq5";
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadFile("TradeMind_AI_EA.mq5", eaCode, "text/plain");
   };
 
   const getStatusColor = (status) => {
@@ -79,8 +79,8 @@ function MT5() {
       case "sent": return "text-blue-400 bg-blue-500/10 border-blue-500/20";
       case "pending": return "text-yellow-400 bg-yellow-500/10 border-yellow-500/20";
       case "failed": return "text-red-400 bg-red-500/10 border-red-500/20";
-      case "cancelled": return "text-slate-400 bg-slate-700 border-slate-600";
-      default: return "text-slate-400 bg-slate-700 border-slate-600";
+      case "cancelled": return "text-slate-500 dark:text-slate-400 bg-slate-200 dark:bg-slate-700 border-slate-300 dark:border-slate-600";
+      default: return "text-slate-500 dark:text-slate-400 bg-slate-200 dark:bg-slate-700 border-slate-300 dark:border-slate-600";
     }
   };
 
@@ -221,17 +221,17 @@ void OnDeinit(const int reason) {
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-3xl md:text-4xl font-bold text-white flex items-center gap-3">
-            <Zap className="text-green-400" size={32} />
+          <h1 className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white flex items-center gap-3">
+            <Zap className="text-green-600 dark:text-green-400" size={32} />
             MT5 Auto Trading
           </h1>
-          <p className="text-slate-400 mt-1 text-sm">
+          <p className="text-slate-500 dark:text-slate-400 mt-1 text-sm">
             Connect TradeMind AI signals to MetaTrader 5
           </p>
         </div>
         <button
           onClick={fetchData}
-          className="flex items-center gap-2 bg-slate-900 border border-slate-800 px-4 py-2.5 rounded-xl text-sm text-slate-400 hover:text-white transition"
+          className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-4 py-2.5 rounded-xl text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition"
         >
           <RefreshCw size={14} />
           Refresh
@@ -253,7 +253,7 @@ void OnDeinit(const int reason) {
             <p className={`font-bold text-sm ${accountType === "real" ? "text-red-400" : "text-green-400"}`}>
               {accountType === "real" ? "REAL MONEY ACCOUNT" : "DEMO ACCOUNT"}
             </p>
-            <p className="text-slate-400 text-xs mt-0.5">
+            <p className="text-slate-500 dark:text-slate-400 text-xs mt-0.5">
               {accountType === "real"
                 ? "Signals sent to MT5 will be tagged for your live account — real funds are at risk"
                 : "Signals sent to MT5 will be tagged for practice/demo trading only"
@@ -261,11 +261,11 @@ void OnDeinit(const int reason) {
             </p>
           </div>
         </div>
-        <div className="flex items-center bg-slate-950/50 rounded-xl p-1 flex-shrink-0 w-full sm:w-auto">
+        <div className="flex items-center bg-slate-100 dark:bg-slate-950/50 rounded-xl p-1 flex-shrink-0 w-full sm:w-auto">
           <button
             onClick={() => selectAccountType("demo")}
             className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-sm font-semibold transition ${
-              accountType === "demo" ? "bg-green-500 text-slate-950" : "text-slate-400 hover:text-white"
+              accountType === "demo" ? "bg-green-500 text-slate-950" : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
             }`}
           >
             Demo
@@ -273,7 +273,7 @@ void OnDeinit(const int reason) {
           <button
             onClick={() => selectAccountType("real")}
             className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-sm font-semibold transition ${
-              accountType === "real" ? "bg-red-500 text-white" : "text-slate-400 hover:text-white"
+              accountType === "real" ? "bg-red-500 text-white" : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
             }`}
           >
             Real
@@ -284,20 +284,20 @@ void OnDeinit(const int reason) {
       {/* Stats */}
       {stats && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-            <p className="text-slate-400 text-sm mb-1">Total Signals</p>
-            <p className="text-3xl font-bold text-white">{stats.total}</p>
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5">
+            <p className="text-slate-500 dark:text-slate-400 text-sm mb-1">Total Signals</p>
+            <p className="text-3xl font-bold text-slate-900 dark:text-white">{stats.total}</p>
           </div>
-          <div className="bg-slate-900 border border-green-500/20 rounded-2xl p-5">
-            <p className="text-slate-400 text-sm mb-1">Executed</p>
+          <div className="bg-white dark:bg-slate-900 border border-green-500/20 rounded-2xl p-5">
+            <p className="text-slate-500 dark:text-slate-400 text-sm mb-1">Executed</p>
             <p className="text-3xl font-bold text-green-400">{stats.executed}</p>
           </div>
-          <div className="bg-slate-900 border border-yellow-500/20 rounded-2xl p-5">
-            <p className="text-slate-400 text-sm mb-1">Pending</p>
+          <div className="bg-white dark:bg-slate-900 border border-yellow-500/20 rounded-2xl p-5">
+            <p className="text-slate-500 dark:text-slate-400 text-sm mb-1">Pending</p>
             <p className="text-3xl font-bold text-yellow-400">{stats.pending}</p>
           </div>
-          <div className="bg-slate-900 border border-red-500/20 rounded-2xl p-5">
-            <p className="text-slate-400 text-sm mb-1">Failed</p>
+          <div className="bg-white dark:bg-slate-900 border border-red-500/20 rounded-2xl p-5">
+            <p className="text-slate-500 dark:text-slate-400 text-sm mb-1">Failed</p>
             <p className="text-3xl font-bold text-red-400">{stats.failed}</p>
           </div>
         </div>
@@ -309,35 +309,35 @@ void OnDeinit(const int reason) {
         <div className="space-y-5">
 
           {/* Step 1 */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center text-slate-950 font-bold text-sm flex-shrink-0">
                 1
               </div>
-              <h3 className="font-bold text-white">Download & Install MT5</h3>
+              <h3 className="font-bold text-slate-900 dark:text-white">Download & Install MT5</h3>
             </div>
-            <p className="text-slate-400 text-sm mb-4">
+            <p className="text-slate-500 dark:text-slate-400 text-sm mb-4">
               Choose your broker to download MetaTrader 5
             </p>
             <button
               onClick={() => setShowBrokers(true)}
-              className="flex items-center gap-2 w-full bg-slate-800 border border-slate-700 hover:border-green-500/50 px-4 py-2.5 rounded-xl text-sm text-slate-300 hover:text-white transition"
+              className="flex items-center gap-2 w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-green-500/50 px-4 py-2.5 rounded-xl text-sm text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition"
             >
-              <ExternalLink size={14} className="text-green-400" />
+              <ExternalLink size={14} className="text-green-600 dark:text-green-400" />
               Select a broker
             </button>
             <BrokerModal open={showBrokers} onClose={() => setShowBrokers(false)} />
           </div>
 
           {/* Step 2 */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center text-slate-950 font-bold text-sm flex-shrink-0">
                 2
               </div>
-              <h3 className="font-bold text-white">Configure Lot Size</h3>
+              <h3 className="font-bold text-slate-900 dark:text-white">Configure Lot Size</h3>
             </div>
-            <p className="text-slate-400 text-sm mb-3">
+            <p className="text-slate-500 dark:text-slate-400 text-sm mb-3">
               Set your default lot size for auto trades
             </p>
             <div className="flex items-center gap-3">
@@ -347,9 +347,9 @@ void OnDeinit(const int reason) {
                 min="0.01"
                 value={lotSize}
                 onChange={(e) => setLotSize(e.target.value)}
-                className="bg-slate-800 border border-slate-700 focus:border-green-500 p-3 rounded-xl outline-none text-white font-mono text-sm w-32"
+                className="bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:border-green-500 p-3 rounded-xl outline-none text-slate-900 dark:text-white font-mono text-sm w-32"
               />
-              <div className="text-xs text-slate-500">
+              <div className="text-xs text-slate-400 dark:text-slate-500">
                 <p>0.01 = Micro lot ($0.10/pip)</p>
                 <p>0.10 = Mini lot ($1.00/pip)</p>
                 <p>1.00 = Standard lot ($10/pip)</p>
@@ -358,16 +358,16 @@ void OnDeinit(const int reason) {
           </div>
 
           {/* Step 3 — EA install + WebRequest allow-list, both done inside MT5 at the same time */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center text-slate-950 font-bold text-sm flex-shrink-0">
                 3
               </div>
-              <h3 className="font-bold text-white">Install the EA in MT5</h3>
+              <h3 className="font-bold text-slate-900 dark:text-white">Install the EA in MT5</h3>
             </div>
 
-            <p className="text-slate-400 text-sm mb-3">
-              Download the file into MT5's <code className="text-green-400">MQL5\Experts</code> folder, or paste the code manually into MetaEditor (File → New → Expert Advisor)
+            <p className="text-slate-500 dark:text-slate-400 text-sm mb-3">
+              Download the file into MT5's <code className="text-green-600 dark:text-green-400">MQL5\Experts</code> folder, or paste the code manually into MetaEditor (File → New → Expert Advisor)
             </p>
             <div className="grid grid-cols-2 gap-2 mb-2">
               <button
@@ -378,71 +378,73 @@ void OnDeinit(const int reason) {
                 Download .mq5
               </button>
               <button
-                onClick={() => copyToClipboard(eaCode)}
-                className="flex items-center gap-2 bg-slate-800 border border-slate-700 hover:border-green-500/50 text-slate-300 hover:text-white font-semibold px-4 py-2.5 rounded-xl text-sm transition justify-center"
+                onClick={() => copyToClipboard(eaCode, "code")}
+                className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-green-500/50 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-semibold px-4 py-2.5 rounded-xl text-sm transition justify-center"
               >
                 <Copy size={14} />
-                {copied ? "Copied! ✓" : "Copy Code"}
+                {copiedField === "code" ? "Copied! ✓" : "Copy Code"}
               </button>
             </div>
             <div className="flex items-start gap-2 bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 mb-3">
               <Info size={14} className="text-blue-400 flex-shrink-0 mt-0.5" />
-              <p className="text-xs text-slate-400">
-                In MT5: <span className="text-white">File → Open Data Folder → MQL5 → Experts</span>, save the downloaded file there, then restart MT5 (or right-click <span className="text-white">Expert Advisors</span> in the Navigator panel → Refresh).
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                In MT5: <span className="text-slate-900 dark:text-white">File → Open Data Folder → MQL5 → Experts</span>, save the downloaded file there, then restart MT5 (or right-click <span className="text-slate-900 dark:text-white">Expert Advisors</span> in the Navigator panel → Refresh).
               </p>
             </div>
             <button
               onClick={() => setShowCode(!showCode)}
-              className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-300 transition mb-4"
+              className="flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition mb-4"
             >
               {showCode ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
               {showCode ? "Hide code" : "View code"}
             </button>
             {showCode && (
-              <div className="bg-slate-950 border border-slate-700 rounded-xl p-4 max-h-48 overflow-y-auto mb-4">
-                <pre className="text-xs text-green-400 font-mono whitespace-pre-wrap">
+              <div className="bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl p-4 max-h-48 overflow-y-auto mb-4">
+                <pre className="text-xs text-green-600 dark:text-green-400 font-mono whitespace-pre-wrap">
                   {eaCode}
                 </pre>
               </div>
             )}
 
-            <div className="border-t border-slate-800 pt-4 space-y-2 text-sm text-slate-400">
-              <p>Then in MT5: <span className="text-white">Tools → Options → Expert Advisors</span></p>
-              <p>Check: <span className="text-green-400">✅ Allow WebRequest for listed URL</span>, and add:</p>
-              <div className="bg-slate-800 border border-slate-700 rounded-xl p-3 flex items-center justify-between">
-                <code className="text-green-400 text-xs font-mono break-all">
+            <div className="border-t border-slate-200 dark:border-slate-800 pt-4 space-y-2 text-sm text-slate-500 dark:text-slate-400">
+              <p>Then in MT5: <span className="text-slate-900 dark:text-white">Tools → Options → Expert Advisors</span></p>
+              <p>Check: <span className="text-green-600 dark:text-green-400">✅ Allow WebRequest for listed URL</span>, and add:</p>
+              <div className="bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 flex items-center justify-between">
+                <code className="text-green-600 dark:text-green-400 text-xs font-mono break-all">
                   {SERVER_URL}
                 </code>
                 <button
-                  onClick={() => copyToClipboard(SERVER_URL)}
-                  className="text-slate-500 hover:text-green-400 transition flex-shrink-0 ml-2"
+                  onClick={() => copyToClipboard(SERVER_URL, "serverUrl")}
+                  aria-label="Copy server URL"
+                  className="p-2 -m-2 text-slate-400 dark:text-slate-500 hover:text-green-600 dark:hover:text-green-400 transition flex-shrink-0 ml-2"
                 >
-                  <Copy size={12} />
+                  {copiedField === "serverUrl" ? <Check size={12} className="text-green-500" /> : <Copy size={12} />}
                 </button>
               </div>
             </div>
           </div>
 
           {/* Step 4 */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center text-slate-950 font-bold text-sm flex-shrink-0">
                 4
               </div>
-              <h3 className="font-bold text-white">Your MT5 Signal URL</h3>
+              <h3 className="font-bold text-slate-900 dark:text-white">Your MT5 Signal URL</h3>
             </div>
-            <p className="text-slate-400 text-sm mb-3">
+            <p className="text-slate-500 dark:text-slate-400 text-sm mb-3">
               Already built into the EA code above — MT5 polls this every 10 seconds for new signals
             </p>
-            <div className="bg-slate-800 border border-slate-700 rounded-xl p-3 flex items-center justify-between">
-              <code className="text-green-400 text-xs font-mono break-all">
+            <div className="bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 flex items-center justify-between">
+              <code className="text-green-600 dark:text-green-400 text-xs font-mono break-all">
                 {MT5_ENDPOINT}
               </code>
               <button
-                onClick={() => copyToClipboard(MT5_ENDPOINT)}
-                className="text-slate-500 hover:text-green-400 transition flex-shrink-0 ml-2"
+                onClick={() => copyToClipboard(MT5_ENDPOINT, "endpoint")}
+                aria-label="Copy signal URL"
+                className="p-2 -m-2 text-slate-400 dark:text-slate-500 hover:text-green-600 dark:hover:text-green-400 transition flex-shrink-0 ml-2"
               >
-                <Copy size={12} />
+                {copiedField === "endpoint" ? <Check size={12} className="text-green-500" /> : <Copy size={12} />}
               </button>
             </div>
           </div>
@@ -450,10 +452,10 @@ void OnDeinit(const int reason) {
         </div>
 
         {/* Signal History */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden h-fit">
-          <div className="px-6 py-4 border-b border-slate-800">
-            <h3 className="font-bold text-white">Signal History</h3>
-            <p className="text-xs text-slate-400 mt-0.5">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden h-fit">
+          <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800">
+            <h3 className="font-bold text-slate-900 dark:text-white">Signal History</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
               Signals sent to MT5
             </p>
           </div>
@@ -464,16 +466,16 @@ void OnDeinit(const int reason) {
             </div>
           ) : signals.length === 0 ? (
             <div className="text-center py-16 px-6">
-              <Zap size={40} className="text-slate-700 mx-auto mb-4" />
-              <p className="text-slate-400 font-semibold">No signals sent yet</p>
-              <p className="text-slate-500 text-sm mt-2">
+              <Zap size={40} className="text-slate-300 dark:text-slate-700 mx-auto mb-4" />
+              <p className="text-slate-500 dark:text-slate-400 font-semibold">No signals sent yet</p>
+              <p className="text-slate-400 dark:text-slate-500 text-sm mt-2">
                 Send a signal from Live Analysis or Notifications page
               </p>
             </div>
           ) : (
-            <div className="divide-y divide-slate-800 max-h-[600px] overflow-y-auto">
+            <div className="divide-y divide-slate-200 dark:divide-slate-800 max-h-[600px] overflow-y-auto">
               {signals.map((signal) => (
-                <div key={signal._id} className="px-5 py-4 hover:bg-slate-800/40 transition">
+                <div key={signal._id} className="px-5 py-4 hover:bg-slate-100 dark:hover:bg-slate-800/40 transition">
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center gap-2">
                       <span className={`text-base font-bold ${
@@ -484,7 +486,7 @@ void OnDeinit(const int reason) {
                           : <TrendingDown size={16} className="inline mr-1" />}
                         {signal.action?.toUpperCase()}
                       </span>
-                      <span className="font-bold text-white">{signal.pair}</span>
+                      <span className="font-bold text-slate-900 dark:text-white">{signal.pair}</span>
                       <span className={`text-xs font-bold px-2 py-0.5 rounded-md ${
                         signal.accountType === "real"
                           ? "bg-red-500/10 text-red-400"
@@ -500,20 +502,20 @@ void OnDeinit(const int reason) {
                   </div>
 
                   <div className="grid grid-cols-3 gap-2 mb-2">
-                    <div className="bg-slate-800 rounded-lg p-2 text-center">
-                      <p className="text-xs text-slate-500">Entry</p>
-                      <p className="font-mono text-xs font-bold text-white">
+                    <div className="bg-slate-100 dark:bg-slate-800 rounded-lg p-2 text-center">
+                      <p className="text-xs text-slate-400 dark:text-slate-500">Entry</p>
+                      <p className="font-mono text-xs font-bold text-slate-900 dark:text-white">
                         {signal.entry}
                       </p>
                     </div>
                     <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-2 text-center">
-                      <p className="text-xs text-slate-500">SL</p>
+                      <p className="text-xs text-slate-400 dark:text-slate-500">SL</p>
                       <p className="font-mono text-xs font-bold text-red-400">
                         {signal.stopLoss || "—"}
                       </p>
                     </div>
                     <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-2 text-center">
-                      <p className="text-xs text-slate-500">TP</p>
+                      <p className="text-xs text-slate-400 dark:text-slate-500">TP</p>
                       <p className="font-mono text-xs font-bold text-green-400">
                         {signal.takeProfit || "—"}
                       </p>
@@ -521,17 +523,17 @@ void OnDeinit(const int reason) {
                   </div>
 
                   <div className="flex items-center justify-between">
-                    <span className="text-xs text-slate-500">
+                    <span className="text-xs text-slate-400 dark:text-slate-500">
                       Lot: {signal.lotSize} · {signal.confidence}% confidence
                     </span>
-                    <span className="text-xs text-slate-600">
+                    <span className="text-xs text-slate-400 dark:text-slate-600">
                       {new Date(signal.createdAt).toLocaleString()}
                     </span>
                   </div>
 
                   {signal.mt5Response && (
-                    <div className="mt-2 bg-slate-800/50 rounded-lg p-2">
-                      <p className="text-xs text-slate-400">
+                    <div className="mt-2 bg-slate-100 dark:bg-slate-800/50 rounded-lg p-2">
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
                         MT5: {signal.mt5Response}
                       </p>
                     </div>
@@ -548,13 +550,13 @@ void OnDeinit(const int reason) {
         <div className="flex items-start gap-3">
           <Info size={18} className="text-blue-400 flex-shrink-0 mt-0.5" />
           <div>
-            <p className="text-blue-400 font-semibold text-sm mb-1">
+            <p className="text-blue-600 dark:text-blue-400 font-semibold text-sm mb-1">
               Once set up, here's what happens on every signal
             </p>
-            <p className="text-slate-300 text-sm leading-relaxed">
+            <p className="text-slate-600 dark:text-slate-300 text-sm leading-relaxed">
               Send a signal (Live Analysis or Notifications) → it's saved and your EA picks it up within
               10 seconds → the EA executes it with your configured lot size on your{" "}
-              <span className={accountType === "real" ? "text-red-400 font-semibold" : "text-green-400 font-semibold"}>
+              <span className={accountType === "real" ? "text-red-500 dark:text-red-400 font-semibold" : "text-green-600 dark:text-green-400 font-semibold"}>
                 {accountType}
               </span>{" "}
               account → it reports back here as Executed or Failed.

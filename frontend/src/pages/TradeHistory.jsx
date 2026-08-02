@@ -7,6 +7,7 @@ import {
   X, CheckCircle, RefreshCw, LineChart
 } from "lucide-react";
 import { API_URL } from "../config/api";
+import { downloadFile } from "../utils/nativeDownload";
 import PriceTicker from "../components/PriceTicker";
 import SnapshotCaptureModal from "../components/SnapshotCaptureModal";
 
@@ -198,13 +199,7 @@ function TradeHistory() {
       `"${(t.notes || "").replace(/"/g, "'")}"`,
     ]);
     const csv = [csvHeaders, ...rows].map((r) => r.join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `trademind-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadFile(`trademind-${new Date().toISOString().slice(0, 10)}.csv`, csv, "text/csv");
   };
 
   return (
@@ -213,21 +208,21 @@ function TradeHistory() {
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-3xl md:text-4xl font-bold text-white">Trade History</h1>
-          <p className="text-slate-400 mt-1 text-sm">{trades.length} trades recorded</p>
+          <h1 className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white">Trade History</h1>
+          <p className="text-slate-500 dark:text-slate-400 mt-1 text-sm">{trades.length} trades recorded</p>
         </div>
       </div>
 
       {/* Filters Row */}
       <div className="flex flex-wrap gap-3 mb-5">
-        <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 flex-1 min-w-[200px]">
-          <Search size={15} className="text-slate-500 flex-shrink-0" />
+        <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 flex-1 min-w-[200px]">
+          <Search size={15} className="text-slate-400 dark:text-slate-500 flex-shrink-0" />
           <input
             type="text"
             placeholder="Search pair..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="bg-transparent outline-none text-sm text-white flex-1 min-w-0"
+            className="bg-transparent outline-none text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 flex-1 min-w-0"
           />
         </div>
         <div className="flex gap-2 flex-wrap">
@@ -238,7 +233,7 @@ function TradeHistory() {
               className={`px-4 py-2.5 rounded-xl text-sm font-semibold capitalize transition ${
                 filter === f
                   ? "bg-green-500 text-slate-950"
-                  : "bg-slate-900 border border-slate-800 text-slate-400 hover:text-white"
+                  : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
               }`}
             >
               {f}
@@ -247,14 +242,14 @@ function TradeHistory() {
           <button
             onClick={() => fetchTrades(true)}
             disabled={refreshing}
-            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold bg-slate-900 border border-slate-800 text-slate-400 hover:text-green-400 transition"
+            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:text-green-400 transition"
           >
             <RefreshCw size={13} className={refreshing ? "animate-spin" : ""} />
             {refreshing ? "..." : "Refresh"}
           </button>
           <button
             onClick={exportCSV}
-            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold bg-slate-900 border border-slate-800 text-slate-400 hover:text-green-400 transition"
+            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:text-green-400 transition"
           >
             <Download size={13} /> Export
           </button>
@@ -270,7 +265,7 @@ function TradeHistory() {
           <div className="w-8 h-8 border-4 border-green-500 border-t-transparent rounded-full animate-spin" />
         </div>
       ) : filtered.length === 0 ? (
-        <div className="text-center py-20 text-slate-500">
+        <div className="text-center py-20 text-slate-400 dark:text-slate-500">
           <p>No trades found</p>
         </div>
       ) : (
@@ -289,10 +284,10 @@ function TradeHistory() {
               : null;
 
             return (
-              <div key={trade._id || i} className="bg-slate-900 border border-slate-800 rounded-2xl p-4">
+              <div key={trade._id || i} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <span className="font-bold text-white">{trade.pair}</span>
+                    <span className="font-bold text-slate-900 dark:text-white">{trade.pair}</span>
                     <span className={`inline-flex items-center gap-1 text-xs font-semibold ${
                       trade.direction === "buy" ? "text-green-400" : "text-red-400"
                     }`}>
@@ -313,30 +308,30 @@ function TradeHistory() {
                       ❌ LOSS
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold bg-slate-700 text-slate-400">
+                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400">
                       ➖ EVEN
                     </span>
                   )}
                 </div>
 
                 <div className="grid grid-cols-3 gap-2 mb-3">
-                  <div className="bg-slate-800 rounded-lg p-2 text-center">
-                    <p className="text-[10px] text-slate-500 mb-0.5">Entry</p>
-                    <p className="font-mono text-xs text-slate-300">{trade.entryPrice || "—"}</p>
+                  <div className="bg-slate-100 dark:bg-slate-800 rounded-lg p-2 text-center">
+                    <p className="text-[10px] text-slate-400 dark:text-slate-500 mb-0.5">Entry</p>
+                    <p className="font-mono text-xs text-slate-700 dark:text-slate-300">{trade.entryPrice || "—"}</p>
                   </div>
-                  <div className="bg-slate-800 rounded-lg p-2 text-center">
-                    <p className="text-[10px] text-slate-500 mb-0.5">Exit</p>
-                    <p className="font-mono text-xs text-slate-300">{trade.exitPrice || "—"}</p>
+                  <div className="bg-slate-100 dark:bg-slate-800 rounded-lg p-2 text-center">
+                    <p className="text-[10px] text-slate-400 dark:text-slate-500 mb-0.5">Exit</p>
+                    <p className="font-mono text-xs text-slate-700 dark:text-slate-300">{trade.exitPrice || "—"}</p>
                   </div>
-                  <div className="bg-slate-800 rounded-lg p-2 text-center">
-                    <p className="text-[10px] text-slate-500 mb-0.5">Live</p>
+                  <div className="bg-slate-100 dark:bg-slate-800 rounded-lg p-2 text-center">
+                    <p className="text-[10px] text-slate-400 dark:text-slate-500 mb-0.5">Live</p>
                     <p className="font-mono text-xs text-green-400">
                       {livePrice ? formatPrice(trade.pair, livePrice) : "—"}
                     </p>
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between text-xs text-slate-400 mb-3">
+                <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-3">
                   <span>{trade.setup || "No strategy"}</span>
                   <span>{trade.openedAt ? new Date(trade.openedAt).toLocaleDateString() : "—"}</span>
                 </div>
@@ -353,10 +348,10 @@ function TradeHistory() {
                       <span className={`text-sm font-semibold ${
                         Number(livePL.pl) >= 0 ? "text-green-400" : "text-red-400"
                       }`}>
-                        {Number(livePL.pl) >= 0 ? "+" : ""}${livePL.pl} <span className="text-slate-500 font-normal">unrealized</span>
+                        {Number(livePL.pl) >= 0 ? "+" : ""}${livePL.pl} <span className="text-slate-400 dark:text-slate-500 font-normal">unrealized</span>
                       </span>
                     ) : (
-                      <span className="text-slate-600 text-sm">—</span>
+                      <span className="text-slate-400 dark:text-slate-600 text-sm">—</span>
                     )}
                   </div>
                   <div className="flex items-center gap-2">
@@ -364,6 +359,7 @@ function TradeHistory() {
                       onClick={() => navigate("/charts", {
                         state: { symbol: TRADINGVIEW_SYMBOLS[trade.pair] }
                       })}
+                      aria-label="View live chart"
                       className="p-2 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400"
                     >
                       <LineChart size={14} />
@@ -389,24 +385,24 @@ function TradeHistory() {
         </div>
 
         {/* Desktop table */}
-        <div className="hidden lg:block bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+        <div className="hidden lg:block bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[640px]">
               <thead>
-                <tr className="text-left border-b border-slate-800">
-                  <th className="px-4 py-3.5 text-xs font-semibold text-slate-400 uppercase tracking-wider">Pair</th>
-                  <th className="px-4 py-3.5 text-xs font-semibold text-slate-400 uppercase tracking-wider">Direction</th>
-                  <th className="px-4 py-3.5 text-xs font-semibold text-slate-400 uppercase tracking-wider">Entry</th>
-                  <th className="px-4 py-3.5 text-xs font-semibold text-slate-400 uppercase tracking-wider">Exit</th>
-                  <th className="px-4 py-3.5 text-xs font-semibold text-slate-400 uppercase tracking-wider">Live Price</th>
-                  <th className="px-4 py-3.5 text-xs font-semibold text-slate-400 uppercase tracking-wider">Strategy</th>
-                  <th className="px-4 py-3.5 text-xs font-semibold text-slate-400 uppercase tracking-wider">Status</th>
-                  <th className="px-4 py-3.5 text-xs font-semibold text-slate-400 uppercase tracking-wider text-right">P&L</th>
-                  <th className="px-4 py-3.5 text-xs font-semibold text-slate-400 uppercase tracking-wider">Date</th>
-                  <th className="px-4 py-3.5 text-xs font-semibold text-slate-400 uppercase tracking-wider">Actions</th>
+                <tr className="text-left border-b border-slate-200 dark:border-slate-800">
+                  <th className="px-4 py-3.5 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Pair</th>
+                  <th className="px-4 py-3.5 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Direction</th>
+                  <th className="px-4 py-3.5 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Entry</th>
+                  <th className="px-4 py-3.5 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Exit</th>
+                  <th className="px-4 py-3.5 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Live Price</th>
+                  <th className="px-4 py-3.5 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Strategy</th>
+                  <th className="px-4 py-3.5 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
+                  <th className="px-4 py-3.5 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right">P&L</th>
+                  <th className="px-4 py-3.5 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Date</th>
+                  <th className="px-4 py-3.5 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800">
+              <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
                 {filtered.map((trade, i) => {
                   const livePrice = livePrices[trade.pair];
                   const livePL = !trade.outcome && livePrice
@@ -416,11 +412,11 @@ function TradeHistory() {
                   return (
                     <tr
                       key={trade._id || i}
-                      className="hover:bg-slate-800/50 transition-colors"
+                      className="hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors"
                     >
                       {/* Pair */}
                       <td className="px-4 py-3.5">
-                        <span className="font-bold text-white text-sm">{trade.pair}</span>
+                        <span className="font-bold text-slate-900 dark:text-white text-sm">{trade.pair}</span>
                       </td>
 
                       {/* Direction */}
@@ -437,14 +433,14 @@ function TradeHistory() {
 
                       {/* Entry */}
                       <td className="px-4 py-3.5">
-                        <span className="font-mono text-sm text-slate-300">
+                        <span className="font-mono text-sm text-slate-700 dark:text-slate-300">
                           {trade.entryPrice || "—"}
                         </span>
                       </td>
 
                       {/* Exit */}
                       <td className="px-4 py-3.5">
-                        <span className="font-mono text-sm text-slate-300">
+                        <span className="font-mono text-sm text-slate-700 dark:text-slate-300">
                           {trade.exitPrice || "—"}
                         </span>
                       </td>
@@ -465,13 +461,13 @@ function TradeHistory() {
                             )}
                           </div>
                         ) : (
-                          <span className="text-slate-600 text-xs">—</span>
+                          <span className="text-slate-400 dark:text-slate-600 text-xs">—</span>
                         )}
                       </td>
 
                       {/* Strategy */}
                       <td className="px-4 py-3.5">
-                        <span className="text-slate-400 text-sm">
+                        <span className="text-slate-500 dark:text-slate-400 text-sm">
                           {trade.setup || "—"}
                         </span>
                       </td>
@@ -491,7 +487,7 @@ function TradeHistory() {
                             ❌ LOSS
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-700 text-slate-400">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400">
                             ➖ EVEN
                           </span>
                         )}
@@ -507,13 +503,13 @@ function TradeHistory() {
                             ${Number(trade.profitLoss || 0).toFixed(2)}
                           </span>
                         ) : (
-                          <span className="text-slate-600 text-sm">—</span>
+                          <span className="text-slate-400 dark:text-slate-600 text-sm">—</span>
                         )}
                       </td>
 
                       {/* Date */}
                       <td className="px-4 py-3.5">
-                        <span className="text-slate-400 text-xs">
+                        <span className="text-slate-500 dark:text-slate-400 text-xs">
                           {trade.openedAt
                             ? new Date(trade.openedAt).toLocaleDateString()
                             : "—"}
@@ -528,6 +524,7 @@ function TradeHistory() {
                               state: { symbol: TRADINGVIEW_SYMBOLS[trade.pair] }
                             })}
                             title="View Live Chart"
+                            aria-label="View live chart"
                             className="p-1.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 hover:bg-blue-500/20 transition"
                           >
                             <LineChart size={13} />
@@ -562,21 +559,22 @@ function TradeHistory() {
       {/* Close Trade Modal */}
       {closingTrade && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md shadow-2xl">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl w-full max-w-md shadow-2xl">
 
             {/* Modal Header */}
-            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-800">
+            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-200 dark:border-slate-800">
               <div>
-                <h3 className="text-lg font-bold text-white">
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white">
                   Close Trade
                 </h3>
-                <p className="text-sm text-slate-400 mt-0.5">
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
                   {closingTrade.pair} — {closingTrade.direction?.toUpperCase()}
                 </p>
               </div>
               <button
                 onClick={() => { setClosingTrade(null); setExitPrice(""); setShowCloseSnapshot(false); }}
-                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition"
+                aria-label="Close"
+                className="p-2 rounded-xl text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition"
               >
                 <X size={18} />
               </button>
@@ -586,14 +584,14 @@ function TradeHistory() {
 
               {/* Trade Summary */}
               <div className="grid grid-cols-2 gap-3">
-                <div className="bg-slate-800 rounded-xl p-3">
-                  <p className="text-xs text-slate-400 mb-1">Entry Price</p>
-                  <p className="font-mono font-bold text-white">
+                <div className="bg-slate-100 dark:bg-slate-800 rounded-xl p-3">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Entry Price</p>
+                  <p className="font-mono font-bold text-slate-900 dark:text-white">
                     {closingTrade.entryPrice}
                   </p>
                 </div>
-                <div className="bg-slate-800 rounded-xl p-3">
-                  <p className="text-xs text-slate-400 mb-1">Direction</p>
+                <div className="bg-slate-100 dark:bg-slate-800 rounded-xl p-3">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Direction</p>
                   <p className={`font-bold capitalize ${
                     closingTrade.direction === "buy" ? "text-green-400" : "text-red-400"
                   }`}>
@@ -602,7 +600,7 @@ function TradeHistory() {
                 </div>
                 {closingTrade.stopLoss && (
                   <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3">
-                    <p className="text-xs text-slate-400 mb-1">AI Stop Loss</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">AI Stop Loss</p>
                     <p className="font-mono font-bold text-red-400">
                       {closingTrade.stopLoss}
                     </p>
@@ -610,7 +608,7 @@ function TradeHistory() {
                 )}
                 {closingTrade.takeProfit && (
                   <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-3">
-                    <p className="text-xs text-slate-400 mb-1">AI Take Profit</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">AI Take Profit</p>
                     <p className="font-mono font-bold text-green-400">
                       {closingTrade.takeProfit}
                     </p>
@@ -619,10 +617,10 @@ function TradeHistory() {
               </div>
 
               {/* Live Price Fetch */}
-              <div className="bg-slate-800 border border-slate-700 rounded-xl p-4">
+              <div className="bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
                 <div className="flex items-center justify-between mb-3">
                   <div>
-                    <p className="text-xs text-slate-400 font-semibold uppercase tracking-wide">
+                    <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wide">
                       Current Market Price
                     </p>
                     {livePrices[closingTrade.pair] ? (
@@ -630,7 +628,7 @@ function TradeHistory() {
                         {formatPrice(closingTrade.pair, livePrices[closingTrade.pair])}
                       </p>
                     ) : (
-                      <p className="text-slate-500 text-sm mt-1">Not available</p>
+                      <p className="text-slate-400 dark:text-slate-500 text-sm mt-1">Not available</p>
                     )}
                   </div>
                   <button
@@ -654,7 +652,7 @@ function TradeHistory() {
 
               {/* Manual Exit Price */}
               <div>
-                <label className="text-sm text-slate-400 mb-2 block font-medium">
+                <label className="text-sm text-slate-500 dark:text-slate-400 mb-2 block font-medium">
                   Exit Price
                 </label>
                 <input
@@ -664,7 +662,7 @@ function TradeHistory() {
                   onChange={(e) => setExitPrice(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && setShowCloseSnapshot(true)}
                   placeholder="Enter exit price manually"
-                  className="w-full bg-slate-800 border border-slate-700 focus:border-green-500 p-3.5 rounded-xl outline-none transition text-white font-mono text-sm"
+                  className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:border-green-500 p-3.5 rounded-xl outline-none transition text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 font-mono text-sm"
                 />
               </div>
 
@@ -675,14 +673,14 @@ function TradeHistory() {
                     ? "bg-green-500/10 border-green-500/30"
                     : previewClose.outcome === "loss"
                     ? "bg-red-500/10 border-red-500/30"
-                    : "bg-slate-800 border-slate-700"
+                    : "bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
                 }`}>
-                  <p className="text-xs text-slate-400 font-semibold uppercase tracking-wide mb-3">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wide mb-3">
                     Result Preview
                   </p>
                   <div className="grid grid-cols-3 gap-3 text-center mb-3">
                     <div>
-                      <p className="text-xs text-slate-400 mb-1">P&L</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">P&L</p>
                       <p className={`text-xl font-bold font-mono ${
                         Number(previewClose.pl) >= 0 ? "text-green-400" : "text-red-400"
                       }`}>
@@ -690,7 +688,7 @@ function TradeHistory() {
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs text-slate-400 mb-1">Pips</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Pips</p>
                       <p className={`text-xl font-bold ${
                         Number(previewClose.pips) >= 0 ? "text-green-400" : "text-red-400"
                       }`}>
@@ -698,8 +696,8 @@ function TradeHistory() {
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs text-slate-400 mb-1">Risk Ratio</p>
-                      <p className="text-xl font-bold text-white">
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Risk Ratio</p>
+                      <p className="text-xl font-bold text-slate-900 dark:text-white">
                         {previewClose.riskRatio ? `1:${previewClose.riskRatio}` : "—"}
                       </p>
                     </div>
@@ -709,14 +707,14 @@ function TradeHistory() {
                       ? "bg-green-500/20 text-green-400"
                       : previewClose.outcome === "loss"
                       ? "bg-red-500/20 text-red-400"
-                      : "bg-slate-700 text-slate-400"
+                      : "bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400"
                   }`}>
                     {previewClose.outcome === "win" ? "✅ WIN"
                       : previewClose.outcome === "loss" ? "❌ LOSS"
                       : "➖ BREAKEVEN"}
                   </div>
                   {closingTrade.stopLoss && previewClose.outcome === "loss" && (
-                    <p className="text-center text-xs text-slate-400 mt-2">
+                    <p className="text-center text-xs text-slate-500 dark:text-slate-400 mt-2">
                       {Math.abs(parseFloat(exitPrice) - parseFloat(closingTrade.stopLoss)) < 0.002
                         ? "✅ Closed at AI suggested Stop Loss"
                         : "⚠️ Closed manually — different from AI Stop Loss"}

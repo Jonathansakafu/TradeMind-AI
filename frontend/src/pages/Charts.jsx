@@ -219,50 +219,50 @@ function Charts() {
 
       {/* Header */}
       <div className="mb-5">
-        <h1 className="text-3xl md:text-4xl font-bold text-white">Live Charts</h1>
-        <p className="text-slate-400 mt-1 text-sm">
+        <h1 className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white">Live Charts</h1>
+        <p className="text-slate-500 dark:text-slate-400 mt-1 text-sm">
           TradingView charts with your open trade levels
         </p>
       </div>
 
       {/* Symbol Search — TradingView-style: type to find any pair/crypto/index/commodity */}
       <div className="relative mb-3" ref={searchRef}>
-        <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 focus-within:border-green-500/50 rounded-xl px-4 py-2.5">
-          <Search size={16} className="text-slate-500 flex-shrink-0" />
+        <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 focus-within:border-green-500/50 rounded-xl px-4 py-2.5">
+          <Search size={16} className="text-slate-400 dark:text-slate-500 flex-shrink-0" />
           <input
             type="text"
             value={search}
             onChange={(e) => { setSearch(e.target.value); setSearchOpen(true); }}
             onFocus={() => setSearchOpen(true)}
             placeholder={`Search a symbol... (currently ${selectedPair.label})`}
-            className="bg-transparent outline-none text-sm text-white placeholder-slate-500 flex-1 min-w-0"
+            className="bg-transparent outline-none text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 flex-1 min-w-0"
           />
           {search && (
-            <button onClick={() => setSearch("")} className="text-slate-500 hover:text-white flex-shrink-0">
+            <button onClick={() => setSearch("")} aria-label="Clear search" className="p-2 -m-2 text-slate-400 dark:text-slate-500 hover:text-slate-900 dark:hover:text-white flex-shrink-0">
               <X size={14} />
             </button>
           )}
         </div>
 
         {searchOpen && (
-          <div className="absolute left-0 right-0 top-full mt-2 bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl z-30 max-h-80 overflow-y-auto">
+          <div className="absolute left-0 right-0 top-full mt-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl z-30 max-h-80 overflow-y-auto">
             {searchResults.length === 0 ? (
-              <p className="text-slate-500 text-sm px-4 py-4 text-center">No symbols match "{search}"</p>
+              <p className="text-slate-400 dark:text-slate-500 text-sm px-4 py-4 text-center">No symbols match "{search}"</p>
             ) : (
               searchResults.map((pair) => (
                 <button
                   key={pair.symbol}
                   onClick={() => selectPair(pair)}
-                  className={`flex items-center justify-between w-full px-4 py-3 hover:bg-slate-800 transition text-left border-b border-slate-800/50 last:border-0 ${
+                  className={`flex items-center justify-between w-full px-4 py-3 hover:bg-slate-100 dark:hover:bg-slate-800 transition text-left border-b border-slate-200/50 dark:border-slate-800/50 last:border-0 ${
                     selectedPair.symbol === pair.symbol ? "bg-green-500/10" : ""
                   }`}
                 >
                   <span className={`text-sm font-medium ${
-                    selectedPair.symbol === pair.symbol ? "text-green-400" : "text-white"
+                    selectedPair.symbol === pair.symbol ? "text-green-600 dark:text-green-400" : "text-slate-900 dark:text-white"
                   }`}>
                     {pair.label}
                   </span>
-                  <span className="text-xs text-slate-500 bg-slate-800 px-2 py-0.5 rounded-md flex-shrink-0">
+                  <span className="text-xs text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md flex-shrink-0">
                     {pair.group}
                   </span>
                 </button>
@@ -283,7 +283,7 @@ function Charts() {
             className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition ${
               selectedPair.symbol === pair.symbol
                 ? "bg-green-500 text-slate-950"
-                : "bg-slate-900 border border-slate-800 text-slate-400 hover:text-white"
+                : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
             }`}
           >
             {pair.label}
@@ -300,7 +300,7 @@ function Charts() {
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
               selectedInterval === i.value
                 ? "bg-green-500 text-slate-950"
-                : "bg-slate-900 border border-slate-800 text-slate-400 hover:text-white"
+                : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
             }`}
           >
             {i.label}
@@ -315,7 +315,7 @@ function Charts() {
           {/* Trade selector kama kuna zaidi ya moja */}
           {openTrades.length > 1 && (
             <div className="flex gap-2 flex-wrap">
-              <span className="text-xs text-slate-400 self-center">Open trades:</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400 self-center">Open trades:</span>
               {openTrades.map((t) => (
                 <button
                   key={t._id}
@@ -323,7 +323,7 @@ function Charts() {
                   className={`px-3 py-1 rounded-lg text-xs font-semibold transition ${
                     selectedTrade?._id === t._id
                       ? "bg-green-500 text-slate-950"
-                      : "bg-slate-900 border border-slate-800 text-slate-400 hover:text-white"
+                      : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                   }`}
                 >
                   {t.direction?.toUpperCase()} @ {t.entryPrice}
@@ -334,7 +334,7 @@ function Charts() {
 
           {/* Trade details panel */}
           {selectedTrade && (
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5">
               <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
                 <div className="flex items-center gap-3">
                   <div className={`px-3 py-1.5 rounded-xl text-sm font-bold ${
@@ -344,7 +344,7 @@ function Charts() {
                   }`}>
                     {selectedTrade.direction?.toUpperCase()}
                   </div>
-                  <span className="text-white font-bold text-lg">
+                  <span className="text-slate-900 dark:text-white font-bold text-lg">
                     {selectedTrade.pair}
                   </span>
                   <span className="px-2 py-1 rounded-lg text-xs font-bold bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">
@@ -359,7 +359,7 @@ function Charts() {
                       ? "bg-green-500/10 border-green-500/30"
                       : "bg-red-500/10 border-red-500/30"
                   }`}>
-                    <p className="text-xs text-slate-400">Live P&L</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Live P&L</p>
                     <p className={`text-xl font-bold font-mono ${
                       livePL.isProfit ? "text-green-400" : "text-red-400"
                     }`}>
@@ -374,16 +374,16 @@ function Charts() {
 
               {/* Price Levels */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <div className="bg-slate-800 rounded-xl p-3 text-center">
-                  <p className="text-xs text-slate-400 mb-1">Entry</p>
-                  <p className="font-mono font-bold text-blue-400 text-sm">
+                <div className="bg-slate-100 dark:bg-slate-800 rounded-xl p-3 text-center">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Entry</p>
+                  <p className="font-mono font-bold text-blue-600 dark:text-blue-400 text-sm">
                     {formatPrice(selectedTrade.pair, selectedTrade.entryPrice)}
                   </p>
                   <div className="w-full h-0.5 bg-blue-500/40 mt-2 rounded" />
                 </div>
 
                 <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-center">
-                  <p className="text-xs text-slate-400 mb-1">Stop Loss</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Stop Loss</p>
                   <p className="font-mono font-bold text-red-400 text-sm">
                     {selectedTrade.stopLoss
                       ? formatPrice(selectedTrade.pair, selectedTrade.stopLoss)
@@ -393,7 +393,7 @@ function Charts() {
                 </div>
 
                 <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-3 text-center">
-                  <p className="text-xs text-slate-400 mb-1">Take Profit</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Take Profit</p>
                   <p className="font-mono font-bold text-green-400 text-sm">
                     {selectedTrade.takeProfit
                       ? formatPrice(selectedTrade.pair, selectedTrade.takeProfit)
@@ -402,9 +402,9 @@ function Charts() {
                   <div className="w-full h-0.5 bg-green-500/40 mt-2 rounded" />
                 </div>
 
-                <div className="bg-slate-800 rounded-xl p-3 text-center">
-                  <p className="text-xs text-slate-400 mb-1">Live Price</p>
-                  <p className="font-mono font-bold text-white text-sm">
+                <div className="bg-slate-100 dark:bg-slate-800 rounded-xl p-3 text-center">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Live Price</p>
+                  <p className="font-mono font-bold text-slate-900 dark:text-white text-sm">
                     {formatPrice(selectedTrade.pair, livePrice)}
                   </p>
                   <div className={`w-full h-0.5 mt-2 rounded ${
@@ -416,8 +416,8 @@ function Charts() {
               {/* Risk levels indicator */}
               {selectedTrade.stopLoss && selectedTrade.takeProfit && livePrice && (
                 <div className="mt-4">
-                  <p className="text-xs text-slate-400 mb-2">Price Position</p>
-                  <div className="relative h-6 bg-slate-800 rounded-full overflow-hidden">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">Price Position</p>
+                  <div className="relative h-6 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                     {(() => {
                       const sl = parseFloat(selectedTrade.stopLoss);
                       const tp = parseFloat(selectedTrade.takeProfit);
@@ -459,16 +459,16 @@ function Charts() {
               )}
 
               {/* Trade info footer */}
-              <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-800 flex-wrap gap-2">
-                <div className="flex items-center gap-4 text-xs text-slate-400">
-                  <span>Lot: <span className="text-white font-semibold">{selectedTrade.lotSize || "—"}</span></span>
-                  <span>Opened: <span className="text-white font-semibold">
+              <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-200 dark:border-slate-800 flex-wrap gap-2">
+                <div className="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400">
+                  <span>Lot: <span className="text-slate-900 dark:text-white font-semibold">{selectedTrade.lotSize || "—"}</span></span>
+                  <span>Opened: <span className="text-slate-900 dark:text-white font-semibold">
                     {selectedTrade.openedAt
                       ? new Date(selectedTrade.openedAt).toLocaleDateString()
                       : "—"}
                   </span></span>
                   {selectedTrade.setup && (
-                    <span>Setup: <span className="text-white font-semibold">{selectedTrade.setup}</span></span>
+                    <span>Setup: <span className="text-slate-900 dark:text-white font-semibold">{selectedTrade.setup}</span></span>
                   )}
                 </div>
                 <div className={`text-xs px-3 py-1 rounded-lg font-semibold ${
@@ -486,10 +486,10 @@ function Charts() {
 
       {/* No open trades message */}
       {openTrades.length === 0 && (
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 mb-4 flex items-center gap-3">
-          <div className="w-2 h-2 rounded-full bg-slate-600" />
-          <p className="text-slate-400 text-sm">
-            No open trades for <span className="text-white font-semibold">{selectedPair.label}</span> —
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 mb-4 flex items-center gap-3">
+          <div className="w-2 h-2 rounded-full bg-slate-400 dark:bg-slate-600" />
+          <p className="text-slate-500 dark:text-slate-400 text-sm">
+            No open trades for <span className="text-slate-900 dark:text-white font-semibold">{selectedPair.label}</span> —
             chart shown for analysis only
           </p>
         </div>
@@ -497,7 +497,7 @@ function Charts() {
 
       {/* TradingView Chart */}
       <div
-        className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden"
+        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden"
         style={{ height: openTrades.length > 0 ? "500px" : "620px" }}
       >
         <div
@@ -507,7 +507,7 @@ function Charts() {
         />
       </div>
 
-      <p className="text-slate-600 text-xs mt-3 text-center">
+      <p className="text-slate-400 dark:text-slate-600 text-xs mt-3 text-center">
         Charts powered by TradingView · Prices update every 30 seconds
       </p>
 

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">TradeMind AI</string>
+    <string name="title_activity_main">TradeMind AI</string>
+    <string name="package_name">com.trademind.ai</string>
+    <string name="custom_url_scheme">com.trademind.ai</string>
+</resources>

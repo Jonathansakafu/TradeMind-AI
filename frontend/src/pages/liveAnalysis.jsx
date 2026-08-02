@@ -153,13 +153,13 @@ const sendToMT5 = async (analysisData) => {
       <div className="flex items-center justify-between mb-8">
         <div>
           <h2 className="text-3xl md:text-4xl font-bold">Live Market Analysis</h2>
-          <p className="text-slate-400 mt-2">
+          <p className="text-slate-500 dark:text-slate-400 mt-2">
             AI analyzes live market and compares with your trading history
           </p>
         </div>
         <button
           onClick={fetchPrices}
-          className="flex items-center gap-2 bg-slate-900 border border-slate-800 px-4 py-2.5 rounded-xl text-sm text-slate-400 hover:text-white transition"
+          className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-4 py-2.5 rounded-xl text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition"
         >
           <RefreshCw size={14} />
           Refresh
@@ -173,7 +173,7 @@ const sendToMT5 = async (analysisData) => {
           className={`px-5 py-2.5 rounded-xl text-sm font-semibold transition ${
             activeTab === "forex"
               ? "bg-green-500 text-slate-950"
-              : "bg-slate-900 border border-slate-800 text-slate-400 hover:text-white"
+              : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
           }`}
         >
           💱 Forex Pairs
@@ -183,7 +183,7 @@ const sendToMT5 = async (analysisData) => {
           className={`px-5 py-2.5 rounded-xl text-sm font-semibold transition flex items-center gap-2 ${
             activeTab === "crypto"
               ? "bg-green-500 text-slate-950"
-              : "bg-slate-900 border border-slate-800 text-slate-400 hover:text-white"
+              : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
           }`}
         >
           ₿ Crypto
@@ -196,13 +196,13 @@ const sendToMT5 = async (analysisData) => {
       {/* Prices Grid */}
       <div className="mb-8">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-semibold text-slate-300">
+          <h3 className="font-semibold text-slate-700 dark:text-slate-300">
             {activeTab === "forex"
               ? "Live Prices — Click pair for AI Analysis"
               : "Crypto Prices — Available 24/7 including weekends"}
           </h3>
           {lastUpdated && (
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-slate-400 dark:text-slate-500">
               Updated: {lastUpdated.toLocaleTimeString()}
             </p>
           )}
@@ -225,12 +225,12 @@ const sendToMT5 = async (analysisData) => {
                   className={`p-4 rounded-xl border text-left transition ${
                     isSelected
                       ? "bg-green-500/10 border-green-500/50"
-                      : "bg-slate-900 border-slate-800 hover:border-slate-600"
+                      : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-600"
                   }`}
                 >
                   <div className="flex items-center justify-between mb-1">
                     <p className={`text-xs font-semibold ${
-                      isSelected ? "text-green-400" : "text-slate-400"
+                      isSelected ? "text-green-400" : "text-slate-500 dark:text-slate-400"
                     }`}>
                       {isCrypto
                         ? pair.replace("USD", "/USD")
@@ -255,9 +255,9 @@ const sendToMT5 = async (analysisData) => {
 
       {/* AI Analysis */}
       {analysisLoading ? (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-12 flex flex-col items-center justify-center gap-4">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-12 flex flex-col items-center justify-center gap-4">
           <div className="w-12 h-12 border-4 border-green-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-slate-400">AI is analyzing {selectedPair}...</p>
+          <p className="text-slate-500 dark:text-slate-400">AI is analyzing {selectedPair}...</p>
         </div>
       ) : analysis ? (
         <div className="space-y-6">
@@ -275,59 +275,59 @@ const sendToMT5 = async (analysisData) => {
                       ? "🔴 SELL SIGNAL"
                       : "⚠️ WAIT — No Clear Signal"}
                   </p>
-                  <p className="text-slate-400 text-sm mt-1">
+                  <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
                     {analysis.pair} — Current Price:{" "}
-                    <span className="font-mono font-bold text-white">
+                    <span className="font-mono font-bold text-slate-900 dark:text-white">
                       {formatPrice(analysis.pair, analysis.currentPrice)}
                     </span>
                   </p>
                 </div>
               </div>
               <div className="text-right">
-                <p className="text-xs text-slate-400 mb-1">AI Confidence</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">AI Confidence</p>
                 <p className={`text-3xl md:text-4xl font-bold ${getSignalColor(analysis.analysis?.signal)}`}>
                   {analysis.analysis?.confidence}%
                 </p>
               </div>
             </div>
-            <p className="text-slate-300 text-sm leading-relaxed bg-slate-800/50 rounded-xl p-4">
+            <p className="text-slate-700 dark:text-slate-300 text-sm leading-relaxed bg-slate-100/50 dark:bg-slate-800/50 rounded-xl p-4">
               {analysis.analysis?.reasoning}
             </p>
           </div>
 
           {/* Entry SL TP */}
           <div className="grid grid-cols-3 gap-4">
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 text-center">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 text-center">
               <div className="flex items-center justify-center gap-2 mb-2">
                 <Target size={16} className="text-blue-400" />
-                <p className="text-xs text-slate-400 font-semibold">ENTRY</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold">ENTRY</p>
               </div>
-              <p className="text-xl font-bold font-mono text-white">
+              <p className="text-xl font-bold font-mono text-slate-900 dark:text-white">
                 {analysis.analysis?.entry || "—"}
               </p>
-              <p className="text-xs text-slate-500 mt-1">Suggested entry</p>
+              <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Suggested entry</p>
             </div>
-            <div className="bg-slate-900 border border-red-500/20 rounded-2xl p-5 text-center">
+            <div className="bg-white dark:bg-slate-900 border border-red-500/20 rounded-2xl p-5 text-center">
               <div className="flex items-center justify-center gap-2 mb-2">
                 <AlertTriangle size={16} className="text-red-400" />
-                <p className="text-xs text-slate-400 font-semibold">STOP LOSS</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold">STOP LOSS</p>
               </div>
               <p className="text-xl font-bold font-mono text-red-400">
                 {analysis.analysis?.stopLoss || "—"}
               </p>
-              <p className="text-xs text-slate-500 mt-1">
+              <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
                 {analysis.analysis?.pipsToSL} pips risk
               </p>
             </div>
-            <div className="bg-slate-900 border border-green-500/20 rounded-2xl p-5 text-center">
+            <div className="bg-white dark:bg-slate-900 border border-green-500/20 rounded-2xl p-5 text-center">
               <div className="flex items-center justify-center gap-2 mb-2">
                 <DollarSign size={16} className="text-green-400" />
-                <p className="text-xs text-slate-400 font-semibold">TAKE PROFIT</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold">TAKE PROFIT</p>
               </div>
               <p className="text-xl font-bold font-mono text-green-400">
                 {analysis.analysis?.takeProfit || "—"}
               </p>
-              <p className="text-xs text-slate-500 mt-1">
+              <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
                 {analysis.analysis?.pipsToTP} pips reward
               </p>
             </div>
@@ -335,32 +335,32 @@ const sendToMT5 = async (analysisData) => {
 
           {/* Market Info + History Match */}
           <div className="grid grid-cols-2 gap-4">
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-              <p className="text-xs text-slate-400 mb-3 font-semibold">📊 MARKET INFO</p>
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-3 font-semibold">📊 MARKET INFO</p>
               <div className="space-y-2">
                 <div className="flex justify-between">
-                  <span className="text-slate-400 text-sm">Risk/Reward</span>
-                  <span className="font-semibold text-white">
+                  <span className="text-slate-500 dark:text-slate-400 text-sm">Risk/Reward</span>
+                  <span className="font-semibold text-slate-900 dark:text-white">
                     {analysis.analysis?.riskRewardRatio || "—"}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-400 text-sm">Market Condition</span>
-                  <span className="font-semibold text-white capitalize">
+                  <span className="text-slate-500 dark:text-slate-400 text-sm">Market Condition</span>
+                  <span className="font-semibold text-slate-900 dark:text-white capitalize">
                     {analysis.analysis?.marketCondition || "—"}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-400 text-sm">Best Time</span>
-                  <span className="font-semibold text-white">
+                  <span className="text-slate-500 dark:text-slate-400 text-sm">Best Time</span>
+                  <span className="font-semibold text-slate-900 dark:text-white">
                     {analysis.analysis?.bestTimeToTrade || "—"}
                   </span>
                 </div>
               </div>
             </div>
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-              <p className="text-xs text-slate-400 mb-3 font-semibold">🧠 HISTORY MATCH</p>
-              <p className="text-sm text-slate-300 leading-relaxed">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-3 font-semibold">🧠 HISTORY MATCH</p>
+              <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
                 {analysis.analysis?.historicalMatch ||
                   "Add more trades to get personalized historical match"}
               </p>
@@ -381,17 +381,17 @@ const sendToMT5 = async (analysisData) => {
 
           {/* Record Trade Button — Auto fills form */}
 {analysis.analysis?.signal !== "wait" && (
-  <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-    <p className="text-sm text-slate-400 mb-1">
+  <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5">
+    <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">
       Take action on this signal
     </p>
-    <p className="text-xs text-slate-500 mb-4">
+    <p className="text-xs text-slate-400 dark:text-slate-500 mb-4">
       Record manually or send to MT5 for auto execution
     </p>
     <div className="flex gap-3 flex-wrap">
       <button
         onClick={recordTradeFromSignal}
-        className="flex items-center gap-2 bg-slate-800 border border-slate-700 hover:border-green-500/50 text-white font-semibold px-5 py-3 rounded-xl transition text-sm"
+        className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-green-500/50 text-slate-900 dark:text-white font-semibold px-5 py-3 rounded-xl transition text-sm"
       >
         <TrendingUp size={16} className="text-green-400" />
         Record Manually
@@ -416,12 +416,12 @@ const sendToMT5 = async (analysisData) => {
 )}
         </div>
       ) : (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center">
-          <Brain size={48} className="text-slate-700 mx-auto mb-4" />
-          <p className="text-slate-400 text-lg">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-12 text-center">
+          <Brain size={48} className="text-slate-300 dark:text-slate-700 mx-auto mb-4" />
+          <p className="text-slate-500 dark:text-slate-400 text-lg">
             Click any pair above to get AI analysis
           </p>
-          <p className="text-slate-600 text-sm mt-2">
+          <p className="text-slate-400 dark:text-slate-600 text-sm mt-2">
             AI will analyze live price and compare with your trading history
           </p>
           {activeTab === "crypto" && (

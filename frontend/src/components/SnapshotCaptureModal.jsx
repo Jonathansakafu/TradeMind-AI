@@ -40,12 +40,12 @@ function SnapshotCaptureModal({
   return (
     <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-[999] flex items-center justify-center p-4" onClick={onClose}>
       <div
-        className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg shadow-2xl max-h-[90vh] flex flex-col"
+        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl w-full max-w-lg shadow-2xl max-h-[90vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800 flex-shrink-0">
-          <p className="font-bold text-white text-sm">{title}</p>
-          <button onClick={onClose} className="text-slate-400 hover:text-white transition">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex-shrink-0">
+          <p className="font-bold text-slate-900 dark:text-white text-sm">{title}</p>
+          <button onClick={onClose} aria-label="Close" className="p-2 -m-2 text-slate-400 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition">
             <X size={18} />
           </button>
         </div>

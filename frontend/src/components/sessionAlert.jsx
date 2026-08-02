@@ -157,7 +157,8 @@ function SessionAlert() {
               </div>
               <button
                 onClick={() => setDismissed([...dismissed, session.name])}
-                className="text-slate-500 hover:text-slate-300 transition"
+                aria-label="Dismiss session alert"
+                className="p-2 -m-2 text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition"
               >
                 <X size={14} />
               </button>
@@ -165,8 +166,8 @@ function SessionAlert() {
 
             {/* Time */}
             <div className="flex items-center gap-1.5 mb-3">
-              <Clock size={12} className="text-slate-400" />
-              <p className="text-xs text-slate-400">
+              <Clock size={12} className="text-slate-500 dark:text-slate-400" />
+              <p className="text-xs text-slate-500 dark:text-slate-400">
                 {session.open}:00 — {session.close}:00 UTC
               </p>
             </div>
@@ -174,7 +175,7 @@ function SessionAlert() {
             {/* Best pairs from history */}
             {bestPairs.length > 0 ? (
               <div>
-                <p className="text-xs text-slate-400 mb-2 flex items-center gap-1">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-2 flex items-center gap-1">
                   <TrendingUp size={11} />
                   Best pairs from your history:
                 </p>
@@ -191,7 +192,7 @@ function SessionAlert() {
               </div>
             ) : (
               <div>
-                <p className="text-xs text-slate-400 mb-2">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
                   Pairs za kawaida kwa session hii:
                 </p>
                 <div className="flex flex-wrap gap-2">
@@ -208,8 +209,8 @@ function SessionAlert() {
             )}
 
             {/* AI tip */}
-            <div className="mt-3 pt-3 border-t border-slate-700/50">
-              <p className="text-xs text-slate-400">
+            <div className="mt-3 pt-3 border-t border-slate-200/50 dark:border-slate-700/50">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
                 💡 {bestPairs.length > 0
                   ? `Historically unafanya vizuri zaidi na ${bestPairs[0].pair} (${bestPairs[0].winRate}% win rate) wakati wa ${session.label}`
                   : `Ongeza trades zaidi ili upate personalized suggestions kwa ${session.label} session`}
@@ -223,7 +224,7 @@ function SessionAlert() {
       {visibleSessions.length > 1 && (
         <button
           onClick={() => setShow(false)}
-          className="text-xs text-slate-500 hover:text-slate-300 text-center transition"
+          className="text-xs text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 text-center transition"
         >
           Hide all alerts
         </button>

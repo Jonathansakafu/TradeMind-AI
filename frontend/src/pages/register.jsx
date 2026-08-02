@@ -72,11 +72,11 @@ function Register() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center text-white">
+    <div className="min-h-screen bg-white dark:bg-slate-950 flex items-center justify-center text-slate-900 dark:text-white">
 
-      <div className="bg-slate-900 p-10 rounded-2xl w-full max-w-md shadow-xl">
+      <div className="bg-white dark:bg-slate-900 p-10 rounded-2xl w-full max-w-md shadow-xl">
 
-        <h1 className="text-4xl font-bold text-center text-green-400 mb-8">
+        <h1 className="text-4xl font-bold text-center text-green-600 dark:text-green-400 mb-8">
           TradeMind AI
         </h1>
 
@@ -93,7 +93,7 @@ function Register() {
             onChange={(e) =>
               setUsername(e.target.value)
             }
-            className="w-full bg-slate-800 p-4 rounded-xl outline-none"
+            className="w-full bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 p-4 rounded-xl outline-none"
           />
 
           <input
@@ -103,7 +103,7 @@ function Register() {
             onChange={(e) =>
               setEmail(e.target.value)
             }
-            className="w-full bg-slate-800 p-4 rounded-xl outline-none"
+            className="w-full bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 p-4 rounded-xl outline-none"
           />
 
           <input
@@ -113,7 +113,7 @@ function Register() {
             onChange={(e) =>
               setPassword(e.target.value)
             }
-            className="w-full bg-slate-800 p-4 rounded-xl outline-none"
+            className="w-full bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 p-4 rounded-xl outline-none"
           />
 
           {message && (
@@ -123,7 +123,7 @@ function Register() {
                   ? "bg-red-500/10 text-red-400 border border-red-500/20"
                   : message.type === "success"
                   ? "bg-green-500/10 text-green-400 border border-green-500/20"
-                  : "bg-slate-800 text-slate-300 border border-slate-700"
+                  : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700"
               }`}
             >
               {message.text}
@@ -143,13 +143,13 @@ function Register() {
 
         </div>
 
-        <p className="text-slate-400 mt-6 text-center">
+        <p className="text-slate-500 dark:text-slate-400 mt-6 text-center">
 
           Already have an account?{" "}
 
           <Link
-            to="/"
-            className="text-green-400"
+            to="/login"
+            className="text-green-600 dark:text-green-400"
           >
             Login
           </Link>

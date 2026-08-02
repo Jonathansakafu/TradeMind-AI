@@ -62,18 +62,18 @@ function PriceTicker({ compact = false, className = "" }) {
   const renderChip = (item, key) => (
     <div
       key={key}
-      className={`flex items-center flex-shrink-0 border-r border-slate-800 ${
+      className={`flex items-center flex-shrink-0 border-r border-slate-200 dark:border-slate-800 ${
         compact ? "gap-1.5 px-4 py-2.5" : "gap-2.5 px-5 py-3"
       }`}
     >
-      <span className={`text-xs font-bold ${CRYPTO_PAIRS.has(item.pair) ? "text-yellow-400" : "text-slate-500"}`}>
+      <span className={`text-xs font-bold ${CRYPTO_PAIRS.has(item.pair) ? "text-yellow-600 dark:text-yellow-400" : "text-slate-400 dark:text-slate-500"}`}>
         {CRYPTO_PAIRS.has(item.pair) ? "₿" : "FX"}
       </span>
-      <span className={`font-semibold text-white ${compact ? "text-xs" : "text-sm"}`}>
+      <span className={`font-semibold text-slate-900 dark:text-white ${compact ? "text-xs" : "text-sm"}`}>
         {formatLabel(item.pair)}
       </span>
       <span className={`font-mono ${compact ? "text-xs" : "text-sm"} ${
-        item.direction === "up" ? "text-green-400" : item.direction === "down" ? "text-red-400" : "text-slate-300"
+        item.direction === "up" ? "text-green-600 dark:text-green-400" : item.direction === "down" ? "text-red-500 dark:text-red-400" : "text-slate-500 dark:text-slate-300"
       }`}>
         {formatPrice(item.pair, item.price)}
       </span>
@@ -83,7 +83,7 @@ function PriceTicker({ compact = false, className = "" }) {
   );
 
   return (
-    <div className={`relative w-full min-w-0 overflow-hidden bg-slate-900 border border-slate-800 rounded-2xl ${className || (compact ? "" : "mb-8")}`}>
+    <div className={`relative w-full min-w-0 overflow-hidden bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl ${className || (compact ? "" : "mb-8")}`}>
       <style>{`
         @keyframes ${animationName} {
           from { transform: translateX(0); }

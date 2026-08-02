@@ -67,22 +67,22 @@ function AskAI() {
       <div className="flex items-center justify-between mb-8 flex-wrap gap-4">
         <div>
           <h2 className="text-3xl md:text-4xl font-bold flex items-center gap-3">
-            <Sparkles className="text-green-400" size={32} />
+            <Sparkles className="text-green-600 dark:text-green-400" size={32} />
             Ask AI
           </h2>
-          <p className="text-slate-400 mt-2">
+          <p className="text-slate-500 dark:text-slate-400 mt-2">
             Ask questions grounded in your uploaded books and trade history — powered by retrieval-augmented generation
           </p>
         </div>
       </div>
 
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl flex flex-col h-[65vh]">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl flex flex-col h-[65vh]">
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
           {messages.length === 0 && (
             <div className="text-center py-16">
-              <Sparkles size={40} className="text-slate-700 mx-auto mb-4" />
-              <p className="text-slate-400 text-lg font-semibold">Ask anything about your trading</p>
-              <p className="text-slate-500 text-sm mt-2 max-w-md mx-auto">
+              <Sparkles size={40} className="text-slate-300 dark:text-slate-700 mx-auto mb-4" />
+              <p className="text-slate-500 dark:text-slate-400 text-lg font-semibold">Ask anything about your trading</p>
+              <p className="text-slate-400 dark:text-slate-500 text-sm mt-2 max-w-md mx-auto">
                 e.g. "What does my Wyckoff book say about spring patterns?" or
                 "How have my EURUSD London session trades performed?"
               </p>
@@ -104,7 +104,7 @@ function AskAI() {
                     className={`rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap ${
                       m.role === "user"
                         ? "bg-green-500 text-slate-950 font-medium"
-                        : "bg-slate-800 text-slate-200"
+                        : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200"
                     }`}
                   >
                     {isStreamingEmpty ? (
@@ -128,7 +128,7 @@ function AskAI() {
                         <span
                           key={si}
                           title={s.snippet}
-                          className="inline-flex items-center gap-1 text-xs bg-slate-800/70 border border-slate-700 text-slate-400 px-2 py-1 rounded-lg"
+                          className="inline-flex items-center gap-1 text-xs bg-slate-100 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 text-slate-500 px-2 py-1 rounded-lg"
                         >
                           {SOURCE_ICONS[s.source] || <BookOpen size={12} />}
                           {s.label}
@@ -138,8 +138,8 @@ function AskAI() {
                   )}
                 </div>
                 {m.role === "user" && (
-                  <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center flex-shrink-0 order-2">
-                    <User size={16} className="text-slate-400" />
+                  <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center flex-shrink-0 order-2">
+                    <User size={16} className="text-slate-500 dark:text-slate-400" />
                   </div>
                 )}
               </div>
@@ -148,17 +148,18 @@ function AskAI() {
           <div ref={bottomRef} />
         </div>
 
-        <form onSubmit={askQuestion} className="border-t border-slate-800 p-4 flex gap-3">
+        <form onSubmit={askQuestion} className="border-t border-slate-200 dark:border-slate-800 p-4 flex gap-3">
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Ask about your books or trade history..."
-            className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-green-500"
+            className="flex-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-green-500"
           />
           <button
             type="submit"
             disabled={loading || !input.trim()}
+            aria-label="Send message"
             className="flex items-center gap-2 bg-green-500 hover:bg-green-600 disabled:opacity-50 text-slate-950 font-semibold px-5 py-3 rounded-xl text-sm transition"
           >
             <Send size={16} />

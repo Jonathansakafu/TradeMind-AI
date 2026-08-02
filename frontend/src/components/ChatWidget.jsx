@@ -69,7 +69,7 @@ function ChatWidget() {
       {/* Launcher bubble */}
       <button
         onClick={() => setOpen(!open)}
-        className="fixed bottom-5 right-5 z-[998] w-14 h-14 rounded-full bg-green-500 hover:bg-green-600 text-slate-950 shadow-2xl flex items-center justify-center transition"
+        className="fixed bottom-[calc(env(safe-area-inset-bottom)+1.25rem)] right-[calc(env(safe-area-inset-right)+1.25rem)] z-[998] w-14 h-14 rounded-full bg-green-500 hover:bg-green-600 text-slate-950 shadow-2xl flex items-center justify-center transition"
         aria-label="Open AI chat"
       >
         {open ? <X size={22} /> : <Sparkles size={22} />}
@@ -78,25 +78,25 @@ function ChatWidget() {
       {/* Chat panel */}
       {open && (
         <div
-          className="fixed z-[997] bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+          className="fixed z-[997] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl flex flex-col overflow-hidden"
           style={{
-            bottom: "88px",
-            right: "20px",
+            bottom: "calc(env(safe-area-inset-bottom) + 88px)",
+            right: "calc(env(safe-area-inset-right) + 20px)",
             width: "min(380px, calc(100vw - 32px))",
             height: "min(560px, calc(100vh - 140px))",
           }}
         >
-          <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800 bg-slate-900 flex-shrink-0">
-            <Sparkles size={16} className="text-green-400" />
-            <p className="font-bold text-white text-sm">TradeMind AI Assistant</p>
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex-shrink-0">
+            <Sparkles size={16} className="text-green-500 dark:text-green-400" />
+            <p className="font-bold text-slate-900 dark:text-white text-sm">TradeMind AI Assistant</p>
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
             {messages.length === 0 && (
               <div className="text-center py-10 px-2">
                 <Bot size={32} className="text-slate-700 mx-auto mb-3" />
-                <p className="text-slate-400 text-sm font-semibold">Ask me anything</p>
-                <p className="text-slate-500 text-xs mt-1.5 leading-relaxed">
+                <p className="text-slate-500 dark:text-slate-400 text-sm font-semibold">Ask me anything</p>
+                <p className="text-slate-400 dark:text-slate-500 text-xs mt-1.5 leading-relaxed">
                   Your trades, your books, or how to use the app — even general trading questions.
                 </p>
               </div>
@@ -117,7 +117,7 @@ function ChatWidget() {
                       className={`rounded-2xl px-3 py-2 text-xs leading-relaxed whitespace-pre-wrap ${
                         m.role === "user"
                           ? "bg-green-500 text-slate-950 font-medium"
-                          : "bg-slate-800 text-slate-200"
+                          : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200"
                       }`}
                     >
                       {isStreamingEmpty ? (
@@ -141,7 +141,7 @@ function ChatWidget() {
                           <span
                             key={si}
                             title={s.snippet}
-                            className="inline-flex items-center gap-1 text-[10px] bg-slate-800/70 border border-slate-700 text-slate-500 px-1.5 py-0.5 rounded"
+                            className="inline-flex items-center gap-1 text-[10px] bg-slate-100 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 text-slate-500 px-1.5 py-0.5 rounded"
                           >
                             {SOURCE_ICONS[s.source] || <BookOpen size={11} />}
                             {s.label}
@@ -151,8 +151,8 @@ function ChatWidget() {
                     )}
                   </div>
                   {m.role === "user" && (
-                    <div className="w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <User size={12} className="text-slate-400" />
+                    <div className="w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <User size={12} className="text-slate-500 dark:text-slate-400" />
                     </div>
                   )}
                 </div>
@@ -161,17 +161,18 @@ function ChatWidget() {
             <div ref={bottomRef} />
           </div>
 
-          <form onSubmit={ask} className="border-t border-slate-800 p-3 flex gap-2 flex-shrink-0">
+          <form onSubmit={ask} className="border-t border-slate-200 dark:border-slate-800 p-3 flex gap-2 flex-shrink-0">
             <input
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Ask a question..."
-              className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-white placeholder-slate-500 outline-none focus:border-green-500"
+              className="flex-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:border-green-500"
             />
             <button
               type="submit"
               disabled={loading || !input.trim()}
+              aria-label="Send message"
               className="flex items-center justify-center bg-green-500 hover:bg-green-600 disabled:opacity-50 text-slate-950 rounded-xl px-3.5 transition flex-shrink-0"
             >
               <Send size={14} />

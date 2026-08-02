@@ -1,8 +1,9 @@
 import { useState } from "react";
 import axios from "axios";
 import MainLayout from "../layouts/MainLayout";
-import { Save, User, Lock, CheckCircle } from "lucide-react";
+import { Save, User, Lock, CheckCircle, Palette } from "lucide-react";
 import { API_URL } from "../config/api";
+import ThemeToggle from "../components/ThemeToggle";
 
 function Settings() {
   const user = JSON.parse(localStorage.getItem("user") || "{}");
@@ -65,38 +66,46 @@ function Settings() {
   return (
     <MainLayout>
       <div className="mb-8">
-        <h2 className="text-4xl font-bold">Settings</h2>
-        <p className="text-slate-400 mt-2">Manage your account</p>
+        <h2 className="text-4xl font-bold text-slate-900 dark:text-white">Settings</h2>
+        <p className="text-slate-500 dark:text-slate-400 mt-2">Manage your account</p>
       </div>
 
       <div className="max-w-xl space-y-6">
 
+        {/* Appearance */}
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6">
+          <h3 className="text-xl font-bold flex items-center gap-2 mb-6 text-slate-900 dark:text-white">
+            <Palette size={20} className="text-green-600 dark:text-green-400" /> Appearance
+          </h3>
+          <ThemeToggle variant="inline" />
+        </div>
+
         {/* Profile */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-          <h3 className="text-xl font-bold flex items-center gap-2 mb-6">
-            <User size={20} className="text-green-400" /> Profile
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6">
+          <h3 className="text-xl font-bold flex items-center gap-2 mb-6 text-slate-900 dark:text-white">
+            <User size={20} className="text-green-600 dark:text-green-400" /> Profile
           </h3>
           <div className="space-y-4">
             <div>
-              <label className="text-sm text-slate-400 mb-1 block">Name</label>
+              <label className="text-sm text-slate-500 dark:text-slate-400 mb-1 block">Name</label>
               <input
                 type="text"
                 value={profile.name}
                 onChange={(e) => setProfile({ ...profile, name: e.target.value })}
-                className="w-full bg-slate-800 border border-slate-700 p-3 rounded-xl outline-none focus:border-green-500 transition text-white"
+                className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-xl outline-none focus:border-green-500 transition text-slate-900 dark:text-white"
               />
             </div>
             <div>
-              <label className="text-sm text-slate-400 mb-1 block">Email</label>
+              <label className="text-sm text-slate-500 dark:text-slate-400 mb-1 block">Email</label>
               <input
                 type="email"
                 value={profile.email}
                 disabled
-                className="w-full bg-slate-800/50 border border-slate-700 p-3 rounded-xl text-slate-500 cursor-not-allowed"
+                className="w-full bg-slate-100/50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 p-3 rounded-xl text-slate-400 dark:text-slate-500 cursor-not-allowed"
               />
             </div>
             {profileMsg && (
-              <p className={`text-sm ${profileMsg.type === "success" ? "text-green-400" : "text-red-400"}`}>
+              <p className={`text-sm ${profileMsg.type === "success" ? "text-green-600 dark:text-green-400" : "text-red-500 dark:text-red-400"}`}>
                 {profileMsg.text}
               </p>
             )}
@@ -110,14 +119,14 @@ function Settings() {
         </div>
 
         {/* Password */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-          <h3 className="text-xl font-bold flex items-center gap-2 mb-6">
-            <Lock size={20} className="text-green-400" /> Change Password
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6">
+          <h3 className="text-xl font-bold flex items-center gap-2 mb-6 text-slate-900 dark:text-white">
+            <Lock size={20} className="text-green-600 dark:text-green-400" /> Change Password
           </h3>
           <div className="space-y-4">
             {["current", "newPass", "confirm"].map((field) => (
               <div key={field}>
-                <label className="text-sm text-slate-400 mb-1 block capitalize">
+                <label className="text-sm text-slate-500 dark:text-slate-400 mb-1 block capitalize">
                   {field === "current" ? "Current Password"
                     : field === "newPass" ? "New Password"
                     : "Confirm New Password"}
@@ -126,12 +135,12 @@ function Settings() {
                   type="password"
                   value={password[field]}
                   onChange={(e) => setPassword({ ...password, [field]: e.target.value })}
-                  className="w-full bg-slate-800 border border-slate-700 p-3 rounded-xl outline-none focus:border-green-500 transition text-white"
+                  className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-xl outline-none focus:border-green-500 transition text-slate-900 dark:text-white"
                 />
               </div>
             ))}
             {passMsg && (
-              <p className={`text-sm ${passMsg.type === "success" ? "text-green-400" : "text-red-400"}`}>
+              <p className={`text-sm ${passMsg.type === "success" ? "text-green-600 dark:text-green-400" : "text-red-500 dark:text-red-400"}`}>
                 {passMsg.text}
               </p>
             )}

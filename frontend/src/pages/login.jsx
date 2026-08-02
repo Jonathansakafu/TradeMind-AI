@@ -37,9 +37,9 @@ function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center text-white px-4">
-      <div className="bg-slate-900 p-10 rounded-2xl w-full max-w-md shadow-xl">
-        <h1 className="text-4xl font-bold text-center text-green-400 mb-8">
+    <div className="min-h-screen bg-white dark:bg-slate-950 flex items-center justify-center text-slate-900 dark:text-white px-4">
+      <div className="bg-white dark:bg-slate-900 p-10 rounded-2xl w-full max-w-md shadow-xl">
+        <h1 className="text-4xl font-bold text-center text-green-600 dark:text-green-400 mb-8">
           TradeMind AI
         </h1>
         <h2 className="text-2xl font-semibold mb-6 text-center">Login</h2>
@@ -50,7 +50,7 @@ function Login() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             onKeyDown={handleKeyDown}
-            className="w-full bg-slate-800 p-4 rounded-xl outline-none focus:ring-2 focus:ring-green-500 transition"
+            className="w-full bg-slate-100 dark:bg-slate-800 p-4 rounded-xl outline-none placeholder-slate-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-green-500 transition"
           />
           <input
             type="password"
@@ -58,14 +58,14 @@ function Login() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             onKeyDown={handleKeyDown}
-            className="w-full bg-slate-800 p-4 rounded-xl outline-none focus:ring-2 focus:ring-green-500 transition"
+            className="w-full bg-slate-100 dark:bg-slate-800 p-4 rounded-xl outline-none placeholder-slate-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-green-500 transition"
           />
           {message && (
             <div
               className={`text-sm rounded-xl p-3 ${
                 message.type === "error"
                   ? "bg-red-500/10 text-red-400 border border-red-500/20"
-                  : "bg-slate-800 text-slate-300 border border-slate-700"
+                  : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700"
               }`}
             >
               {message.text}
@@ -83,9 +83,9 @@ function Login() {
             }
           </button>
         </div>
-        <p className="text-slate-400 mt-6 text-center">
+        <p className="text-slate-500 dark:text-slate-400 mt-6 text-center">
           Don't have an account?{" "}
-          <Link to="/register" className="text-green-400 hover:underline">
+          <Link to="/register" className="text-green-600 dark:text-green-400 hover:underline">
             Register
           </Link>
         </p>

@@ -122,9 +122,10 @@ function NotificationBell() {
       <div ref={dropdownRef}>
         <button
           onClick={() => setOpen(!open)}
-          className="relative p-2 rounded-xl bg-slate-800 border border-slate-700 hover:border-green-500/50 transition"
+          aria-label="Notifications"
+          className="relative p-3 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-green-500/50 transition"
         >
-          <Bell size={16} className="text-slate-300" />
+          <Bell size={16} className="text-slate-500 dark:text-slate-300" />
           {unreadCount > 0 && (
             <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-xs text-white flex items-center justify-center font-bold leading-none">
               {unreadCount > 9 ? "9+" : unreadCount}
@@ -144,15 +145,15 @@ function NotificationBell() {
       {/* Dropdown — full-screen sheet on mobile, floating card from sm: up */}
       {open && (
         <div
-          className="fixed z-[999] bg-slate-900 border border-slate-700 shadow-2xl overflow-hidden
+          className="fixed z-[999] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-2xl overflow-hidden
             inset-3 rounded-2xl
             sm:inset-auto sm:top-4 sm:right-4 sm:w-[380px] sm:max-h-[85vh]"
         >
           {/* Header */}
-          <div className="flex items-center justify-between gap-2 flex-wrap px-4 sm:px-5 py-4 border-b border-slate-800 bg-slate-900 sticky top-0 z-10">
+          <div className="flex items-center justify-between gap-2 flex-wrap px-4 sm:px-5 py-4 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 sticky top-0 z-10">
             <div>
-              <p className="font-bold text-white text-sm">AI Alerts</p>
-              <p className="text-xs text-slate-400">
+              <p className="font-bold text-slate-900 dark:text-white text-sm">AI Alerts</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
                 {unreadCount > 0 ? `${unreadCount} unread` : "All caught up"}
               </p>
             </div>
@@ -175,7 +176,8 @@ function NotificationBell() {
               </button>
               <button
                 onClick={() => setOpen(false)}
-                className="text-slate-500 hover:text-white transition ml-1"
+                aria-label="Close"
+                className="p-2 -m-2 text-slate-400 dark:text-slate-500 hover:text-slate-900 dark:hover:text-white transition ml-1"
               >
                 <X size={16} />
               </button>
@@ -186,9 +188,9 @@ function NotificationBell() {
           <div className="overflow-y-auto h-[calc(100%-73px)] sm:h-auto sm:max-h-[calc(85vh-65px)]">
             {notifications.length === 0 ? (
               <div className="text-center py-10">
-                <Bell size={32} className="text-slate-700 mx-auto mb-3" />
+                <Bell size={32} className="text-slate-300 dark:text-slate-700 mx-auto mb-3" />
                 <p className="text-slate-500 text-sm">No alerts yet</p>
-                <p className="text-slate-600 text-xs mt-1">
+                <p className="text-slate-400 dark:text-slate-600 text-xs mt-1">
                   Click "Generate" to get AI alerts
                 </p>
               </div>
@@ -197,8 +199,8 @@ function NotificationBell() {
                 <div
                   key={n._id}
                   onClick={() => !n.read && markAsRead(n._id)}
-                  className={`px-5 py-4 border-b border-slate-800 cursor-pointer transition hover:bg-slate-800/50 ${
-                    !n.read ? "bg-slate-800/20" : ""
+                  className={`px-5 py-4 border-b border-slate-200 dark:border-slate-800 cursor-pointer transition hover:bg-slate-100 dark:hover:bg-slate-800/50 ${
+                    !n.read ? "bg-slate-100/60 dark:bg-slate-800/20" : ""
                   }`}
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -218,7 +220,7 @@ function NotificationBell() {
                             : n.signal === "sell" ? "🔴 SELL"
                             : "⚠️ WAIT"}
                         </span>
-                        <span className="font-bold text-white text-sm">{n.pair}</span>
+                        <span className="font-bold text-slate-900 dark:text-white text-sm">{n.pair}</span>
                         <span className="text-xs text-slate-400 ml-auto">
                           {n.confidence}%
                         </span>
@@ -226,22 +228,22 @@ function NotificationBell() {
 
                       {/* Entry SL TP */}
                       <div className="grid grid-cols-3 gap-2 mb-2">
-                        <div className="bg-slate-800 rounded-lg px-2 py-1 text-center">
+                        <div className="bg-slate-100 dark:bg-slate-800 rounded-lg px-2 py-1 text-center">
                           <p className="text-xs text-slate-500">Entry</p>
-                          <p className="text-xs font-mono text-white">{n.entry || "—"}</p>
+                          <p className="text-xs font-mono text-slate-900 dark:text-white">{n.entry || "—"}</p>
                         </div>
-                        <div className="bg-slate-800 rounded-lg px-2 py-1 text-center">
+                        <div className="bg-slate-100 dark:bg-slate-800 rounded-lg px-2 py-1 text-center">
                           <p className="text-xs text-slate-500">SL</p>
                           <p className="text-xs font-mono text-red-400">{n.stopLoss || "—"}</p>
                         </div>
-                        <div className="bg-slate-800 rounded-lg px-2 py-1 text-center">
+                        <div className="bg-slate-100 dark:bg-slate-800 rounded-lg px-2 py-1 text-center">
                           <p className="text-xs text-slate-500">TP</p>
                           <p className="text-xs font-mono text-green-400">{n.takeProfit || "—"}</p>
                         </div>
                       </div>
 
                       {/* Reasoning */}
-                      <p className="text-xs text-slate-400 leading-relaxed mb-2 line-clamp-2">
+                      <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-2 line-clamp-2">
                         {n.reasoning}
                       </p>
 
@@ -253,7 +255,7 @@ function NotificationBell() {
                           {SOURCE_ICONS[n.source] || SOURCE_ICONS.ai_auto}
                           <span className="ml-1">{n.sourceLabel || "AI Auto"}</span>
                         </div>
-                        <p className="text-xs text-slate-600">
+                        <p className="text-xs text-slate-400 dark:text-slate-600">
                           {new Date(n.createdAt).toLocaleTimeString()}
                         </p>
                       </div>
@@ -265,7 +267,8 @@ function NotificationBell() {
                         e.stopPropagation();
                         deleteNotification(n._id);
                       }}
-                      className="text-slate-600 hover:text-red-400 transition flex-shrink-0"
+                      aria-label="Delete notification"
+                      className="p-2 -m-2 text-slate-400 dark:text-slate-600 hover:text-red-400 transition flex-shrink-0"
                     >
                       <X size={14} />
                     </button>

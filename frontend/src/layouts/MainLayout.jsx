@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import NotificationBell from "../components/NotificationBell";
 import ChatWidget from "../components/ChatWidget";
+import ThemeToggle from "../components/ThemeToggle";
 
 const navItems = [
   { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -29,10 +30,11 @@ function SidebarContent({ pathname, onNavigate, onClose, user, onLogout }) {
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between mb-8 px-2">
-        <h1 className="text-xl font-bold text-green-400">TradeMind AI</h1>
+        <h1 className="text-xl font-bold text-green-500 dark:text-green-400">TradeMind AI</h1>
         <button
           onClick={onClose}
-          className="md:hidden text-slate-400 hover:text-white"
+          aria-label="Close menu"
+          className="md:hidden p-2 -m-2 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
         >
           <X size={20} />
         </button>
@@ -48,8 +50,8 @@ function SidebarContent({ pathname, onNavigate, onClose, user, onLogout }) {
               onClick={onNavigate}
               className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition ${
                 isActive
-                  ? "bg-green-500/10 text-green-400"
-                  : "text-slate-400 hover:text-white hover:bg-slate-800"
+                  ? "bg-green-500/10 text-green-600 dark:text-green-400"
+                  : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800"
               }`}
             >
               <Icon size={18} />
@@ -69,19 +71,20 @@ function SidebarContent({ pathname, onNavigate, onClose, user, onLogout }) {
         })}
       </nav>
 
-      <div className="border-t border-slate-800 pt-4">
+      <div className="border-t border-slate-200 dark:border-slate-800 pt-4">
         <div className="flex items-center gap-3 px-2 mb-3">
           <div className="w-9 h-9 rounded-full bg-green-500 flex items-center justify-center text-slate-950 font-bold flex-shrink-0">
             {user?.name?.[0]?.toUpperCase() || "T"}
           </div>
           <div className="overflow-hidden">
             <p className="text-sm font-semibold truncate">{user?.name || "Trader"}</p>
-            <p className="text-xs text-slate-500 truncate">{user?.email || ""}</p>
+            <p className="text-xs text-slate-500 dark:text-slate-500 truncate">{user?.email || ""}</p>
           </div>
         </div>
+        <ThemeToggle variant="inline" />
         <button
           onClick={onLogout}
-          className="flex items-center gap-3 w-full px-4 py-3 rounded-xl text-sm text-slate-400 hover:text-red-400 hover:bg-slate-800 transition"
+          className="flex items-center gap-3 w-full px-4 py-3 rounded-xl text-sm text-slate-500 dark:text-slate-400 hover:text-red-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
         >
           <LogOut size={18} /> Logout
         </button>
@@ -105,7 +108,7 @@ function MainLayout({ children }) {
   const closeSidebar = () => setSidebarOpen(false);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex overflow-x-hidden">
+    <div className="min-h-screen bg-white text-slate-900 dark:bg-slate-950 dark:text-white flex overflow-x-hidden">
       <div className="fixed top-3 right-3 md:top-4 md:right-4 z-40">
         <NotificationBell />
       </div>
@@ -118,7 +121,7 @@ function MainLayout({ children }) {
         />
       )}
 
-      <aside className="hidden md:flex flex-col w-64 bg-slate-900 border-r border-slate-800 fixed h-full z-30 p-6">
+      <aside className="hidden md:flex flex-col w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 fixed h-full z-30 p-6">
         <SidebarContent
           pathname={location.pathname}
           onNavigate={closeSidebar}
@@ -128,7 +131,7 @@ function MainLayout({ children }) {
         />
       </aside>
 
-      <aside className={`md:hidden fixed top-0 left-0 h-full w-72 bg-slate-900 border-r border-slate-800 z-50 p-6 transform transition-transform duration-300 ${
+      <aside className={`md:hidden fixed top-0 left-0 h-full w-72 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 z-50 p-6 transform transition-transform duration-300 ${
         sidebarOpen ? "translate-x-0" : "-translate-x-full"
       }`}>
         <SidebarContent
@@ -141,14 +144,15 @@ function MainLayout({ children }) {
       </aside>
 
       <div className="flex-1 min-w-0 md:ml-64 flex flex-col min-h-screen">
-        <div className="md:hidden flex items-center justify-between px-4 py-3 bg-slate-900 border-b border-slate-800 sticky top-0 z-20">
+        <div className="md:hidden flex items-center justify-between px-4 py-3 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-20">
           <button
             onClick={() => setSidebarOpen(true)}
-            className="text-slate-400 hover:text-white transition"
+            aria-label="Open menu"
+            className="p-2 -m-2 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition"
           >
             <Menu size={22} />
           </button>
-          <h1 className="text-lg font-bold text-green-400">TradeMind AI</h1>
+          <h1 className="text-lg font-bold text-green-500 dark:text-green-400">TradeMind AI</h1>
           <span className="w-[22px]" aria-hidden="true" />
         </div>
 

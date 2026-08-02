@@ -1,4 +1,8 @@
+import { useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import { Capacitor } from "@capacitor/core";
+import { StatusBar, Style } from "@capacitor/status-bar";
+import { ThemeProvider, useTheme } from "./context/ThemeContext";
 import Login from "./pages/login";
 import Register from "./pages/register";
 import Dashboard from "./pages/dashboard";
@@ -20,27 +24,43 @@ const ProtectedRoute = ({ children }) => {
   return token ? children : <Navigate to="/login" />;
 };
 
+// Keeps the native status bar in sync with the in-app theme toggle.
+function StatusBarSync() {
+  const { theme } = useTheme();
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    StatusBar.setStyle({ style: theme === "dark" ? Style.Dark : Style.Light });
+    StatusBar.setBackgroundColor({ color: theme === "dark" ? "#020617" : "#ffffff" });
+  }, [theme]);
+
+  return null;
+}
+
 function App() {
   return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-        <Route path="/add-trade" element={<ProtectedRoute><AddTrade /></ProtectedRoute>} />
-        <Route path="/history" element={<ProtectedRoute><TradeHistory /></ProtectedRoute>} />
-        <Route path="/analytics" element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
-        <Route path="/live" element={<ProtectedRoute><LiveAnalysis /></ProtectedRoute>} />
-        <Route path="/news" element={<ProtectedRoute><News /></ProtectedRoute>} />
-        <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
-        <Route path="/charts" element={<ProtectedRoute><Charts /></ProtectedRoute>} />
-        <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
-        <Route path="/mt5" element={<ProtectedRoute><MT5 /></ProtectedRoute>} />
-        <Route path="/ask-ai" element={<ProtectedRoute><AskAI /></ProtectedRoute>} />
-        <Route path="/guide" element={<ProtectedRoute><Guide /></ProtectedRoute>} />
-      </Routes>
-    </Router>
+    <ThemeProvider>
+      <StatusBarSync />
+      <Router>
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+          <Route path="/add-trade" element={<ProtectedRoute><AddTrade /></ProtectedRoute>} />
+          <Route path="/history" element={<ProtectedRoute><TradeHistory /></ProtectedRoute>} />
+          <Route path="/analytics" element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
+          <Route path="/live" element={<ProtectedRoute><LiveAnalysis /></ProtectedRoute>} />
+          <Route path="/news" element={<ProtectedRoute><News /></ProtectedRoute>} />
+          <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
+          <Route path="/charts" element={<ProtectedRoute><Charts /></ProtectedRoute>} />
+          <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+          <Route path="/mt5" element={<ProtectedRoute><MT5 /></ProtectedRoute>} />
+          <Route path="/ask-ai" element={<ProtectedRoute><AskAI /></ProtectedRoute>} />
+          <Route path="/guide" element={<ProtectedRoute><Guide /></ProtectedRoute>} />
+        </Routes>
+      </Router>
+    </ThemeProvider>
   );
 }
 

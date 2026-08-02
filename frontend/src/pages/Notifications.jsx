@@ -27,6 +27,7 @@ function Notifications() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [filter, setFilter] = useState("all");
+  const [sendingId, setSendingId] = useState(null);
   const token = localStorage.getItem("token");
   const headers = { Authorization: `Bearer ${token}` };
 
@@ -125,6 +126,7 @@ function Notifications() {
   };
 
   const sendSignalToMT5 = async (notification) => {
+    setSendingId(notification._id);
     try {
       await axios.post(
         `${API_URL}/api/mt5/signal`,
@@ -146,6 +148,8 @@ function Notifications() {
       alert(`✅ Signal sent to MT5 — EA will execute ${notification.pair} ${notification.signal?.toUpperCase()} shortly!`);
     } catch {
       alert("Failed to send to MT5");
+    } finally {
+      setSendingId(null);
     }
   };
 
@@ -163,10 +167,10 @@ function Notifications() {
       <div className="flex items-center justify-between mb-8 flex-wrap gap-4">
         <div>
           <h2 className="text-3xl md:text-4xl font-bold flex items-center gap-3">
-            <Bell className="text-green-400" size={32} />
+            <Bell className="text-green-600 dark:text-green-400" size={32} />
             Notifications
           </h2>
-          <p className="text-slate-400 mt-2">
+          <p className="text-slate-500 dark:text-slate-400 mt-2">
             {unreadCount > 0 ? `${unreadCount} unread alerts` : "All caught up"}
           </p>
         </div>
@@ -174,7 +178,7 @@ function Notifications() {
           {unreadCount > 0 && (
             <button
               onClick={markAllAsRead}
-              className="flex items-center gap-2 bg-slate-900 border border-slate-800 px-4 py-2.5 rounded-xl text-sm text-slate-400 hover:text-white transition"
+              className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-4 py-2.5 rounded-xl text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition"
             >
               <CheckCheck size={14} />
               Mark all read
@@ -200,7 +204,7 @@ function Notifications() {
             className={`px-4 py-2 rounded-xl text-sm font-medium capitalize transition ${
               filter === f
                 ? "bg-green-500 text-slate-950"
-                : "bg-slate-900 border border-slate-800 text-slate-400 hover:text-white"
+                : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
             }`}
           >
             {f === "all" ? "All"
@@ -217,9 +221,9 @@ function Notifications() {
         </div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-20">
-          <Bell size={48} className="text-slate-700 mx-auto mb-4" />
-          <p className="text-slate-400 text-lg font-semibold">No alerts yet</p>
-          <p className="text-slate-500 text-sm mt-2">
+          <Bell size={48} className="text-slate-300 dark:text-slate-700 mx-auto mb-4" />
+          <p className="text-slate-500 dark:text-slate-400 text-lg font-semibold">No alerts yet</p>
+          <p className="text-slate-400 dark:text-slate-500 text-sm mt-2">
             Click "Generate Alerts" to get AI-powered trading signals
           </p>
           <button
@@ -236,8 +240,8 @@ function Notifications() {
           {filtered.map((n) => (
             <div
               key={n._id}
-              className={`bg-slate-900 border rounded-2xl p-5 transition ${
-                !n.read ? "border-slate-700 shadow-lg" : "border-slate-800 opacity-75"
+              className={`bg-white dark:bg-slate-900 border rounded-2xl p-5 transition ${
+                !n.read ? "border-slate-300 dark:border-slate-700 shadow-lg" : "border-slate-200 dark:border-slate-800 opacity-75"
               }`}
             >
               {/* Card Header */}
@@ -257,9 +261,9 @@ function Notifications() {
                           : n.signal === "sell" ? "🔴 SELL"
                           : "⚠️ WAIT"}
                       </span>
-                      <span className="text-white font-bold text-lg">{n.pair}</span>
+                      <span className="text-slate-900 dark:text-white font-bold text-lg">{n.pair}</span>
                     </div>
-                    <p className="text-xs text-slate-500 mt-0.5">
+                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
                       {new Date(n.createdAt).toLocaleString()}
                     </p>
                   </div>
@@ -274,7 +278,8 @@ function Notifications() {
                   </span>
                   <button
                     onClick={() => deleteNotification(n._id)}
-                    className="text-slate-600 hover:text-red-400 transition"
+                    aria-label="Delete notification"
+                    className="p-2 -m-2 text-slate-400 dark:text-slate-600 hover:text-red-400 transition"
                   >
                     <X size={16} />
                   </button>
@@ -283,20 +288,20 @@ function Notifications() {
 
               {/* Entry SL TP */}
               <div className="grid grid-cols-3 gap-3 mb-4">
-                <div className="bg-slate-800 rounded-xl p-3 text-center">
-                  <p className="text-xs text-slate-500 mb-1">Entry</p>
-                  <p className="font-mono font-bold text-white text-sm">
+                <div className="bg-slate-100 dark:bg-slate-800 rounded-xl p-3 text-center">
+                  <p className="text-xs text-slate-400 dark:text-slate-500 mb-1">Entry</p>
+                  <p className="font-mono font-bold text-slate-900 dark:text-white text-sm">
                     {n.entry || "—"}
                   </p>
                 </div>
                 <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-center">
-                  <p className="text-xs text-slate-500 mb-1">Stop Loss</p>
+                  <p className="text-xs text-slate-400 dark:text-slate-500 mb-1">Stop Loss</p>
                   <p className="font-mono font-bold text-red-400 text-sm">
                     {n.stopLoss || "—"}
                   </p>
                 </div>
                 <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-3 text-center">
-                  <p className="text-xs text-slate-500 mb-1">Take Profit</p>
+                  <p className="text-xs text-slate-400 dark:text-slate-500 mb-1">Take Profit</p>
                   <p className="font-mono font-bold text-green-400 text-sm">
                     {n.takeProfit || "—"}
                   </p>
@@ -304,7 +309,7 @@ function Notifications() {
               </div>
 
               {/* Reasoning */}
-              <p className="text-sm text-slate-300 leading-relaxed mb-4 bg-slate-800/50 rounded-xl p-3 line-clamp-3">
+              <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed mb-4 bg-slate-100/70 dark:bg-slate-800/50 rounded-xl p-3 line-clamp-3">
                 {n.reasoning}
               </p>
 
@@ -320,7 +325,7 @@ function Notifications() {
                   {!n.read && (
                     <button
                       onClick={() => markAsRead(n._id)}
-                      className="text-xs text-slate-400 hover:text-green-400 transition flex items-center gap-1"
+                      className="text-xs text-slate-500 dark:text-slate-400 hover:text-green-400 transition flex items-center gap-1"
                     >
                       <CheckCheck size={12} /> Read
                     </button>
@@ -328,10 +333,11 @@ function Notifications() {
                   {n.signal !== "wait" && (
                     <button
                       onClick={() => sendSignalToMT5(n)}
-                      className="flex items-center gap-1.5 text-xs bg-yellow-500/10 border border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/20 px-3 py-1.5 rounded-lg transition font-semibold"
+                      disabled={sendingId === n._id}
+                      className="flex items-center gap-1.5 text-xs bg-yellow-500/10 border border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/20 disabled:opacity-50 px-3 py-1.5 rounded-lg transition font-semibold"
                     >
-                      <Zap size={12} />
-                      MT5
+                      <Zap size={12} className={sendingId === n._id ? "animate-pulse" : ""} />
+                      {sendingId === n._id ? "Sending..." : "MT5"}
                     </button>
                   )}
                   {n.signal !== "wait" && (

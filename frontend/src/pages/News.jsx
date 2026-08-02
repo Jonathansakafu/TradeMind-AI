@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
+import { Browser } from "@capacitor/browser";
 import MainLayout from "../layouts/MainLayout";
 import {
   Newspaper, TrendingUp, TrendingDown,
@@ -113,46 +114,46 @@ function News() {
     <MainLayout>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="text-3xl md:text-4xl font-bold flex items-center gap-3">
-            <Newspaper className="text-green-400" size={32} />
+          <h2 className="text-3xl md:text-4xl font-bold flex items-center gap-3 text-slate-900 dark:text-white">
+            <Newspaper className="text-green-600 dark:text-green-400" size={32} />
             Forex News
           </h2>
-          <p className="text-slate-400 mt-1">Live news with AI market impact analysis</p>
+          <p className="text-slate-500 dark:text-slate-400 mt-1">Live news with AI market impact analysis</p>
         </div>
         <button onClick={() => fetchNews(searchQuery)}
-          className="flex items-center gap-2 bg-slate-900 border border-slate-800 px-4 py-2.5 rounded-xl text-sm text-slate-400 hover:text-white transition">
+          className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-4 py-2.5 rounded-xl text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition">
           <RefreshCw size={14} /> Refresh
         </button>
       </div>
 
       {/* Search */}
       <div className="relative mb-6">
-        <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-xl px-4 py-3">
-          <Search size={16} className="text-slate-500 flex-shrink-0" />
+        <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3">
+          <Search size={16} className="text-slate-400 dark:text-slate-500 flex-shrink-0" />
           <input
             type="text"
             placeholder="Search forex news... (e.g. Trump, Fed, Interest Rate)"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSearch(searchQuery)}
-            className="bg-transparent outline-none text-sm text-white flex-1"
+            className="bg-transparent outline-none text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 flex-1"
           />
           {searchQuery && (
-            <button onClick={() => { setSearchQuery(""); fetchNews(""); }}>
-              <X size={14} className="text-slate-500 hover:text-white" />
+            <button onClick={() => { setSearchQuery(""); fetchNews(""); }} aria-label="Clear search" className="p-2 -m-2">
+              <X size={14} className="text-slate-400 dark:text-slate-500 hover:text-slate-900 dark:hover:text-white" />
             </button>
           )}
         </div>
         {/* Suggestions */}
         {searchSuggestions.length > 0 && (
-          <div className="absolute top-full left-0 right-0 bg-slate-900 border border-slate-700 rounded-xl mt-1 z-20 overflow-hidden">
+          <div className="absolute top-full left-0 right-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl mt-1 z-20 overflow-hidden">
             {searchSuggestions.map((s, i) => (
               <button
                 key={i}
                 onClick={() => handleSearch(s)}
-                className="flex items-center gap-2 w-full px-4 py-3 text-sm text-slate-300 hover:bg-slate-800 hover:text-white transition text-left"
+                className="flex items-center gap-2 w-full px-4 py-3 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white transition text-left"
               >
-                <Search size={12} className="text-slate-500" />
+                <Search size={12} className="text-slate-400 dark:text-slate-500" />
                 {s}
               </button>
             ))}
@@ -166,7 +167,7 @@ function News() {
           className={`px-4 py-2 rounded-xl text-sm font-semibold transition ${
             activeTab === "live"
               ? "bg-green-500 text-slate-950"
-              : "bg-slate-900 border border-slate-800 text-slate-400 hover:text-white"
+              : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
           }`}>
           📡 Live News
         </button>
@@ -174,7 +175,7 @@ function News() {
           className={`px-4 py-2 rounded-xl text-sm font-semibold transition flex items-center gap-2 ${
             activeTab === "saved"
               ? "bg-green-500 text-slate-950"
-              : "bg-slate-900 border border-slate-800 text-slate-400 hover:text-white"
+              : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
           }`}>
           <Bookmark size={14} />
           Saved ({savedNews.length})
@@ -187,7 +188,7 @@ function News() {
         {/* News List — Independent scroll */}
         <div className="overflow-y-auto max-h-screen space-y-3 pr-1"
           style={{ maxHeight: "calc(100vh - 280px)" }}>
-          <h3 className="font-semibold text-slate-300 mb-3 sticky top-0 bg-slate-950 py-2">
+          <h3 className="font-semibold text-slate-600 dark:text-slate-300 mb-3 sticky top-0 bg-white dark:bg-slate-950 py-2">
             {activeTab === "live" ? "Latest News" : "Saved Articles"}
           </h3>
           {loading ? (
@@ -195,18 +196,18 @@ function News() {
               <div className="w-8 h-8 border-4 border-green-500 border-t-transparent rounded-full animate-spin" />
             </div>
           ) : displayNews.length === 0 ? (
-            <div className="text-center py-20 text-slate-500">
-              <Newspaper size={40} className="mx-auto mb-3 text-slate-700" />
+            <div className="text-center py-20 text-slate-400 dark:text-slate-500">
+              <Newspaper size={40} className="mx-auto mb-3 text-slate-300 dark:text-slate-700" />
               <p>{activeTab === "saved" ? "No saved articles yet" : "No news available"}</p>
             </div>
           ) : (
             displayNews.map((article, i) => (
               <div key={i}
                 onClick={() => analyzeArticle(article)}
-                className={`bg-slate-900 border rounded-xl p-4 cursor-pointer transition hover:border-green-500/50 ${
+                className={`bg-white dark:bg-slate-900 border rounded-xl p-4 cursor-pointer transition hover:border-green-500/50 ${
                   selectedArticle?.title === article.title
                     ? "border-green-500/50 bg-green-500/5"
-                    : "border-slate-800"
+                    : "border-slate-200 dark:border-slate-800"
                 }`}>
                 <div className="flex items-start gap-3">
                   {article.urlToImage && (
@@ -215,28 +216,29 @@ function News() {
                       onError={(e) => { e.target.style.display = "none"; }} />
                   )}
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-white leading-snug mb-1 line-clamp-2">
+                    <p className="text-sm font-semibold text-slate-900 dark:text-white leading-snug mb-1 line-clamp-2">
                       {article.title}
                     </p>
-                    <p className="text-xs text-slate-500 mb-2 line-clamp-1">
+                    <p className="text-xs text-slate-400 dark:text-slate-500 mb-2 line-clamp-1">
                       {article.description}
                     </p>
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs text-slate-600">{article.source?.name}</span>
-                      <span className="text-xs text-slate-600">
+                      <span className="text-xs text-slate-400 dark:text-slate-600">{article.source?.name}</span>
+                      <span className="text-xs text-slate-400 dark:text-slate-600">
                         {new Date(article.publishedAt || article.savedAt).toLocaleString()}
                       </span>
                       <div className="ml-auto flex items-center gap-2">
                         <button
                           onClick={(e) => { e.stopPropagation(); toggleSave(article); }}
-                          className={`transition ${isSaved(article) ? "text-green-400" : "text-slate-600 hover:text-green-400"}`}>
+                          aria-label={isSaved(article) ? "Remove from saved" : "Save article"}
+                          className={`p-2 -m-2 transition ${isSaved(article) ? "text-green-400" : "text-slate-400 dark:text-slate-600 hover:text-green-400"}`}>
                           {isSaved(article)
                             ? <BookmarkCheck size={14} />
                             : <Bookmark size={14} />}
                         </button>
                         <button
-                          onClick={(e) => { e.stopPropagation(); window.open(article.url, "_blank"); }}
-                          className="text-xs text-green-400 hover:text-green-300 flex items-center gap-1">
+                          onClick={(e) => { e.stopPropagation(); Browser.open({ url: article.url }); }}
+                          className="text-xs text-green-600 dark:text-green-400 hover:text-green-500 dark:hover:text-green-300 flex items-center gap-1">
                           Read <ExternalLink size={10} />
                         </button>
                       </div>
@@ -250,42 +252,42 @@ function News() {
 
         {/* AI Analysis — Independent scroll */}
         <div ref={analysisRef}
-          className="bg-slate-900 border border-slate-800 rounded-2xl p-6 overflow-y-auto"
+          className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 overflow-y-auto"
           style={{ maxHeight: "calc(100vh - 280px)" }}>
-          <h3 className="font-semibold text-slate-300 mb-4 flex items-center gap-2 sticky top-0 bg-slate-900 py-2">
+          <h3 className="font-semibold text-slate-600 dark:text-slate-300 mb-4 flex items-center gap-2 sticky top-0 bg-white dark:bg-slate-900 py-2">
             <AlertTriangle size={16} className="text-yellow-400" />
             AI Market Impact Analysis
           </h3>
 
           {!selectedArticle ? (
-            <div className="text-center py-16 text-slate-500">
-              <Newspaper size={40} className="mx-auto mb-3 text-slate-700" />
+            <div className="text-center py-16 text-slate-400 dark:text-slate-500">
+              <Newspaper size={40} className="mx-auto mb-3 text-slate-300 dark:text-slate-700" />
               <p className="text-sm">Click any news article on the left</p>
-              <p className="text-xs text-slate-600 mt-1">AI will analyze market impact</p>
+              <p className="text-xs text-slate-400 dark:text-slate-600 mt-1">AI will analyze market impact</p>
             </div>
           ) : analyzing ? (
             <div className="flex flex-col items-center justify-center py-16 gap-4">
               <div className="w-10 h-10 border-4 border-green-500 border-t-transparent rounded-full animate-spin" />
-              <p className="text-slate-400 text-sm">AI analyzing news impact...</p>
+              <p className="text-slate-500 dark:text-slate-400 text-sm">AI analyzing news impact...</p>
             </div>
           ) : analysis ? (
             <div className="space-y-4">
-              <div className="bg-slate-800 rounded-xl p-4">
-                <p className="text-xs text-slate-400 mb-1">Headline</p>
-                <p className="text-sm font-semibold text-white">{analysis.headline}</p>
+              <div className="bg-slate-100 dark:bg-slate-800 rounded-xl p-4">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Headline</p>
+                <p className="text-sm font-semibold text-slate-900 dark:text-white">{analysis.headline}</p>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div className={`rounded-xl p-3 border text-center ${
                   analysis.sentiment === "bullish" ? "bg-green-500/10 border-green-500/20"
                   : analysis.sentiment === "bearish" ? "bg-red-500/10 border-red-500/20"
-                  : "bg-slate-800 border-slate-700"
+                  : "bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
                 }`}>
-                  <p className="text-xs text-slate-400 mb-1">Sentiment</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Sentiment</p>
                   <p className={`font-bold ${
                     analysis.sentiment === "bullish" ? "text-green-400"
                     : analysis.sentiment === "bearish" ? "text-red-400"
-                    : "text-slate-300"
+                    : "text-slate-600 dark:text-slate-300"
                   }`}>
                     {analysis.sentiment === "bullish" ? "📈 Bullish"
                       : analysis.sentiment === "bearish" ? "📉 Bearish"
@@ -293,32 +295,32 @@ function News() {
                   </p>
                 </div>
                 <div className={`rounded-xl p-3 border text-center ${getImpactColor(analysis.impactLevel)}`}>
-                  <p className="text-xs text-slate-400 mb-1">Impact</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Impact</p>
                   <p className="font-bold capitalize">{analysis.impactLevel} Impact</p>
                 </div>
               </div>
 
-              <div className="bg-slate-800 rounded-xl p-4">
-                <p className="text-xs text-slate-400 mb-1">Summary</p>
-                <p className="text-sm text-slate-300">{analysis.summary}</p>
+              <div className="bg-slate-100 dark:bg-slate-800 rounded-xl p-4">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Summary</p>
+                <p className="text-sm text-slate-600 dark:text-slate-300">{analysis.summary}</p>
               </div>
 
               {analysis.affectedPairs?.length > 0 && (
                 <div>
-                  <p className="text-xs text-slate-400 mb-2">Affected Pairs</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">Affected Pairs</p>
                   <div className="space-y-2">
                     {analysis.affectedPairs.map((p, i) => (
                       <div key={i} className={`rounded-xl p-3 border ${
                         p.impact === "bullish" ? "bg-green-500/10 border-green-500/20"
                         : p.impact === "bearish" ? "bg-red-500/10 border-red-500/20"
-                        : "bg-slate-800 border-slate-700"
+                        : "bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
                       }`}>
                         <div className="flex items-center justify-between mb-2">
-                          <span className="font-bold text-white">{p.pair}</span>
+                          <span className="font-bold text-slate-900 dark:text-white">{p.pair}</span>
                           <span className={`text-xs font-semibold flex items-center gap-1 ${
                             p.impact === "bullish" ? "text-green-400"
                             : p.impact === "bearish" ? "text-red-400"
-                            : "text-slate-400"
+                            : "text-slate-500 dark:text-slate-400"
                           }`}>
                             {p.impact === "bullish" ? <><TrendingUp size={12} /> Bullish</>
                               : p.impact === "bearish" ? <><TrendingDown size={12} /> Bearish</>
@@ -327,30 +329,30 @@ function News() {
                         </div>
                         {p.entry && (
                           <div className="grid grid-cols-3 gap-2 mb-2">
-                            <div className="bg-slate-900/50 rounded-lg px-2 py-1 text-center">
-                              <p className="text-xs text-slate-500">Entry</p>
-                              <p className="text-xs font-mono text-white">{p.entry}</p>
+                            <div className="bg-slate-200/60 dark:bg-slate-900/50 rounded-lg px-2 py-1 text-center">
+                              <p className="text-xs text-slate-400 dark:text-slate-500">Entry</p>
+                              <p className="text-xs font-mono text-slate-900 dark:text-white">{p.entry}</p>
                             </div>
-                            <div className="bg-slate-900/50 rounded-lg px-2 py-1 text-center">
-                              <p className="text-xs text-slate-500">SL</p>
+                            <div className="bg-slate-200/60 dark:bg-slate-900/50 rounded-lg px-2 py-1 text-center">
+                              <p className="text-xs text-slate-400 dark:text-slate-500">SL</p>
                               <p className="text-xs font-mono text-red-400">{p.stopLoss}</p>
                             </div>
-                            <div className="bg-slate-900/50 rounded-lg px-2 py-1 text-center">
-                              <p className="text-xs text-slate-500">TP</p>
+                            <div className="bg-slate-200/60 dark:bg-slate-900/50 rounded-lg px-2 py-1 text-center">
+                              <p className="text-xs text-slate-400 dark:text-slate-500">TP</p>
                               <p className="text-xs font-mono text-green-400">{p.takeProfit}</p>
                             </div>
                           </div>
                         )}
-                        <p className="text-xs text-slate-400">{p.reasoning}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">{p.reasoning}</p>
                       </div>
                     ))}
                   </div>
                 </div>
               )}
 
-              <div className="bg-slate-800 rounded-xl p-4">
-                <p className="text-xs text-slate-400 mb-1">💡 Trading Advice</p>
-                <p className="text-sm text-slate-300">{analysis.tradingAdvice}</p>
+              <div className="bg-slate-100 dark:bg-slate-800 rounded-xl p-4">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">💡 Trading Advice</p>
+                <p className="text-sm text-slate-600 dark:text-slate-300">{analysis.tradingAdvice}</p>
               </div>
 
               {/* Save with Analysis */}
@@ -359,7 +361,7 @@ function News() {
                 className={`w-full flex items-center justify-center gap-2 p-3 rounded-xl border transition text-sm font-semibold ${
                   isSaved(selectedArticle)
                     ? "bg-green-500/10 border-green-500/30 text-green-400"
-                    : "bg-slate-800 border-slate-700 text-slate-400 hover:text-white"
+                    : "bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                 }`}>
                 {isSaved(selectedArticle)
                   ? <><BookmarkCheck size={16} /> Saved with Analysis</>
