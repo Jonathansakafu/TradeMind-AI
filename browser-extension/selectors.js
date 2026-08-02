@@ -142,6 +142,34 @@
     return null;
   }
 
+  // Types text one character at a time with real keydown/input/keyup
+  // events per character (not one bulk value-set + single "input" event) —
+  // more likely to be picked up by search-as-you-type logic that listens
+  // for individual keystrokes rather than just watching the field's value.
+  async function typeIntoField(el, text) {
+    el.focus();
+    el.value = "";
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+    for (const char of text) {
+      el.dispatchEvent(new KeyboardEvent("keydown", { key: char, bubbles: true }));
+      el.value += char;
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      el.dispatchEvent(new KeyboardEvent("keyup", { key: char, bubbles: true }));
+      await new Promise((r) => setTimeout(r, 60 + Math.random() * 80));
+    }
+  }
+
+  // Turns "GBP/USD OTC" into "GBP" and "Gold OTC" into "Gold" — a short
+  // base-currency term, not the full label. Confirmed live: searching the
+  // full "EUR/USD OTC" string (with the slash and the word "OTC") found no
+  // results, but a human searching just "eur" correctly matched every
+  // "EUR/..." OTC pair, so Pocket Option's search evidently isn't doing a
+  // full-string match against the exact displayed label.
+  function toSearchTerm(pair) {
+    const base = pair.replace(/\s*OTC$/i, "").trim();
+    return base.split("/")[0];
+  }
+
   // Opens the pair picker (if needed), searches for `pair`, clicks the
   // matching result, then re-reads .current-symbol to confirm the switch
   // actually took before returning ok — a wrong/failed switch must never
@@ -156,13 +184,11 @@
 
     const searchEl = findPairSearch();
     if (!searchEl) return { ok: false, reason: "Pair search box not found after opening the picker" };
-    searchEl.focus();
-    searchEl.value = pair;
-    searchEl.dispatchEvent(new Event("input", { bubbles: true }));
-    await new Promise((r) => setTimeout(r, 500));
+    await typeIntoField(searchEl, toSearchTerm(pair));
+    await new Promise((r) => setTimeout(r, 600));
 
     const resultEl = findPairResult(pair);
-    if (!resultEl) return { ok: false, reason: `No result found for "${pair}" in the pair picker` };
+    if (!resultEl) return { ok: false, reason: `No result found for "${pair}" in the pair picker (searched "${toSearchTerm(pair)}")` };
     await humanClick(resultEl);
     await new Promise((r) => setTimeout(r, 300));
 
