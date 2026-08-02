@@ -24,24 +24,43 @@
     return null;
   }
 
-  // Returns true (confirmed demo), false (confirmed real), or null (could
-  // not tell). content.js MUST treat null the same as false — fail closed.
+  // Confirmed from the live site: <body> carries "is-chart-demo" while on
+  // a demo account. The real-account equivalent class hasn't been
+  // confirmed yet (not seen live), so this only returns true on a
+  // positive demo match — anything else is null (unknown), which
+  // content.js treats the same as false. Fail closed, never guess.
   function isDemoMode() {
-    const candidates = [
-      "[data-account-type]",
-      ".account-mode",
-      ".balance-type",
-      ".demo-real-switch",
-    ];
-    const el = firstMatch(candidates);
-    if (!el) return null;
-
-    const text = (el.getAttribute("data-account-type") || el.textContent || "").toLowerCase();
-    if (text.includes("demo")) return true;
-    if (text.includes("real") || text.includes("live")) return false;
+    const classes = document.body.classList;
+    if (classes.contains("is-chart-demo")) return true;
+    if (classes.contains("is-chart-live") || classes.contains("is-chart-real")) return false;
     return null;
   }
 
+  // Confirmed from the live site: the Buy/Sell toggle is two
+  // ".switch-state-block__item" elements, each containing a
+  // ".payout__text" span with the literal text "Buy" or "Sell". Matching
+  // on that label text (rather than a fragile positional/CSS-class guess)
+  // survives minor markup/styling changes as long as the label stays.
+  function findButtonByLabel(label) {
+    const items = document.querySelectorAll(".switch-state-block__item");
+    for (const item of items) {
+      const text = item.querySelector(".payout__text")?.textContent?.trim();
+      if (text === label) return item;
+    }
+    return null;
+  }
+
+  function findBuyButton() {
+    return findButtonByLabel("Buy");
+  }
+
+  function findSellButton() {
+    return findButtonByLabel("Sell");
+  }
+
+  // Not yet confirmed against the live site — only the section title divs
+  // ("Amount", "Time") were captured so far, not the actual input/selector
+  // controls next to them. Placeholder until the real markup is provided.
   function findAmountInput() {
     return firstMatch(["input[name='amount']", ".amount-input input", "[data-testid='trade-amount']"]);
   }
@@ -52,14 +71,6 @@
 
   function findPairSearch() {
     return firstMatch([".asset-search", "[data-testid='asset-select']"]);
-  }
-
-  function findBuyButton() {
-    return firstMatch([".btn-call", ".btn-up", "[data-testid='trade-buy']", "button[title='Up']"]);
-  }
-
-  function findSellButton() {
-    return firstMatch([".btn-put", ".btn-down", "[data-testid='trade-sell']", "button[title='Down']"]);
   }
 
   // Dispatches a realistic sequence of pointer events rather than a bare
