@@ -1,3 +1,4 @@
+const crypto = require("crypto");
 const TradingSession = require("../models/TradingSession");
 const MT5Signal = require("../models/MT5Signal");
 const { getSessionProgress } = require("../utils/sessionLimits");
@@ -7,7 +8,7 @@ const startSession = async (req, res) => {
   try {
     const {
       mode, profitTarget, riskLimit, maxTrades, pairs,
-      stake, payoutPercent, accountType, accountReady,
+      stake, payoutPercent, accountType, accountReady, autoExecute,
     } = req.body;
 
     if (!mode || !profitTarget || !riskLimit || !maxTrades) {
@@ -51,6 +52,13 @@ const startSession = async (req, res) => {
       });
     }
 
+    const resolvedAccountType = accountType === "real" ? "real" : "demo";
+
+    // Auto-execute (the browser extension clicking real trades) is only
+    // ever allowed for demo Quick Trade sessions — this is the primary
+    // safety gate, enforced here regardless of what the client sends.
+    const canAutoExecute = mode === "quick_trade" && resolvedAccountType === "demo" && !!autoExecute;
+
     const session = await TradingSession.create({
       user: req.user._id,
       mode,
@@ -58,9 +66,12 @@ const startSession = async (req, res) => {
       riskLimit,
       maxTrades,
       pairs: pairs || [],
-      accountType: accountType === "real" ? "real" : "demo",
+      accountType: resolvedAccountType,
       stake: mode === "quick_trade" ? stake : undefined,
       payoutPercent: mode === "quick_trade" ? payoutPercent : undefined,
+      autoExecute: canAutoExecute,
+      botToken: canAutoExecute ? crypto.randomBytes(32).toString("hex") : undefined,
+      botTokenCreatedAt: canAutoExecute ? new Date() : undefined,
     });
 
     res.status(201).json(session);
@@ -122,6 +133,8 @@ const stopSession = async (req, res) => {
 
     session.status = "stopped_manual";
     session.endedAt = new Date();
+    session.autoExecute = false;
+    session.botToken = undefined;
     await session.save();
 
     res.status(200).json(session);

@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "TradeMind AI - Quick Trade Auto-Execute",
+  "version": "1.0.0",
+  "description": "Auto-executes TradeMind AI Quick Trade signals on your Pocket Option DEMO account only. Never touches Real accounts.",
+  "permissions": ["storage", "alarms"],
+  "host_permissions": [
+    "*://*.pocketoption.com/*",
+    "https://trademind-ai-backend-2tnj.onrender.com/*",
+    "http://localhost:5000/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://*.pocketoption.com/*"],
+      "js": ["selectors.js", "content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "TradeMind AI Auto-Execute"
+  }
+}

@@ -31,6 +31,12 @@ async function checkAndUpdateSession(sessionId) {
   if (newStatus) {
     session.status = newStatus;
     session.endedAt = new Date();
+    // A limit-triggered stop is the common case (not the manual Stop
+    // Session button) — the bot token must not outlive it, or the
+    // extension could keep polling a session that looks inert but still
+    // has a live token sitting around.
+    session.autoExecute = false;
+    session.botToken = undefined;
     await session.save();
   }
 

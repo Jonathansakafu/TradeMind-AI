@@ -5,7 +5,9 @@ import MainLayout from "../layouts/MainLayout";
 import {
   Bot, Target, ShieldAlert, Hash, Zap, LineChart,
   CheckCircle, XCircle, StopCircle, TrendingUp, TrendingDown, ShieldCheck,
+  Puzzle, Copy, Check, Download,
 } from "lucide-react";
+import { Clipboard } from "@capacitor/clipboard";
 import { API_URL } from "../config/api";
 
 const FOREX_PAIRS = ["EURUSD", "GBPUSD", "USDJPY", "XAUUSD", "AUDUSD", "USDCAD"];
@@ -54,6 +56,14 @@ function TradingSession() {
   const [payoutPercent, setPayoutPercent] = useState("85");
   const [accountType, setAccountType] = useState("demo");
   const [accountReady, setAccountReady] = useState(false);
+  const [autoExecute, setAutoExecute] = useState(false);
+  const [copiedField, setCopiedField] = useState(null);
+
+  const copyToClipboard = (text, field) => {
+    Clipboard.write({ string: text });
+    setCopiedField(field);
+    setTimeout(() => setCopiedField(null), 2000);
+  };
 
   const togglePair = (pair) => {
     setSelectedPairs((prev) =>
@@ -114,6 +124,7 @@ function TradingSession() {
           pairs: selectedPairs,
           accountType,
           accountReady,
+          autoExecute: mode === "quick_trade" && accountType === "demo" && autoExecute,
           stake: mode === "quick_trade" ? Number(stake) : undefined,
           payoutPercent: mode === "quick_trade" ? Number(payoutPercent) : undefined,
         },
@@ -221,7 +232,10 @@ function TradingSession() {
                 Demo
               </button>
               <button
-                onClick={() => setAccountType("real")}
+                onClick={() => {
+                  setAccountType("real");
+                  setAutoExecute(false);
+                }}
                 className={`flex-1 px-4 py-2 rounded-lg text-sm font-semibold transition ${
                   accountType === "real" ? "bg-red-500 text-white" : "text-slate-500 dark:text-slate-400"
                 }`}
@@ -231,17 +245,36 @@ function TradingSession() {
             </div>
 
             {mode === "quick_trade" ? (
-              <label className="flex items-start gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={accountReady}
-                  onChange={(e) => setAccountReady(e.target.checked)}
-                  className="mt-0.5 w-4 h-4 accent-green-500 flex-shrink-0"
-                />
-                <span className="text-sm text-slate-600 dark:text-slate-300">
-                  I have a Pocket Option or Expert Option account open and ready to trade
-                </span>
-              </label>
+              <>
+                <label className="flex items-start gap-3 cursor-pointer mb-4">
+                  <input
+                    type="checkbox"
+                    checked={accountReady}
+                    onChange={(e) => setAccountReady(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 accent-green-500 flex-shrink-0"
+                  />
+                  <span className="text-sm text-slate-600 dark:text-slate-300">
+                    I have a Pocket Option or Expert Option account open and ready to trade
+                  </span>
+                </label>
+
+                {accountType === "demo" && (
+                  <label className="flex items-start gap-3 cursor-pointer bg-slate-100 dark:bg-slate-950/50 rounded-xl p-3">
+                    <input
+                      type="checkbox"
+                      checked={autoExecute}
+                      onChange={(e) => setAutoExecute(e.target.checked)}
+                      className="mt-0.5 w-4 h-4 accent-green-500 flex-shrink-0"
+                    />
+                    <span className="text-sm text-slate-600 dark:text-slate-300">
+                      <span className="font-semibold text-slate-900 dark:text-white flex items-center gap-1.5">
+                        <Puzzle size={14} /> Auto-Execute (Demo only)
+                      </span>
+                      Let a browser extension click the trades for you on your Pocket Option demo account. Demo accounts only — never available for Real.
+                    </span>
+                  </label>
+                )}
+              </>
             ) : (
               <p className="text-xs text-slate-400 dark:text-slate-500">
                 Requires your MT5 EA to have connected at least once — set it up on the{" "}
@@ -485,6 +518,71 @@ function TradingSession() {
               />
             </div>
           </div>
+
+          {/* Connect the Extension */}
+          {session.autoExecute && !isFinished && (
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <Puzzle size={18} /> Connect the Extension
+                </h3>
+                {session.botLastPolledAt && Date.now() - new Date(session.botLastPolledAt).getTime() < 90000 ? (
+                  <span className="flex items-center gap-1.5 text-xs font-semibold text-green-600 dark:text-green-400">
+                    <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" /> Connected
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 dark:text-slate-500">
+                    <span className="w-2 h-2 rounded-full bg-slate-400 dark:bg-slate-600" /> Not connected yet
+                  </span>
+                )}
+              </div>
+
+              <a
+                href="/downloads/trademind-extension.zip"
+                download
+                className="flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-slate-950 font-bold px-4 py-2.5 rounded-xl text-sm transition mb-4"
+              >
+                <Download size={14} /> Download Extension
+              </a>
+
+              <div className="space-y-3 mb-4">
+                <div>
+                  <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Session ID</label>
+                  <div className="bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 flex items-center justify-between">
+                    <code className="text-green-600 dark:text-green-400 text-xs font-mono break-all">{session._id}</code>
+                    <button
+                      onClick={() => copyToClipboard(session._id, "sessionId")}
+                      aria-label="Copy session ID"
+                      className="p-2 -m-2 text-slate-400 dark:text-slate-500 hover:text-green-600 dark:hover:text-green-400 transition flex-shrink-0 ml-2"
+                    >
+                      {copiedField === "sessionId" ? <Check size={12} className="text-green-500" /> : <Copy size={12} />}
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Bot Token</label>
+                  <div className="bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 flex items-center justify-between">
+                    <code className="text-green-600 dark:text-green-400 text-xs font-mono break-all">{session.botToken}</code>
+                    <button
+                      onClick={() => copyToClipboard(session.botToken, "botToken")}
+                      aria-label="Copy bot token"
+                      className="p-2 -m-2 text-slate-400 dark:text-slate-500 hover:text-green-600 dark:hover:text-green-400 transition flex-shrink-0 ml-2"
+                    >
+                      {copiedField === "botToken" ? <Check size={12} className="text-green-500" /> : <Copy size={12} />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <ol className="text-xs text-slate-500 dark:text-slate-400 space-y-1.5 list-decimal list-inside">
+                <li>Unzip the download, open Chrome → <span className="text-slate-900 dark:text-white">chrome://extensions</span>, turn on <span className="text-slate-900 dark:text-white">Developer mode</span>.</li>
+                <li>Click <span className="text-slate-900 dark:text-white">Load unpacked</span> and select the unzipped folder.</li>
+                <li>Open your Pocket Option demo account in a tab and log in.</li>
+                <li>Click the extension icon, paste the Session ID and Bot Token above, then Connect.</li>
+                <li>Keep the Pocket Option tab open and visible while the session runs.</li>
+              </ol>
+            </div>
+          )}
 
           {/* Session trades */}
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden">

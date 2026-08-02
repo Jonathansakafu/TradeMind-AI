@@ -64,6 +64,26 @@ const tradingSessionSchema = new mongoose.Schema(
     endedAt: {
       type: Date,
     },
+
+    // Quick Trade + demo only — lets the browser extension auto-execute
+    // signals instead of the trader tapping Won/Lost manually. botToken is
+    // only ever set when mode/accountType/autoExecute all agree it's safe.
+    autoExecute: {
+      type: Boolean,
+      default: false,
+    },
+
+    botToken: {
+      type: String,
+    },
+
+    botTokenCreatedAt: {
+      type: Date,
+    },
+
+    botLastPolledAt: {
+      type: Date,
+    },
   },
   {
     timestamps: true,

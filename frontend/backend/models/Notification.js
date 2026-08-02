@@ -30,6 +30,15 @@ const notificationSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: "TradingSession",
   },
+  // Set only when the auto-execute browser extension claims/reports this
+  // notification — a "failed"/"unknown" result leaves it unread with
+  // botStatus set so it still shows up in the normal manual Won/Lost UI.
+  botStatus: {
+    type: String,
+    enum: ["pending", "claimed", "won", "lost", "failed"],
+  },
+  botClaimedAt: { type: Date },
+  botError: { type: String },
 }, { timestamps: true });
 
 module.exports = mongoose.model("Notification", notificationSchema);
