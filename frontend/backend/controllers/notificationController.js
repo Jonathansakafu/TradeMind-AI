@@ -49,13 +49,18 @@ async function generateQuickTradeSignals(userId, session) {
     try {
       // Checked before doing any AI work, and against every candidate pair
       // (not just the first 2) — otherwise repeatedly generating within
-      // the same 10-minute window always re-tries the same leading pairs,
-      // finds them already deduped, and silently produces nothing new.
+      // the same window always re-tries the same leading pairs, finds
+      // them already deduped, and silently produces nothing new. Window
+      // shortened from 10min to 2min while there's a single user actively
+      // testing (repeatedly clicking Generate can otherwise exhaust all
+      // ~10 default pairs' cooldowns within a few minutes) — widen this
+      // back once there are real users, so it's not spamming them.
+      const DEDUP_WINDOW_MS = 2 * 60 * 1000;
       const existingRecent = await Notification.findOne({
         user: userId,
         pair,
         type: "quick_trade",
-        createdAt: { $gte: new Date(Date.now() - 10 * 60 * 1000) },
+        createdAt: { $gte: new Date(Date.now() - DEDUP_WINDOW_MS) },
       });
       if (existingRecent) continue;
 
