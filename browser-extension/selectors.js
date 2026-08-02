@@ -2,16 +2,17 @@
 // (once we have real selectors from the live site) stay localized and never
 // touch the polling/safety/reporting logic in content.js.
 //
-// STATUS: demo-mode detection, Buy/Sell, and expiry presets are confirmed
-// against real markup from the user's live Pocket Option account. Amount
-// entry is a best-effort first attempt (a real <input>, direct value-set
-// not yet verified live) with a documented on-screen-keypad fallback if it
-// doesn't work. Pair selection is still unconfirmed/placeholder — trading
-// will refuse to run until that's filled in, since trading the wrong pair
-// silently would be worse than not trading at all. Every function fails
-// closed (returns null/false) rather than guessing, and content.js reports
-// "failed" with a clear reason whenever that happens instead of pretending
-// to have placed or read a trade.
+// STATUS: demo-mode detection, Buy/Sell, expiry presets, and pair
+// selection (including a post-switch verification check) are all
+// confirmed against real markup/screenshots from the user's live Pocket
+// Option account. Amount entry is a best-effort first attempt (a real
+// <input>, direct value-set not yet verified live) with a documented
+// on-screen-keypad fallback if it doesn't work — that, plus reading back
+// the win/loss result (readLastResult), are the two remaining pieces that
+// need a first live test to confirm. Every function fails closed (returns
+// null/false) rather than guessing, and content.js reports "failed" with
+// a clear reason whenever that happens instead of pretending to have
+// placed or read a trade.
 
 (function () {
   // Try a list of candidate selectors in order, return the first match.
@@ -116,17 +117,60 @@
   }
 
   // Confirmed from the live site: the search box inside the pair picker is
-  // ".search__field". Still missing, and still blocking real trading:
-  // (1) the trigger that opens the pair picker in the first place (the
-  // "AUD/CAD OTC ▾"-style label at the top-left of the chart), (2) what a
-  // filtered result item looks like once you type into this box, and (3)
-  // a way to verify the chart actually switched to the intended pair
-  // before proceeding — without that verification, a wrong/failed pair
-  // switch could silently trade whatever pair was already open instead of
-  // the one the signal was actually about, which is worse than not
-  // trading at all.
+  // ".search__field", and the current-pair label/trigger at the top-left
+  // of the chart is ".current-symbol" (its exact text, e.g. "AUD/CAD OTC",
+  // is also what's used below to confirm the switch actually worked).
   function findPairSearch() {
     return firstMatch([".search__field"]);
+  }
+
+  function findPairTrigger() {
+    return firstMatch([".current-symbol"]);
+  }
+
+  // Result rows in the pair picker don't have a confirmed class name, but
+  // — same trick as Buy/Sell — every row shows the pair's exact name as
+  // plain text (e.g. "EUR/USD OTC"), which `notification.pair` already
+  // matches exactly (it's stored in the same "EUR/USD OTC" format chosen
+  // for the Quick Trade pair picker in TradingSession.jsx), so matching on
+  // that text finds the row without needing its class.
+  function findPairResult(label) {
+    const candidates = document.querySelectorAll("div, span");
+    for (const el of candidates) {
+      if (el.children.length === 0 && el.textContent?.trim() === label) return el;
+    }
+    return null;
+  }
+
+  // Opens the pair picker (if needed), searches for `pair`, clicks the
+  // matching result, then re-reads .current-symbol to confirm the switch
+  // actually took before returning ok — a wrong/failed switch must never
+  // silently leave whatever pair was already open selected instead.
+  async function selectPair(pair) {
+    const trigger = findPairTrigger();
+    if (!trigger) return { ok: false, reason: "Pair trigger (.current-symbol) not found" };
+    if (trigger.textContent?.trim() === pair) return { ok: true }; // already on the right pair
+
+    await humanClick(trigger);
+    await new Promise((r) => setTimeout(r, 300));
+
+    const searchEl = findPairSearch();
+    if (!searchEl) return { ok: false, reason: "Pair search box not found after opening the picker" };
+    searchEl.focus();
+    searchEl.value = pair;
+    searchEl.dispatchEvent(new Event("input", { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 500));
+
+    const resultEl = findPairResult(pair);
+    if (!resultEl) return { ok: false, reason: `No result found for "${pair}" in the pair picker` };
+    await humanClick(resultEl);
+    await new Promise((r) => setTimeout(r, 300));
+
+    const nowSelected = findPairTrigger()?.textContent?.trim();
+    if (nowSelected !== pair) {
+      return { ok: false, reason: `Pair switch didn't take — chart shows "${nowSelected}" instead of "${pair}"` };
+    }
+    return { ok: true };
   }
 
   // Dispatches a realistic sequence of pointer events rather than a bare
@@ -155,9 +199,8 @@
       return { ok: false, reason: "Could not confirm Demo mode — refusing to trade" };
     }
 
-    const pairEl = findPairSearch();
-    if (!pairEl) return { ok: false, reason: "Pair selector not found on page (selectors.js needs updating for this site)" };
-    // TODO Phase 2: actually search/select `pair` once the real search UI is known.
+    const pairResult = await selectPair(pair);
+    if (!pairResult.ok) return pairResult;
 
     const expiryTrigger = findExpiryTrigger();
     if (!expiryTrigger) return { ok: false, reason: "Expiry dropdown trigger not found (selectors.js needs updating for this site)" };
@@ -204,6 +247,9 @@
     findExpiryTrigger,
     findAmountInput,
     findPairSearch,
+    findPairTrigger,
+    findPairResult,
+    selectPair,
     findBuyButton,
     findSellButton,
     placeTrade,
