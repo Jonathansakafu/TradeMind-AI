@@ -23,12 +23,24 @@ function toMarketSymbol(pair) {
   return base.replace(/\//g, "").toUpperCase();
 }
 
+// Default Quick Trade pairs when a session didn't specify any. Must match
+// the exact OTC display text Pocket Option's own UI shows (same list as
+// QUICK_TRADE_OTC_PAIRS in frontend/src/pages/TradingSession.jsx) — the
+// auto-execute browser extension matches a signal's pair against that
+// exact on-page text, so a raw MT5-style symbol like "BTCUSD" (used
+// elsewhere in this file for the forex/MT5 path) would never be found in
+// Pocket Option's pair picker and every Quick Trade signal would fail.
+const QUICK_TRADE_DEFAULT_PAIRS = [
+  "EUR/USD OTC", "GBP/USD OTC", "USD/JPY OTC", "AUD/USD OTC", "USD/CAD OTC",
+  "USD/CHF OTC", "NZD/USD OTC", "EUR/JPY OTC", "GBP/JPY OTC", "Gold OTC",
+];
+
 // Quick Trade signals — direction + confidence only, no entry/SL/TP, since
 // the trader executes on Pocket Option/Expert Option themselves. Mirrors
 // the forex loop below but calls analyzeQuickSignal instead.
 async function generateQuickTradeSignals(userId, session) {
   const prices = await marketService.getAllPrices();
-  const candidatePairs = session.pairs?.length ? session.pairs : [...CRYPTO_PAIRS, ...FOREX_PAIRS];
+  const candidatePairs = session.pairs?.length ? session.pairs : QUICK_TRADE_DEFAULT_PAIRS;
   const availablePairs = candidatePairs.filter((p) => prices[toMarketSymbol(p)]).slice(0, 2);
 
   let created = 0;
