@@ -58,6 +58,7 @@ function TradingSession() {
   const [accountReady, setAccountReady] = useState(false);
   const [autoExecute, setAutoExecute] = useState(false);
   const [copiedField, setCopiedField] = useState(null);
+  const [botConnected, setBotConnected] = useState(false);
 
   const copyToClipboard = (text, field) => {
     Clipboard.write({ string: text });
@@ -77,6 +78,10 @@ function TradingSession() {
       const res = await axios.get(`${API_URL}/api/sessions/active`, { headers });
       setSession(res.data.session);
       if (res.data.progress) setProgress(res.data.progress);
+      setBotConnected(
+        !!res.data.session?.botLastPolledAt &&
+        Date.now() - new Date(res.data.session.botLastPolledAt).getTime() < 90000
+      );
       if (res.data.session) {
         const tradesRes = await axios.get(
           `${API_URL}/api/trades?tradingSessionId=${res.data.session._id}&limit=50`,
@@ -92,9 +97,12 @@ function TradingSession() {
   }, []);
 
   useEffect(() => {
-    fetchActiveSession();
+    const timer = setTimeout(fetchActiveSession, 0);
     const interval = setInterval(fetchActiveSession, 30000);
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(timer);
+      clearInterval(interval);
+    };
   }, [fetchActiveSession]);
 
   const startSession = async () => {
@@ -526,7 +534,7 @@ function TradingSession() {
                 <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
                   <Puzzle size={18} /> Connect the Extension
                 </h3>
-                {session.botLastPolledAt && Date.now() - new Date(session.botLastPolledAt).getTime() < 90000 ? (
+                {botConnected ? (
                   <span className="flex items-center gap-1.5 text-xs font-semibold text-green-600 dark:text-green-400">
                     <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" /> Connected
                   </span>

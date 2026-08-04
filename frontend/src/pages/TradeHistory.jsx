@@ -99,10 +99,15 @@ function TradeHistory() {
   };
 
   useEffect(() => {
-    fetchTrades();
-    fetchLivePrices();
+    const timer = setTimeout(() => {
+      fetchTrades();
+      fetchLivePrices();
+    }, 0);
     const interval = setInterval(fetchLivePrices, 60000);
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(timer);
+      clearInterval(interval);
+    };
   }, []);
 
   const filtered = trades.filter((t) => {

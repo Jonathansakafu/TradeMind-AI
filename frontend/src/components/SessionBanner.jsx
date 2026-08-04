@@ -25,9 +25,12 @@ function SessionBanner({ className = "" }) {
   }, []);
 
   useEffect(() => {
-    fetchActiveSession();
+    const timer = setTimeout(fetchActiveSession, 0);
     const interval = setInterval(fetchActiveSession, 30000);
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(timer);
+      clearInterval(interval);
+    };
   }, [fetchActiveSession]);
 
   if (!session || session.status !== "active") return null;

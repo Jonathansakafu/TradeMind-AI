@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import axios from "axios";
 import { Browser } from "@capacitor/browser";
 import MainLayout from "../layouts/MainLayout";
@@ -21,7 +21,7 @@ function News() {
     } catch { return []; }
   });
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchSuggestions, setSearchSuggestions] = useState([]);
+  const [suppressSuggestions, setSuppressSuggestions] = useState(false);
   const [activeTab, setActiveTab] = useState("live");
   const analysisRef = useRef(null);
   const token = localStorage.getItem("token");
@@ -42,27 +42,29 @@ function News() {
     }
   };
 
-  useEffect(() => { fetchNews(); }, []);
-
-  // Search suggestions
   useEffect(() => {
-    if (searchQuery.length < 2) {
-      setSearchSuggestions([]);
-      return;
-    }
-    const suggestions = [
+    const timer = setTimeout(fetchNews, 0);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Search suggestions — pure derived state, no effect needed. Suppressed
+  // right after a search is submitted (below) so the dropdown doesn't
+  // immediately reappear with the same query still in the box; typing
+  // again re-enables it via the input's onChange.
+  const searchSuggestions = useMemo(() => {
+    if (suppressSuggestions || searchQuery.length < 2) return [];
+    return [
       `${searchQuery} forex`,
       `${searchQuery} trading`,
       `${searchQuery} USD`,
       `${searchQuery} market impact`,
       `${searchQuery} currency`,
     ];
-    setSearchSuggestions(suggestions);
-  }, [searchQuery]);
+  }, [searchQuery, suppressSuggestions]);
 
   const handleSearch = (query) => {
     setSearchQuery(query);
-    setSearchSuggestions([]);
+    setSuppressSuggestions(true);
     fetchNews(query);
   };
 
@@ -134,7 +136,7 @@ function News() {
             type="text"
             placeholder="Search forex news... (e.g. Trump, Fed, Interest Rate)"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => { setSearchQuery(e.target.value); setSuppressSuggestions(false); }}
             onKeyDown={(e) => e.key === "Enter" && handleSearch(searchQuery)}
             className="bg-transparent outline-none text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 flex-1"
           />

@@ -41,9 +41,12 @@ function NotificationBell() {
   };
 
   useEffect(() => {
-    fetchNotifications();
+    const timer = setTimeout(fetchNotifications, 0);
     const interval = setInterval(fetchNotifications, 5 * 60 * 1000);
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(timer);
+      clearInterval(interval);
+    };
   }, []);
 
   useEffect(() => {

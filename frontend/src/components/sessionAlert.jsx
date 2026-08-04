@@ -74,20 +74,6 @@ const getActiveSessions = () => {
   });
 };
 
-const getTimeUntilNext = () => {
-  const now = new Date();
-  const utcHour = now.getUTCHours();
-  const utcMin = now.getUTCMinutes();
-
-  for (const s of SESSIONS) {
-    if (s.open > utcHour || (s.open === utcHour && utcMin < 0)) {
-      const hoursLeft = s.open - utcHour;
-      return { session: s.label, hours: hoursLeft };
-    }
-  }
-  return null;
-};
-
 function SessionAlert() {
   const [activeSessions, setActiveSessions] = useState([]);
   const [dismissed, setDismissed] = useState([]);

@@ -46,9 +46,12 @@ function LiveAnalysis() {
   };
 
   useEffect(() => {
-    fetchPrices();
+    const timer = setTimeout(fetchPrices, 0);
     const interval = setInterval(fetchPrices, 60000);
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(timer);
+      clearInterval(interval);
+    };
   }, []);
 
   const analyzePair = async (pair) => {

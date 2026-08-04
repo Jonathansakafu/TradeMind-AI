@@ -57,9 +57,12 @@ function MT5() {
   };
 
   useEffect(() => {
-    fetchData();
+    const timer = setTimeout(fetchData, 0);
     const interval = setInterval(fetchData, 30000);
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(timer);
+      clearInterval(interval);
+    };
   }, []);
 
   const copyToClipboard = (text, field) => {

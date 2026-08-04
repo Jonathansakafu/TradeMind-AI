@@ -1,5 +1,5 @@
 import { Sun, Moon } from "lucide-react";
-import { useTheme } from "../context/ThemeContext";
+import { useTheme } from "../hooks/useTheme";
 
 // `variant="inline"` renders a labeled row (sidebar); default renders a
 // compact icon-only button (headers, settings cards).

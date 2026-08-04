@@ -149,12 +149,17 @@ function Charts() {
   };
 
   useEffect(() => {
-    fetchOpenTrades(selectedPair.pair);
-    fetchLivePrice(selectedPair.pair);
+    const timer = setTimeout(() => {
+      fetchOpenTrades(selectedPair.pair);
+      fetchLivePrice(selectedPair.pair);
+    }, 0);
     const interval = setInterval(() => {
       fetchLivePrice(selectedPair.pair);
     }, 30000);
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(timer);
+      clearInterval(interval);
+    };
   }, [selectedPair]);
 
   // TradingView chart

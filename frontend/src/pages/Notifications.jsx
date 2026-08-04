@@ -62,8 +62,11 @@ function Notifications() {
   };
 
   useEffect(() => {
-    fetchNotifications();
-    fetchActiveSession();
+    const timer = setTimeout(() => {
+      fetchNotifications();
+      fetchActiveSession();
+    }, 0);
+    return () => clearTimeout(timer);
   }, []);
 
   const generateAlerts = async () => {

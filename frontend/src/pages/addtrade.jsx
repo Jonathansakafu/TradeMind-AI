@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
 import MainLayout from "../layouts/MainLayout";
@@ -60,6 +60,48 @@ const calculatePL = (pair, direction, entryPrice, exitPrice, lotSize) => {
   };
 };
 
+function FormField({ label, name, value, onChange, type = "text", placeholder, step, required }) {
+  return (
+    <div>
+      <label className="text-sm text-slate-500 dark:text-slate-400 mb-1 block">
+        {label} {required && <span className="text-red-400">*</span>}
+      </label>
+      <input
+        type={type} name={name} step={step}
+        placeholder={placeholder} value={value}
+        onChange={onChange}
+        className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-xl outline-none focus:border-green-500 transition text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500"
+      />
+    </div>
+  );
+}
+
+function FormSelect({ label, name, value, onChange, options, required, optional }) {
+  return (
+    <div>
+      <label className="text-sm text-slate-500 dark:text-slate-400 mb-1 block">
+        {label}
+        {required && <span className="text-red-400 ml-1">*</span>}
+        {optional && <span className="text-slate-400 dark:text-slate-600 ml-1">(optional)</span>}
+      </label>
+      <select
+        name={name} value={value} onChange={onChange}
+        className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-xl outline-none focus:border-green-500 transition text-slate-900 dark:text-white"
+      >
+        <option value="">Select...</option>
+        {options.map((o) => (
+          <option
+            key={typeof o === "object" ? o.value : o}
+            value={typeof o === "object" ? o.value : o}
+          >
+            {typeof o === "object" ? o.label : o}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 function AddTrade() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -67,7 +109,6 @@ function AddTrade() {
   const [loading, setLoading] = useState(false);
   const [screenshot, setScreenshot] = useState(null);
   const [preview, setPreview] = useState(null);
-  const [calculated, setCalculated] = useState(null);
   const [capturing, setCapturing] = useState(false);
   const [detecting, setDetecting] = useState(false);
   const [detectedSetup, setDetectedSetup] = useState(null);
@@ -104,13 +145,10 @@ function AddTrade() {
     session: detectSession(),
   });
 
-  useEffect(() => {
-    const result = calculatePL(
-      form.pair, form.direction,
-      form.entryPrice, form.exitPrice, form.lotSize
-    );
-    setCalculated(result);
-  }, [form.pair, form.direction, form.entryPrice, form.exitPrice, form.lotSize]);
+  const calculated = useMemo(
+    () => calculatePL(form.pair, form.direction, form.entryPrice, form.exitPrice, form.lotSize),
+    [form.pair, form.direction, form.entryPrice, form.exitPrice, form.lotSize]
+  );
 
   const handleChange = (e) =>
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -234,44 +272,6 @@ function AddTrade() {
     }
   };
 
-  const Field = ({ label, name, type = "text", placeholder, step, required }) => (
-    <div>
-      <label className="text-sm text-slate-500 dark:text-slate-400 mb-1 block">
-        {label} {required && <span className="text-red-400">*</span>}
-      </label>
-      <input
-        type={type} name={name} step={step}
-        placeholder={placeholder} value={form[name]}
-        onChange={handleChange}
-        className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-xl outline-none focus:border-green-500 transition text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500"
-      />
-    </div>
-  );
-
-  const Select = ({ label, name, options, required, optional }) => (
-    <div>
-      <label className="text-sm text-slate-500 dark:text-slate-400 mb-1 block">
-        {label}
-        {required && <span className="text-red-400 ml-1">*</span>}
-        {optional && <span className="text-slate-400 dark:text-slate-600 ml-1">(optional)</span>}
-      </label>
-      <select
-        name={name} value={form[name]} onChange={handleChange}
-        className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-xl outline-none focus:border-green-500 transition text-slate-900 dark:text-white"
-      >
-        <option value="">Select...</option>
-        {options.map((o) => (
-          <option
-            key={typeof o === "object" ? o.value : o}
-            value={typeof o === "object" ? o.value : o}
-          >
-            {typeof o === "object" ? o.label : o}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
-
   return (
     <MainLayout>
       <div className="max-w-2xl mx-auto">
@@ -298,9 +298,9 @@ function AddTrade() {
 
           {/* Pair + Direction */}
           <div className="grid grid-cols-2 gap-4">
-            <Select label="Pair" name="pair" options={PAIRS} required />
-            <Select
-              label="Direction" name="direction" required
+            <FormSelect label="Pair" name="pair" value={form.pair} onChange={handleChange} options={PAIRS} required />
+            <FormSelect
+              label="Direction" name="direction" value={form.direction} onChange={handleChange} required
               options={[
                 { value: "buy", label: "Buy (Long) 📈" },
                 { value: "sell", label: "Sell (Short) 📉" },
@@ -310,21 +310,21 @@ function AddTrade() {
 
           {/* Entry + Exit */}
           <div className="grid grid-cols-2 gap-4">
-            <Field
-              label="Entry Price" name="entryPrice"
+            <FormField
+              label="Entry Price" name="entryPrice" value={form.entryPrice} onChange={handleChange}
               type="number" step="any" placeholder="1.08500" required
             />
-            <Field
-              label="Exit Price" name="exitPrice"
+            <FormField
+              label="Exit Price" name="exitPrice" value={form.exitPrice} onChange={handleChange}
               type="number" step="any" placeholder="1.09000"
             />
           </div>
 
           {/* SL + TP + Lot */}
           <div className="grid grid-cols-3 gap-4">
-            <Field label="Stop Loss" name="stopLoss" type="number" step="any" placeholder="1.08200" />
-            <Field label="Take Profit" name="takeProfit" type="number" step="any" placeholder="1.09200" />
-            <Field label="Lot Size" name="lotSize" type="number" step="any" placeholder="0.01" required />
+            <FormField label="Stop Loss" name="stopLoss" value={form.stopLoss} onChange={handleChange} type="number" step="any" placeholder="1.08200" />
+            <FormField label="Take Profit" name="takeProfit" value={form.takeProfit} onChange={handleChange} type="number" step="any" placeholder="1.09200" />
+            <FormField label="Lot Size" name="lotSize" value={form.lotSize} onChange={handleChange} type="number" step="any" placeholder="0.01" required />
           </div>
 
           {/* AUTO P&L */}
@@ -506,7 +506,7 @@ function AddTrade() {
           </div>
 
           {/* Date */}
-          <Field label="Date & Time" name="openedAt" type="datetime-local" />
+          <FormField label="Date & Time" name="openedAt" value={form.openedAt} onChange={handleChange} type="datetime-local" />
 
           {/* Notes */}
           <div>
