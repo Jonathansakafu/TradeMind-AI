@@ -33,9 +33,12 @@ const notificationSchema = new mongoose.Schema({
   // Set only when the auto-execute browser extension claims/reports this
   // notification — a "failed"/"unknown" result leaves it unread with
   // botStatus set so it still shows up in the normal manual Won/Lost UI.
+  // "win"/"loss" (not "won"/"lost") to match both the outcome value the
+  // quick-trade-bot controller actually sets this to, and Trade.outcome's
+  // own enum, for consistency.
   botStatus: {
     type: String,
-    enum: ["pending", "claimed", "won", "lost", "failed"],
+    enum: ["pending", "claimed", "win", "loss", "failed"],
   },
   botClaimedAt: { type: Date },
   botError: { type: String },
