@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const TradingSession = require("../models/TradingSession");
 const Notification = require("../models/Notification");
 const Trade = require("../models/Trade");
@@ -8,7 +9,11 @@ const { checkAndUpdateSession } = require("../utils/sessionLimits");
 // ToS-sensitive site), so it authenticates with a per-session bot token
 // instead — same pattern as the MT5 EA's public /pending + /executed routes.
 async function loadValidSession(sessionId, token) {
-  if (!sessionId || !token) return null;
+  // A malformed (non-ObjectId) sessionId — e.g. a stale/garbled value
+  // pasted into the extension popup — should fail the same way an
+  // unknown one does, not throw a raw Mongoose CastError past this
+  // public, unauthenticated endpoint.
+  if (!sessionId || !token || !mongoose.Types.ObjectId.isValid(sessionId)) return null;
   const session = await TradingSession.findById(sessionId);
   if (!session || session.botToken !== token) return null;
   return session;
