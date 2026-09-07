@@ -13,9 +13,9 @@ const MODEL_NAME = "gemini-flash-latest";
 // screenshot analysis needs an actual multimodal model, so this one
 // specific feature goes through Gemini instead, which is already
 // configured (GEMINI_API_KEY) but was previously unused.
-exports.analyzeChartImage = async (base64Image, mimeType, retrievedChunks = []) => {
+exports.analyzeChartImage = async (base64Image, mimeType, retrievedChunks = [], extra = {}) => {
   const model = genAI.getGenerativeModel({ model: MODEL_NAME });
-  const ragCtx = ragService.formatContext(retrievedChunks);
+  const ragCtx = ragService.buildPromptContext({ retrievedChunks, bookSummary: extra.bookSummary });
 
   const prompt = `You are TradeMind AI, a professional forex chart analyst. Analyze this chart screenshot and provide a structured trading analysis.
 ${ragCtx ? `\nApply this retrieved context from the trader's own uploaded books where relevant:\n${ragCtx}` : ""}

@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const DocumentChunk = require("../models/DocumentChunk");
+const BookConcept = require("../models/BookConcept");
 const { chunkText } = require("../utils/chunkText");
 const embeddingService = require("./embeddingService");
 
@@ -16,7 +17,13 @@ const MAX_CHUNKS_PER_BOOK = 200;
 // query -- without this cutoff, "closest available" chunks were being
 // shown as cited sources even when the model correctly ignored them and
 // answered from general knowledge instead (misleading in the UI).
-const MIN_RELEVANCE_SCORE = 0.75;
+// Was 0.75 (raw cosine >= 0.5) -- too strict for MiniLM-L6-v2 matching
+// short queries against book prose, silently filtering out real book
+// content in practice (users reported uploaded books never seemed to
+// influence anything). Lowered to still catch genuine noise while no
+// longer discarding real matches; revisit once real retrieval results
+// are visible in production.
+const MIN_RELEVANCE_SCORE = 0.6;
 
 // Cached after the first attempt so we don't retry a doomed $vectorSearch
 // call on every single retrieval once we know the cluster/index can't do it.
@@ -238,6 +245,55 @@ exports.formatContext = (chunks) => {
   return `\nRetrieved context — ground your answer in this and cite sources by label:\n${chunks
     .map((c) => `[Source: ${c.label || c.source}]\n${c.text}`)
     .join("\n\n")}`;
+};
+
+// The curated concepts/strategies/rules Claude/Groq already extracted at
+// upload time (see aiController.analyzeDocument) were previously only
+// ever read back by the "My Books" list UI -- disconnected from every
+// actual signal/analysis/answer path. This makes that extraction
+// unconditionally available context, independent of the similarity-search
+// threshold above, so an uploaded book counts even when no individual
+// chunk scores high enough to be retrieved on its own.
+const MAX_BOOKS = 3;
+const MAX_ITEMS_PER_LIST = 8;
+
+exports.getBookConceptSummary = async (userId) => {
+  if (!userId) return "";
+  const books = await BookConcept.find({ user: userId })
+    .sort({ createdAt: -1 })
+    .limit(MAX_BOOKS)
+    .select("bookName concepts strategies rules")
+    .lean();
+  if (books.length === 0) return "";
+
+  const sections = books.map((b) => {
+    const parts = [`"${b.bookName}"`];
+    if (b.concepts?.length) parts.push(`concepts: ${b.concepts.slice(0, MAX_ITEMS_PER_LIST).join("; ")}`);
+    if (b.strategies?.length) parts.push(`strategies: ${b.strategies.slice(0, MAX_ITEMS_PER_LIST).join("; ")}`);
+    if (b.rules?.length) parts.push(`rules: ${b.rules.slice(0, MAX_ITEMS_PER_LIST).join("; ")}`);
+    return parts.join(" — ");
+  });
+
+  return `\nConcepts extracted from the trader's uploaded books (apply these where relevant, cite the book name):\n${sections.join("\n")}`;
+};
+
+// Composes every fused context source (RAG chunks, extracted book
+// concepts, price-action momentum, this pair's own recent trade history)
+// into one prompt-ready block, so every AI call site builds its context
+// the same way instead of each hand-rolling its own concatenation.
+exports.buildPromptContext = ({ retrievedChunks, bookSummary, momentum, pairTrades } = {}) => {
+  const parts = [];
+  if (bookSummary) parts.push(bookSummary);
+  const ragCtx = exports.formatContext(retrievedChunks);
+  if (ragCtx) parts.push(ragCtx);
+  if (momentum?.summary) parts.push(`\nMarket pressure: ${momentum.summary}`);
+  if (pairTrades?.length) {
+    const summary = pairTrades
+      .map((t) => `${t.direction} outcome:${t.outcome || "open"} pnl:${t.profitLoss ?? "—"}`)
+      .join("; ");
+    parts.push(`\nThis pair's most recent trades for this trader: ${summary}`);
+  }
+  return parts.join("\n");
 };
 
 exports.VECTOR_INDEX_NAME = VECTOR_INDEX_NAME;

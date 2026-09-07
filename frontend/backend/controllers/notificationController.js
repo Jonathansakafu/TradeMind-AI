@@ -5,6 +5,7 @@ const marketService = require("../services/marketService");
 const newsService = require("../services/newsService");
 const claudeAI = require("../services/claudeAI");
 const ragService = require("../services/ragService");
+const { computeMomentum } = require("../services/marketAnalysis");
 
 // Crypto pairs zinapatikana 24/7 — zitumike kwanza kwa notifications
 const CRYPTO_PAIRS = ["BTCUSD", "ETHUSD", "XRPUSD"];
@@ -43,6 +44,11 @@ async function generateQuickTradeSignals(userId, session) {
   const candidatePairs = session.pairs?.length ? session.pairs : QUICK_TRADE_DEFAULT_PAIRS;
   const availablePairs = candidatePairs.filter((p) => prices[toMarketSymbol(p)]);
 
+  // Fetched once for the whole cycle, not per pair -- it's the same
+  // regardless of which pair is being analyzed, and it's a Mongo query
+  // (cheap), but no reason to repeat it up to ~10x per cycle.
+  const bookSummary = await ragService.getBookConceptSummary(userId);
+
   // No per-cycle cap — availablePairs is already naturally bounded (session
   // pairs or the ~10 default pairs), and with indexed dedup lookups and
   // cached news/prices (see marketService/newsService), analyzing all of
@@ -80,7 +86,10 @@ async function generateQuickTradeSignals(userId, session) {
         console.error(`Historical data failed for ${pair}:`, err.message);
       }
 
-      const analysis = await claudeAI.analyzeQuickSignal(formattedPair, currentPrice, historical);
+      const momentum = computeMomentum(historical);
+      const analysis = await claudeAI.analyzeQuickSignal(
+        formattedPair, currentPrice, historical, [], { bookSummary, momentum }
+      );
 
       if (analysis.direction && analysis.direction !== "wait") {
         await Notification.create({
@@ -161,6 +170,10 @@ exports.autoGenerate = async (userId) => {
       console.error("News fetch failed:", err.message);
     }
 
+    // Fetched once per cycle, not per pair -- same reasoning as the Quick
+    // Trade path above.
+    const bookSummary = await ragService.getBookConceptSummary(userId);
+
     for (const pair of pairsToAnalyze) {
       try {
         const currentPrice = prices[pair] || null;
@@ -175,9 +188,15 @@ exports.autoGenerate = async (userId) => {
         }
 
         const relevantNews = newsService.getNewsSentiment(newsArticles, pair);
+        // "screenshot" added to sources so the trader's own uploaded chart
+        // screenshots (if any, for this pair) can actually surface here --
+        // previously this only ever retrieved book/trade chunks, so an
+        // uploaded screenshot never influenced auto-generated signals.
         const retrievedChunks = await ragService.retrieve(
-          userId, `${formattedPair} trading strategy signal`, { topK: 6 }
+          userId, `${formattedPair} trading strategy signal`,
+          { topK: 6, sources: ["book", "trade", "screenshot"] }
         );
+        const momentum = computeMomentum(historical);
 
         const analysis = await claudeAI.analyzeMarketSmart(
           formattedPair,
@@ -185,7 +204,8 @@ exports.autoGenerate = async (userId) => {
           historical,
           pastTrades,
           retrievedChunks,
-          relevantNews
+          relevantNews,
+          { bookSummary, momentum }
         );
 
         if (analysis.signal && analysis.signal !== "wait") {

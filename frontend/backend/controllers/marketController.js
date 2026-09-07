@@ -1,7 +1,7 @@
 const marketService = require("../services/marketService");
 const newsService = require("../services/newsService");
 const claudeAI = require("../services/claudeAI");
-const ragService = require("../services/ragService");
+const signalContext = require("../services/signalContext");
 const Trade = require("../models/Trade");
 
 const PAIRS = ["EURUSD", "GBPUSD", "USDJPY", "XAUUSD", "AUDUSD", "GBPJPY"];
@@ -31,14 +31,25 @@ exports.analyzePair = async (req, res) => {
     }
 
     const relevantNews = newsService.getNewsSentiment(newsArticles, pair);
-    const [historical, retrievedChunks] = await Promise.all([
-      marketService.getHistoricalData(formattedPair, "1h", 20),
-      ragService.retrieve(req.user._id, `${formattedPair} trading strategy signal`, { topK: 6 }),
-    ]);
+    const historical = await marketService.getHistoricalData(formattedPair, "1h", 20);
+
+    // Same fused context (books, RAG chunks including uploaded chart
+    // screenshots, price-action momentum, this pair's own recent trades)
+    // as auto-generated signals use — an on-demand "analyze this pair"
+    // click shouldn't be any less grounded than the background cycle.
+    const { bookSummary, retrievedChunks, momentum, pairTrades } = await signalContext.buildContext(
+      req.user._id,
+      {
+        pair,
+        historicalCandles: historical,
+        ragQuery: `${formattedPair} trading strategy signal`,
+      }
+    );
 
     const analysis = await claudeAI.analyzeMarketSmart(
       formattedPair, priceData.price, historical,
-      pastTrades, retrievedChunks, relevantNews
+      pastTrades, retrievedChunks, relevantNews,
+      { bookSummary, momentum, pairTrades }
     );
 
     res.json({

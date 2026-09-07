@@ -22,9 +22,12 @@ exports.analyzeTrade = async (req, res) => {
 
     const query = [trade.pair, trade.direction, trade.setup, trade.session, trade.notes]
       .filter(Boolean).join(" ");
-    const retrievedChunks = await ragService.retrieve(req.user._id, query, { topK: 6 });
+    const [retrievedChunks, bookSummary] = await Promise.all([
+      ragService.retrieve(req.user._id, query, { topK: 6 }),
+      ragService.getBookConceptSummary(req.user._id),
+    ]);
 
-    const result = await claudeAI.analyzeTrade(trade, history, retrievedChunks);
+    const result = await claudeAI.analyzeTrade(trade, history, retrievedChunks, { bookSummary });
 
     const analysis = await Analysis.create({
       user: req.user._id,
@@ -53,9 +56,12 @@ exports.detectPatterns = async (req, res) => {
     const setups = [...new Set(trades.map((t) => t.setup).filter(Boolean))].slice(0, 10);
     const pairs = [...new Set(trades.map((t) => t.pair))].slice(0, 10);
     const query = `trading patterns risk management ${setups.join(" ")} ${pairs.join(" ")}`;
-    const retrievedChunks = await ragService.retrieve(req.user._id, query, { topK: 8 });
+    const [retrievedChunks, bookSummary] = await Promise.all([
+      ragService.retrieve(req.user._id, query, { topK: 8 }),
+      ragService.getBookConceptSummary(req.user._id),
+    ]);
 
-    const result = await claudeAI.detectPatterns(trades, retrievedChunks);
+    const result = await claudeAI.detectPatterns(trades, retrievedChunks, { bookSummary });
 
     const analysis = await Analysis.create({
       user: req.user._id,
@@ -80,9 +86,12 @@ exports.getTradeSuggestion = async (req, res) => {
     const history = await Trade.find({ user: req.user._id }).limit(30);
     const query = [proposedTrade?.pair, proposedTrade?.direction, proposedTrade?.setup, proposedTrade?.session]
       .filter(Boolean).join(" ");
-    const retrievedChunks = await ragService.retrieve(req.user._id, query, { topK: 6 });
+    const [retrievedChunks, bookSummary] = await Promise.all([
+      ragService.retrieve(req.user._id, query, { topK: 6 }),
+      ragService.getBookConceptSummary(req.user._id),
+    ]);
     const result = await claudeAI.getTradeSuggestion(
-      proposedTrade, history, retrievedChunks
+      proposedTrade, history, retrievedChunks, { bookSummary }
     );
     res.json(result);
   } catch (err) {
@@ -197,9 +206,12 @@ exports.analyzeScreenshot = async (req, res) => {
     const mimeType = req.file.mimetype;
     fs.unlinkSync(req.file.path);
 
-    const retrievedChunks = await ragService.retrieve(req.user._id, "chart pattern analysis", { topK: 6, sources: ["book"] });
+    const [retrievedChunks, bookSummary] = await Promise.all([
+      ragService.retrieve(req.user._id, "chart pattern analysis", { topK: 6, sources: ["book"] }),
+      ragService.getBookConceptSummary(req.user._id),
+    ]);
     const result = await geminiVision.analyzeChartImage(
-      base64Image, mimeType, retrievedChunks
+      base64Image, mimeType, retrievedChunks, { bookSummary }
     );
 
     const analysisRecord = await Analysis.create({
@@ -244,11 +256,14 @@ exports.askQuestion = async (req, res) => {
       return res.status(400).json({ message: "Question is required" });
     }
 
-    const retrievedChunks = await ragService.retrieve(req.user._id, question, {
-      topK: 8,
-      sources: ["book", "trade", "guide", "screenshot"],
-    });
-    const result = await claudeAI.answerQuestion(question, retrievedChunks);
+    const [retrievedChunks, bookSummary] = await Promise.all([
+      ragService.retrieve(req.user._id, question, {
+        topK: 8,
+        sources: ["book", "trade", "guide", "screenshot"],
+      }),
+      ragService.getBookConceptSummary(req.user._id),
+    ]);
+    const result = await claudeAI.answerQuestion(question, retrievedChunks, { bookSummary });
 
     res.json(result);
   } catch (err) {
@@ -280,15 +295,18 @@ exports.askQuestionStream = async (req, res) => {
   req.on("close", () => { closed = true; });
 
   try {
-    const retrievedChunks = await ragService.retrieve(req.user._id, question, {
-      topK: 8,
-      sources: ["book", "trade", "guide", "screenshot"],
-    });
+    const [retrievedChunks, bookSummary] = await Promise.all([
+      ragService.retrieve(req.user._id, question, {
+        topK: 8,
+        sources: ["book", "trade", "guide", "screenshot"],
+      }),
+      ragService.getBookConceptSummary(req.user._id),
+    ]);
     if (closed) return res.end();
 
     send("sources", { sources: claudeAI.answerSourcesFor(retrievedChunks) });
 
-    for await (const delta of claudeAI.streamAnswer(question, retrievedChunks)) {
+    for await (const delta of claudeAI.streamAnswer(question, retrievedChunks, { bookSummary })) {
       if (closed) return res.end();
       send("chunk", { text: delta });
     }
