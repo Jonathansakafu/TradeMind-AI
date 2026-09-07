@@ -90,7 +90,8 @@ exports.analyzeNews = async (req, res) => {
   try {
     const { article } = req.body;
     if (!article) return res.status(400).json({ message: "Article inahitajika" });
-    const analysis = await claudeAI.analyzeNewsImpact(article, PAIRS);
+    const prices = await marketService.getAllPrices();
+    const analysis = await claudeAI.analyzeNewsImpact(article, PAIRS, prices);
     res.json(analysis);
   } catch (err) {
     res.status(500).json({ message: err.message });

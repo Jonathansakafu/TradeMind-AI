@@ -248,7 +248,7 @@ exports.autoGenerate = async (userId) => {
         const topNews = newsArticles.slice(0, 1);
         for (const article of topNews) {
           const impact = await claudeAI.analyzeNewsImpact(
-            article, [...CRYPTO_PAIRS, ...FOREX_PAIRS].slice(0, 3)
+            article, [...CRYPTO_PAIRS, ...FOREX_PAIRS].slice(0, 3), prices
           );
           if (impact.impactLevel === "high" && impact.affectedPairs?.length > 0) {
             const affectedPair = impact.affectedPairs[0];

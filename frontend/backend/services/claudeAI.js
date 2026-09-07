@@ -490,10 +490,24 @@ Respond ONLY in JSON with no markdown:
 };
 
 // Analyze news impact
-exports.analyzeNewsImpact = async (article, pairs) => {
+// prices (optional): { PAIR: currentPrice } for the pairs being analyzed.
+// Without this, the model had nothing to ground affectedPairs[].entry/
+// stopLoss/takeProfit in and was producing plausible-looking but stale
+// price levels from its training data (e.g. gold entry/SL/TP around
+// $1900-2000 when the real live price was ~$4400) -- confidently wrong,
+// not just imprecise, since nothing in the prompt or response hinted the
+// levels weren't grounded in anything current.
+exports.analyzeNewsImpact = async (article, pairs, prices = {}) => {
   const cacheKey = `news_${article.title?.slice(0, 30)}`;
   const cached = getCached(cacheKey);
   if (cached) return cached;
+
+  const knownPrices = Object.fromEntries(
+    pairs.map((p) => [p, prices[p]]).filter(([, price]) => price != null)
+  );
+  const priceContext = Object.keys(knownPrices).length > 0
+    ? `\nCurrent live prices for these pairs (source every entry/stopLoss/takeProfit level off these actual prices -- never state a price level from memory/training data, it will be stale): ${JSON.stringify(knownPrices)}`
+    : "\nNo live price data is available for these pairs right now -- leave entry/stopLoss/takeProfit as 0 rather than guessing a level from memory, and say so in reasoning.";
 
   const prompt = `You are a forex news analyst. Analyze this news and its impact on forex pairs. Respond ONLY in JSON with no markdown:
 {
@@ -507,7 +521,7 @@ exports.analyzeNewsImpact = async (article, pairs) => {
 
 News: ${article.title}
 Content: ${article.description || ""}
-Pairs to analyze: ${pairs.join(", ")}`;
+Pairs to analyze: ${pairs.join(", ")}${priceContext}`;
 
   const text = await askGroq(prompt);
   try {

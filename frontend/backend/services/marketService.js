@@ -56,12 +56,18 @@ const isCacheValid = (entry) =>
   Date.now() - entry.timestamp < CACHE_TTL &&
   Object.keys(entry.data).length > 0;
 
-// Fallback prices — approximate values kwa wakati ambapo APIs zinashindwa
+// Fallback prices — approximate values kwa wakati ambapo APIs zinashindwa.
+// Last-resort only now (see the last-known-cached-price preference above
+// and in getLivePrice) -- these are frozen at whatever was roughly true
+// when last updated and WILL drift from reality over time regardless
+// (gold alone moved from ~$2330 to ~$4400+ over this file's life), so
+// treat any use of this constant as a signal something upstream has been
+// failing for a while, not a substitute for fixing that.
 const FALLBACK_PRICES = {
   EURUSD: 1.0850, GBPUSD: 1.2700, USDJPY: 149.50,
   AUDUSD: 0.6500, USDCAD: 1.3600, NZDUSD: 0.6000,
   USDCHF: 0.9100, GBPJPY: 189.00, EURJPY: 162.00,
-  XAUUSD: 2330.00,
+  XAUUSD: 4400.00,
 };
 
 // Pata Gold price kutoka alternative API
@@ -129,11 +135,17 @@ exports.getForexPrices = async () => {
     if (!prices["XAUUSD"]) prices["XAUUSD"] = FALLBACK_PRICES["XAUUSD"];
   }
 
-  // Weka fallback kwa pairs ambazo hazikupatikana
+  // Weka fallback kwa pairs ambazo hazikupatikana -- prefer the last real
+  // price this process actually saw (even if past the freshness TTL) over
+  // the hardcoded constant below, which is whatever was true when this
+  // code was written and drifts further from reality the longer the
+  // process runs without a successful fetch (e.g. gold moving from
+  // ~$2330 to ~$4400 over the life of this file).
   Object.entries(FALLBACK_PRICES).forEach(([pair, fallback]) => {
     if (!prices[pair]) {
-      prices[pair] = fallback;
-      console.log(`Using fallback price for ${pair}: ${fallback}`);
+      const lastKnown = priceCache.forex.data[pair];
+      prices[pair] = lastKnown || fallback;
+      console.log(`Using ${lastKnown ? "last-known cached" : "hardcoded fallback"} price for ${pair}: ${prices[pair]}`);
     }
   });
 
@@ -214,7 +226,8 @@ exports.getLivePrice = async (pair) => {
           priceCache.forex.timestamp = Date.now();
           return { pair: symbol, price: goldPrice, timestamp: new Date() };
         }
-        return { pair: symbol, price: FALLBACK_PRICES["XAUUSD"], timestamp: new Date() };
+        const lastKnownGold = priceCache.forex.data["XAUUSD"];
+        return { pair: symbol, price: lastKnownGold || FALLBACK_PRICES["XAUUSD"], timestamp: new Date() };
       }
 
       // Jaribu Twelve Data
@@ -229,8 +242,8 @@ exports.getLivePrice = async (pair) => {
         return { pair: symbol, price, timestamp: new Date() };
       }
 
-      // Fallback
-      const fallback = FALLBACK_PRICES[symbol];
+      // Fallback — prefer the last real price seen over the hardcoded constant.
+      const fallback = priceCache.forex.data[symbol] || FALLBACK_PRICES[symbol];
       if (fallback) return { pair: symbol, price: fallback, timestamp: new Date() };
       return null;
     }
@@ -245,8 +258,33 @@ exports.getLivePrice = async (pair) => {
   }
 };
 
+// Turns a single known price into a minimal synthetic candle series --
+// used when a provider has no real historical series available at all
+// (this happens reliably for XAU/USD on Twelve Data's time_series
+// endpoint, the same gap already worked around for its *live* price via
+// getGoldPrice() -- but getHistoricalData had no equivalent fallback, so
+// gold analysis was silently starved of any candle data). Flat/near-flat
+// on purpose: computeMomentum should read this as "no real trend data
+// available" (near-zero momentum, low volatility) rather than fabricate
+// movement that never happened.
+const buildSyntheticCandles = (price, count = 10) => {
+  if (!price) return [];
+  const now = Date.now();
+  const candles = [];
+  for (let i = count - 1; i >= 0; i--) {
+    candles.push({
+      datetime: new Date(now - i * 60 * 60 * 1000).toISOString(),
+      open: price, high: price * 1.0005,
+      low: price * 0.9995, close: price,
+    });
+  }
+  return candles;
+};
+
 // Pata historical data
 exports.getHistoricalData = async (pair, interval = "1h", outputsize = 20) => {
+  let values = [];
+
   try {
     const cryptoId = CRYPTO_IDS[pair];
     if (cryptoId) {
@@ -256,7 +294,7 @@ exports.getHistoricalData = async (pair, interval = "1h", outputsize = 20) => {
         { timeout: 10000 }
       );
       const prices = res.data.prices || [];
-      return prices.slice(-outputsize).map(([timestamp, price]) => ({
+      values = prices.slice(-outputsize).map(([timestamp, price]) => ({
         datetime: new Date(timestamp).toISOString(),
         open: price, high: price * 1.001,
         low: price * 0.999, close: price,
@@ -266,11 +304,26 @@ exports.getHistoricalData = async (pair, interval = "1h", outputsize = 20) => {
         `https://api.twelvedata.com/time_series?symbol=${pair}&interval=${interval}&outputsize=${outputsize}&apikey=${TWELVE_DATA_KEY}`,
         { timeout: 12000 }
       );
-      if (res.data?.status === "error") return [];
-      return res.data?.values || [];
+      if (res.data?.status === "error") {
+        // Previously swallowed silently -- a real provider/plan error
+        // (e.g. an unsupported symbol) looked identical to "no data" with
+        // nothing in the logs to diagnose it by.
+        console.error(`Twelve Data time_series error for ${pair}:`, res.data?.message || JSON.stringify(res.data));
+      } else {
+        values = res.data?.values || [];
+      }
     }
   } catch (err) {
-    console.error("Historical data error:", err.message);
-    return [];
+    console.error(`Historical data error for ${pair}:`, err.message);
   }
+
+  if (values.length > 0) return values;
+
+  try {
+    const live = await exports.getLivePrice(pair);
+    if (live?.price) return buildSyntheticCandles(live.price, outputsize);
+  } catch (err) {
+    console.error(`Synthetic candle fallback failed for ${pair}:`, err.message);
+  }
+  return [];
 };
