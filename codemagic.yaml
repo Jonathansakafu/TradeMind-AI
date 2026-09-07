@@ -57,11 +57,14 @@ workflows:
   android-release:
     name: TradeMind AI - Android
     max_build_duration: 30
-    # linux_x2 isn't available on this account's Codemagic plan (confirmed
-    # by an actual failed build: "The selected instance type is not
-    # available with the current billing plan") -- linux is the standard
-    # instance, available on every plan tier including free.
-    instance_type: linux
+    # Two failed builds traced this down: Codemagic's free plan includes
+    # NO Linux build minutes at all (confirmed via their own pricing docs)
+    # -- linux_x2 and plain linux both failed with "instance type not
+    # available with the current billing plan", and no Linux instance
+    # would have worked. Only Apple Silicon Mac minutes are free. Android
+    # builds (Gradle/Android SDK/JDK) run fine on macOS, so this uses the
+    # same mac_mini_m2 instance as ios-release above instead.
+    instance_type: mac_mini_m2
     working_directory: frontend
     environment:
       vars:
