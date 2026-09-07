@@ -57,7 +57,11 @@ workflows:
   android-release:
     name: TradeMind AI - Android
     max_build_duration: 30
-    instance_type: linux_x2
+    # linux_x2 isn't available on this account's Codemagic plan (confirmed
+    # by an actual failed build: "The selected instance type is not
+    # available with the current billing plan") -- linux is the standard
+    # instance, available on every plan tier including free.
+    instance_type: linux
     working_directory: frontend
     environment:
       vars:
