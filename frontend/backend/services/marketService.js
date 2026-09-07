@@ -19,6 +19,32 @@ const CRYPTO_IDS = {
   "LTC/USD": "litecoin",
 };
 
+// Common names/aliases a user or the AI might use in free text, mapped to
+// this app's raw pair symbols (e.g. as returned by getAllPrices()).
+const SYMBOL_ALIASES = {
+  GOLD: "XAUUSD",
+  SILVER: "XAGUSD",
+  BITCOIN: "BTCUSD",
+  ETHEREUM: "ETHUSD",
+  RIPPLE: "XRPUSD",
+};
+
+// Normalizes free-text pair wording ("EUR/USD OTC", "gold", "eurusd") into
+// this app's raw symbol form ("EURUSD", "XAUUSD"). Pocket Option/Expert
+// Option OTC instruments (e.g. "EUR/USD OTC") are broker-generated
+// synthetic prices with no independent public data feed -- the OTC suffix
+// is stripped and the underlying real pair used as the closest honest
+// proxy.
+exports.normalizeSymbol = (raw) => {
+  if (!raw) return "";
+  const base = String(raw)
+    .replace(/\s*OTC$/i, "")
+    .trim()
+    .replace(/\//g, "")
+    .toUpperCase();
+  return SYMBOL_ALIASES[base] || base;
+};
+
 // Cache — dakika 3
 const priceCache = {
   forex: { data: {}, timestamp: 0 },

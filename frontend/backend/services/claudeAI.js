@@ -1,5 +1,7 @@
 const Groq = require("groq-sdk");
 const ragService = require("./ragService");
+const marketService = require("./marketService");
+const { computeMomentum } = require("./marketAnalysis");
 
 // Constructed lazily (not at module load) so the server doesn't crash on
 // startup if GROQ_API_KEY isn't set — it only throws when a request that
@@ -53,23 +55,153 @@ const askGroq = async (prompt) => {
   return completion.choices[0]?.message?.content || "";
 };
 
-// Yields text deltas as they arrive from Groq instead of waiting for the
-// full completion — lets the chat UI render the answer as it's written.
-// reasoning_effort keeps this fast for a chat UI; gpt-oss's reasoning
-// trace lands in a separate `reasoning` delta field, not `content`, so it
-// never leaks into the streamed text.
-async function* askGroqStream(prompt) {
-  const stream = await getGroqClient().chat.completions.create({
-    messages: [{ role: "user", content: prompt }],
+// Gives Ask AI a real way to look up live market conditions instead of
+// telling the trader to go check the ticker themselves — Groq's chat
+// completions API is OpenAI-compatible, so this uses standard
+// function-calling. Only wired into answerQuestion/streamAnswer (the chat
+// endpoints); the structured signal-generation functions already receive
+// live price/momentum data directly as prompt context and don't need it.
+const MARKET_TOOLS = [
+  {
+    type: "function",
+    function: {
+      name: "get_market_snapshot",
+      description: "Fetch the current live price and a short-term price-action momentum/volatility read for a forex or crypto pair. Call this whenever the trader asks about a pair's current price, whether to trade it now, or wants any live read on market conditions — never guess a price or tell them to go look it up themselves; look it up.",
+      parameters: {
+        type: "object",
+        properties: {
+          pair: {
+            type: "string",
+            description: "The pair as a plain symbol, e.g. EURUSD, GBPUSD, XAUUSD. Convert names like \"gold\", \"euro dollar\", or \"bitcoin\" to this form.",
+          },
+        },
+        required: ["pair"],
+      },
+    },
+  },
+];
+
+async function executeMarketTool(name, rawArgs) {
+  if (name !== "get_market_snapshot") {
+    return { error: `Unknown tool "${name}"` };
+  }
+  let args;
+  try {
+    args = JSON.parse(rawArgs || "{}");
+  } catch {
+    args = {};
+  }
+  const pair = marketService.normalizeSymbol(args.pair);
+  if (!pair) return { error: "No pair given" };
+
+  const prices = await marketService.getAllPrices();
+  const currentPrice = prices[pair];
+  if (currentPrice == null) {
+    return { pair, error: "No live price available for this pair right now — market may be closed, or the symbol wasn't recognized." };
+  }
+
+  const formattedPair = pair.length === 6 ? `${pair.slice(0, 3)}/${pair.slice(3)}` : pair;
+  let historical = [];
+  try {
+    historical = await marketService.getHistoricalData(formattedPair, "1h", 10);
+  } catch {
+    // Momentum below just reports "not enough data" — price alone is still useful.
+  }
+
+  return { pair, currentPrice, momentum: computeMomentum(historical) };
+}
+
+// Non-streaming tool-augmented chat: one round of function-calling, then a
+// follow-up completion with the tool's result folded in. Caps at a single
+// tool-call round (fetch live data once, then answer) — this app's chat
+// endpoint doesn't need an open-ended agentic loop.
+async function askGroqWithTools(messages) {
+  const first = await getGroqClient().chat.completions.create({
     model: GROQ_MODEL,
+    messages,
+    tools: MARKET_TOOLS,
+    tool_choice: "auto",
+    temperature: 0.3,
+    max_tokens: 1500,
+    reasoning_effort: "low",
+  });
+
+  const msg = first.choices[0]?.message;
+  if (msg?.tool_calls?.length) {
+    const toolResults = await Promise.all(msg.tool_calls.map(async (call) => ({
+      role: "tool",
+      tool_call_id: call.id,
+      content: JSON.stringify(await executeMarketTool(call.function.name, call.function.arguments)),
+    })));
+
+    const second = await getGroqClient().chat.completions.create({
+      model: GROQ_MODEL,
+      messages: [...messages, msg, ...toolResults],
+      temperature: 0.3,
+      max_tokens: 1500,
+      reasoning_effort: "low",
+    });
+    return second.choices[0]?.message?.content || "";
+  }
+
+  return msg?.content || "";
+}
+
+// Streaming version of the above. Text deltas stream through immediately
+// (the common case — no tool needed); a tool-call turn instead streams
+// only `tool_calls` deltas (no content), which are accumulated by index
+// per the OpenAI-compatible streaming shape, executed once the turn ends,
+// then a second streamed completion carries the actual answer.
+async function* streamGroqWithTools(messages) {
+  const stream = await getGroqClient().chat.completions.create({
+    model: GROQ_MODEL,
+    messages,
+    tools: MARKET_TOOLS,
+    tool_choice: "auto",
     temperature: 0.3,
     max_tokens: 1500,
     reasoning_effort: "low",
     stream: true,
   });
+
+  const toolCalls = [];
+  let finishReason = null;
+
   for await (const chunk of stream) {
-    const delta = chunk.choices[0]?.delta?.content;
-    if (delta) yield delta;
+    const choice = chunk.choices[0];
+    if (choice?.finish_reason) finishReason = choice.finish_reason;
+    if (choice?.delta?.content) yield choice.delta.content;
+    if (choice?.delta?.tool_calls) {
+      for (const tc of choice.delta.tool_calls) {
+        const idx = tc.index ?? 0;
+        if (!toolCalls[idx]) toolCalls[idx] = { id: tc.id, type: "function", function: { name: "", arguments: "" } };
+        if (tc.id) toolCalls[idx].id = tc.id;
+        if (tc.function?.name) toolCalls[idx].function.name += tc.function.name;
+        if (tc.function?.arguments) toolCalls[idx].function.arguments += tc.function.arguments;
+      }
+    }
+  }
+
+  if (finishReason === "tool_calls" && toolCalls.length > 0) {
+    const assistantMsg = { role: "assistant", content: null, tool_calls: toolCalls };
+    const toolResults = await Promise.all(toolCalls.map(async (call) => ({
+      role: "tool",
+      tool_call_id: call.id,
+      content: JSON.stringify(await executeMarketTool(call.function.name, call.function.arguments)),
+    })));
+
+    const followup = await getGroqClient().chat.completions.create({
+      model: GROQ_MODEL,
+      messages: [...messages, assistantMsg, ...toolResults],
+      temperature: 0.3,
+      max_tokens: 1500,
+      reasoning_effort: "low",
+      stream: true,
+    });
+    for await (const chunk of followup) {
+      const delta = chunk.choices[0]?.delta?.content;
+      if (delta) yield delta;
+    }
   }
 }
 
@@ -395,15 +527,26 @@ exports.analyzeLiveMarket = async (pair, currentPrice, historicalPrices, pastTra
   return exports.analyzeMarketSmart(pair, currentPrice, historicalPrices, pastTrades, [], []);
 };
 
-const buildAnswerPrompt = (question, ragCtx) => ragCtx
-  ? `You are TradeMind AI, an assistant embedded in a forex/crypto trading journal app. Answer the trader's question. Prefer the retrieved context below when it's relevant (cite sources by label) — it may include their own trades, their uploaded books, or the app's own user guide. If the context isn't relevant to the question, ignore it and answer from your own general trading/market knowledge instead. Never claim something is in their data if it isn't.
+// Persona/context lives in `system` (not folded into the user turn) so it
+// persists across a tool-call round-trip without being re-stated.
+const buildAnswerMessages = (question, ragCtx, { jsonMode } = {}) => {
+  const persona = ragCtx
+    ? `You are TradeMind AI, an assistant embedded in a forex/crypto trading journal app. Answer the trader's question. Prefer the retrieved context below when it's relevant (cite sources by label) — it may include their own trades, their uploaded books, or the app's own user guide. If the context isn't relevant to the question, ignore it and answer from your own general trading/market knowledge instead. Never claim something is in their data if it isn't.
 
-${ragCtx}
+${ragCtx}`
+    : `You are TradeMind AI, an assistant embedded in a forex/crypto trading journal app. Answer the trader's question using your general trading and market knowledge. Nothing specific to their own trades, books, or the app guide was found for this question, so answer generally and helpfully — do not refuse just because there's no personal data to cite.`;
 
-Question: ${question}`
-  : `You are TradeMind AI, an assistant embedded in a forex/crypto trading journal app. Answer the trader's question using your general trading and market knowledge. Nothing specific to their own trades, books, or the app guide was found for this question, so answer generally and helpfully — do not refuse just because there's no personal data to cite.
+  const toolInstruction = "\n\nYou have a get_market_snapshot tool for live price/momentum data — use it whenever the question needs current market conditions instead of describing how the trader could check themselves.";
 
-Question: ${question}`;
+  const formatInstruction = jsonMode
+    ? '\n\nAlways give your final reply as a single JSON object with no markdown: {"answer": ""} — this applies even after using a tool; your last message must still be in this format.'
+    : "\n\nRespond with plain prose only — no JSON, no markdown code fences. This applies even after using a tool.";
+
+  return [
+    { role: "system", content: persona + toolInstruction + formatInstruction },
+    { role: "user", content: question },
+  ];
+};
 
 const chunksToSources = (retrievedChunks) => retrievedChunks.map((c) => ({
   label: c.label || c.source,
@@ -418,14 +561,9 @@ const chunksToSources = (retrievedChunks) => retrievedChunks.map((c) => ({
 // forex/trading knowledge otherwise.
 exports.answerQuestion = async (question, retrievedChunks = [], extra = {}) => {
   const ragCtx = ragService.buildPromptContext({ retrievedChunks, bookSummary: extra.bookSummary });
-  const prompt = buildAnswerPrompt(question, ragCtx) + `
+  const messages = buildAnswerMessages(question, ragCtx, { jsonMode: true });
 
-Respond ONLY in JSON with no markdown:
-{
-  "answer": ""
-}`;
-
-  const text = await askGroq(prompt);
+  const text = await askGroqWithTools(messages);
   const sources = chunksToSources(retrievedChunks);
 
   try {
@@ -442,10 +580,9 @@ Respond ONLY in JSON with no markdown:
 // streams plain prose directly.
 exports.streamAnswer = async function* (question, retrievedChunks = [], extra = {}) {
   const ragCtx = ragService.buildPromptContext({ retrievedChunks, bookSummary: extra.bookSummary });
-  const prompt = buildAnswerPrompt(question, ragCtx) +
-    "\n\nRespond with plain prose only — no JSON, no markdown code fences.";
+  const messages = buildAnswerMessages(question, ragCtx, { jsonMode: false });
 
-  yield* askGroqStream(prompt);
+  yield* streamGroqWithTools(messages);
 };
 
 exports.answerSourcesFor = chunksToSources;

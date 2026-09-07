@@ -18,11 +18,7 @@ const LIMIT_STOPPED_STATUSES = ["stopped_profit", "stopped_risk", "stopped_trade
 // there's no third-party API for them. We look up quotes using the
 // underlying real pair as the closest honest proxy, while keeping the OTC
 // label for display so it matches what the trader sees in their broker app.
-function toMarketSymbol(pair) {
-  const base = pair.replace(/\s*OTC$/i, "").trim();
-  if (/^gold$/i.test(base)) return "XAUUSD";
-  return base.replace(/\//g, "").toUpperCase();
-}
+const toMarketSymbol = marketService.normalizeSymbol;
 
 // Default Quick Trade pairs when a session didn't specify any. Must match
 // the exact OTC display text Pocket Option's own UI shows (same list as
