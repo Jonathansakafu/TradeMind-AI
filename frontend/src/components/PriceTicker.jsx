@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import axios from "axios";
 import { TrendingUp, TrendingDown } from "lucide-react";
-import { API_URL } from "../config/api";
+import { useAuth } from "../hooks/useAuth";
+import { useResource } from "../hooks/useResource";
+import { fetchMarketPrices } from "../api/resources";
 
 const CRYPTO_PAIRS = new Set([
   "BTCUSD", "ETHUSD", "XRPUSD", "BNBUSD", "SOLUSD", "ADAUSD", "DOGEUSD", "LTCUSD",
@@ -29,30 +30,21 @@ const ESTIMATED_CHIP_WIDTH = 150;
 // component's own margin; compact renders a slimmer variant for use
 // inline within a page (e.g. Trade History) instead of as a dashboard hero.
 function PriceTicker({ compact = false, className = "" }) {
+  const { headers } = useAuth();
+  const { data: prices } = useResource("market-prices", () => fetchMarketPrices(headers), 30000);
   const [items, setItems] = useState([]);
   const prevPrices = useRef({});
 
   useEffect(() => {
-    const fetchPrices = async () => {
-      try {
-        const res = await axios.get(`${API_URL}/api/market/prices`);
-        const prices = res.data.prices || {};
-        const next = Object.entries(prices).map(([pair, price]) => {
-          const prev = prevPrices.current[pair];
-          const direction = prev == null ? "flat" : price > prev ? "up" : price < prev ? "down" : "flat";
-          return { pair, price, direction };
-        });
-        prevPrices.current = prices;
-        if (next.length > 0) setItems(next);
-      } catch {
-        // Keep showing the last known prices if a poll fails
-      }
-    };
-
-    fetchPrices();
-    const interval = setInterval(fetchPrices, 30000);
-    return () => clearInterval(interval);
-  }, []);
+    if (!prices) return;
+    const next = Object.entries(prices).map(([pair, price]) => {
+      const prev = prevPrices.current[pair];
+      const direction = prev == null ? "flat" : price > prev ? "up" : price < prev ? "down" : "flat";
+      return { pair, price, direction };
+    });
+    prevPrices.current = prices;
+    if (next.length > 0) setItems(next);
+  }, [prices]);
 
   if (items.length === 0) return null;
 

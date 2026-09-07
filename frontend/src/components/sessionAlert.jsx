@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import { Bell, X, TrendingUp, Clock } from "lucide-react";
 import { API_URL } from "../config/api";
+import { useAuth } from "../hooks/useAuth";
 
 const SESSIONS = [
   {
@@ -79,7 +80,7 @@ function SessionAlert() {
   const [dismissed, setDismissed] = useState([]);
   const [stats, setStats] = useState({});
   const [show, setShow] = useState(true);
-  const token = localStorage.getItem("token");
+  const { token } = useAuth();
 
   useEffect(() => {
     const update = () => setActiveSessions(getActiveSessions());

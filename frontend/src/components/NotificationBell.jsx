@@ -1,10 +1,13 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import axios from "axios";
 import {
   Bell, X, RefreshCw,
   BookOpen, Brain, History
 } from "lucide-react";
 import { API_URL } from "../config/api";
+import { useAuth } from "../hooks/useAuth";
+import { useResource } from "../hooks/useResource";
+import { fetchNotifications } from "../api/resources";
 
 const SOURCE_ICONS = {
   past_trades: <History size={12} className="text-blue-400" />,
@@ -19,35 +22,18 @@ const SOURCE_COLORS = {
 };
 
 function NotificationBell() {
-  const [notifications, setNotifications] = useState([]);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const { headers } = useAuth();
+  const { data, refetch } = useResource(
+    "notifications",
+    () => fetchNotifications(headers),
+    5 * 60 * 1000
+  );
+  const notifications = data?.notifications || [];
+  const unreadCount = data?.unreadCount || 0;
+
   const [open, setOpen] = useState(false);
   const [generating, setGenerating] = useState(false);
   const dropdownRef = useRef(null);
-  const token = localStorage.getItem("token");
-  const headers = { Authorization: `Bearer ${token}` };
-
-  const fetchNotifications = async () => {
-    try {
-      const res = await axios.get(
-        `${API_URL}/api/notifications`,
-        { headers }
-      );
-      setNotifications(res.data.notifications || []);
-      setUnreadCount(res.data.unreadCount || 0);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  useEffect(() => {
-    const timer = setTimeout(fetchNotifications, 0);
-    const interval = setInterval(fetchNotifications, 5 * 60 * 1000);
-    return () => {
-      clearTimeout(timer);
-      clearInterval(interval);
-    };
-  }, []);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -62,12 +48,8 @@ function NotificationBell() {
   const generateAlerts = async () => {
     setGenerating(true);
     try {
-      await axios.post(
-        `${API_URL}/api/notifications/generate`,
-        {},
-        { headers }
-      );
-      await fetchNotifications();
+      await axios.post(`${API_URL}/api/notifications/generate`, {}, { headers });
+      await refetch();
     } catch (err) {
       console.error(err);
     } finally {
@@ -77,15 +59,8 @@ function NotificationBell() {
 
   const markAsRead = async (id) => {
     try {
-      await axios.put(
-        `${API_URL}/api/notifications/${id}/read`,
-        {},
-        { headers }
-      );
-      setNotifications(notifications.map((n) =>
-        n._id === id ? { ...n, read: true } : n
-      ));
-      setUnreadCount(Math.max(0, unreadCount - 1));
+      await axios.put(`${API_URL}/api/notifications/${id}/read`, {}, { headers });
+      await refetch();
     } catch (err) {
       console.error(err);
     }
@@ -93,13 +68,8 @@ function NotificationBell() {
 
   const markAllAsRead = async () => {
     try {
-      await axios.put(
-        `${API_URL}/api/notifications/read-all`,
-        {},
-        { headers }
-      );
-      setNotifications(notifications.map((n) => ({ ...n, read: true })));
-      setUnreadCount(0);
+      await axios.put(`${API_URL}/api/notifications/read-all`, {}, { headers });
+      await refetch();
     } catch (err) {
       console.error(err);
     }
@@ -107,13 +77,8 @@ function NotificationBell() {
 
   const deleteNotification = async (id) => {
     try {
-      await axios.delete(
-        `${API_URL}/api/notifications/${id}`,
-        { headers }
-      );
-      setNotifications(notifications.filter((n) => n._id !== id));
-      const deleted = notifications.find((n) => n._id === id);
-      if (deleted && !deleted.read) setUnreadCount(Math.max(0, unreadCount - 1));
+      await axios.delete(`${API_URL}/api/notifications/${id}`, { headers });
+      await refetch();
     } catch (err) {
       console.error(err);
     }

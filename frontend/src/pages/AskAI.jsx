@@ -3,6 +3,7 @@ import MainLayout from "../layouts/MainLayout";
 import { Sparkles, Send, BookOpen, History, HelpCircle, Image, User, Bot } from "lucide-react";
 import { streamAsk } from "../utils/streamAsk";
 import SpeakButton from "../components/SpeakButton";
+import { useAuth } from "../hooks/useAuth";
 
 const SOURCE_ICONS = {
   book: <BookOpen size={12} className="text-purple-400" />,
@@ -16,7 +17,7 @@ function AskAI() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef(null);
-  const token = localStorage.getItem("token");
+  const { token } = useAuth();
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });

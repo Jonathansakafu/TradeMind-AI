@@ -1,5 +1,4 @@
-import { useState, useEffect } from "react";
-import axios from "axios";
+import { useState } from "react";
 import MainLayout from "../layouts/MainLayout";
 import {
   Zap, CheckCircle, XCircle, Clock,
@@ -12,11 +11,22 @@ import { API_URL } from "../config/api";
 import BrokerModal from "../components/BrokerModal";
 import SessionBanner from "../components/SessionBanner";
 import { downloadFile } from "../utils/nativeDownload";
+import { useAuth } from "../hooks/useAuth";
+import { useResource } from "../hooks/useResource";
+import { fetchMt5Dashboard } from "../api/resources";
 
 function MT5() {
-  const [signals, setSignals] = useState([]);
-  const [stats, setStats] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const { user, headers } = useAuth();
+  const { data, isLoading: mt5Loading, refetch: fetchData } = useResource(
+    "mt5-dashboard",
+    () => fetchMt5Dashboard(headers),
+    30000
+  );
+  const signals = data?.signals || [];
+  const stats = data?.stats || null;
+  // Only the very first load shows the Signal History panel's spinner —
+  // isLoading otherwise flips true on every 30s background poll tick too.
+  const loading = data === undefined && mt5Loading;
   const [lotSize, setLotSize] = useState("0.01");
   // Tracks which specific value was last copied so each copy button can show
   // its own confirmation, instead of one flag that only the "Copy Code"
@@ -28,9 +38,6 @@ function MT5() {
   const [accountType, setAccountType] = useState(
     localStorage.getItem("mt5AccountType") || "demo"
   );
-  const token = localStorage.getItem("token");
-  const user = JSON.parse(localStorage.getItem("user") || "{}");
-  const headers = { Authorization: `Bearer ${token}` };
 
   const selectAccountType = (type) => {
     setAccountType(type);
@@ -40,30 +47,6 @@ function MT5() {
   const SERVER_URL = API_URL;
   const MT5_ENDPOINT = `${SERVER_URL}/api/mt5/pending?userId=${user._id}`;
   const MT5_EXECUTED_ENDPOINT = `${SERVER_URL}/api/mt5/executed`;
-
-  const fetchData = async () => {
-    try {
-      const [signalsRes, statsRes] = await Promise.all([
-        axios.get(`${SERVER_URL}/api/mt5/signals`, { headers }),
-        axios.get(`${SERVER_URL}/api/mt5/stats`, { headers }),
-      ]);
-      setSignals(signalsRes.data || []);
-      setStats(statsRes.data);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    const timer = setTimeout(fetchData, 0);
-    const interval = setInterval(fetchData, 30000);
-    return () => {
-      clearTimeout(timer);
-      clearInterval(interval);
-    };
-  }, []);
 
   const copyToClipboard = (text, field) => {
     Clipboard.write({ string: text });

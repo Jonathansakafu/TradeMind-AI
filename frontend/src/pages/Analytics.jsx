@@ -8,6 +8,7 @@ import {
   FileText, BookOpen, Trash2
 } from "lucide-react";
 import { API_URL } from "../config/api";
+import { useAuth } from "../hooks/useAuth";
 
 const PAIRS = ["EURUSD","GBPUSD","USDJPY","XAUUSD","AUDUSD","GBPJPY","EURJPY","USDCAD","NZDUSD","USDCHF"];
 const SESSIONS = ["london","new_york","tokyo","sydney","overlap"];
@@ -29,8 +30,7 @@ function Analytics() {
   const [screenshotResult, setScreenshotResult] = useState(null);
   const [books, setBooks] = useState([]);
 
-  const token = localStorage.getItem("token");
-  const headers = { Authorization: `Bearer ${token}` };
+  const { headers } = useAuth();
 
   // Fetch saved books
   useEffect(() => {

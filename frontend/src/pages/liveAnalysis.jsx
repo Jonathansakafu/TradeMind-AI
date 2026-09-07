@@ -1,10 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import MainLayout from "../layouts/MainLayout";
 import { Brain, TrendingUp, TrendingDown, RefreshCw, AlertTriangle, Target, DollarSign, Activity, Zap }
 from "lucide-react";
 import { API_URL } from "../config/api";
+import { useAuth } from "../hooks/useAuth";
+import { useResource } from "../hooks/useResource";
+import { fetchMarketPrices } from "../api/resources";
 
 const FOREX_PAIRS = [
   "EURUSD","GBPUSD","USDJPY","XAUUSD",
@@ -19,40 +22,23 @@ const CRYPTO_PAIRS = [
 
 function LiveAnalysis() {
   const navigate = useNavigate();
-  const [prices, setPrices] = useState({});
-  const [pricesLoading, setPricesLoading] = useState(true);
+  const { headers } = useAuth();
+  const {
+    data: pricesData,
+    isLoading: marketPricesLoading,
+    updatedAt,
+    refetch: fetchPrices,
+  } = useResource("market-prices", () => fetchMarketPrices(headers), 30000);
+  const prices = pricesData ?? {};
+  const lastUpdated = updatedAt ? new Date(updatedAt) : null;
+  // Only the very first load shows the price-grid spinner — this resource
+  // is shared with PriceTicker/Charts/TradeHistory and polls every 30s, so
+  // isLoading flips true on every background tick too, not just the first.
+  const pricesLoading = pricesData === undefined && marketPricesLoading;
   const [selectedPair, setSelectedPair] = useState("EURUSD");
   const [analysis, setAnalysis] = useState(null);
   const [analysisLoading, setAnalysisLoading] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState(null);
   const [activeTab, setActiveTab] = useState("forex");
-  const token = localStorage.getItem("token");
-  const headers = { Authorization: `Bearer ${token}` };
-
-
-  const fetchPrices = async () => {
-    try {
-      const res = await axios.get(
-        `${API_URL}/api/market/prices`,
-        { headers }
-      );
-      setPrices(res.data.prices || {});
-      setLastUpdated(new Date());
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setPricesLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    const timer = setTimeout(fetchPrices, 0);
-    const interval = setInterval(fetchPrices, 60000);
-    return () => {
-      clearTimeout(timer);
-      clearInterval(interval);
-    };
-  }, []);
 
   const analyzePair = async (pair) => {
     setSelectedPair(pair);

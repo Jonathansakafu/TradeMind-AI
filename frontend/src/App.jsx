@@ -4,6 +4,8 @@ import { Capacitor } from "@capacitor/core";
 import { StatusBar, Style } from "@capacitor/status-bar";
 import { ThemeProvider } from "./context/ThemeContext";
 import { useTheme } from "./hooks/useTheme";
+import { AuthProvider } from "./context/AuthContext";
+import { useAuth } from "./hooks/useAuth";
 import Login from "./pages/login";
 import Register from "./pages/register";
 import ForgotPassword from "./pages/ForgotPassword";
@@ -24,7 +26,7 @@ import Guide from "./pages/Guide";
 import TradingSession from "./pages/TradingSession";
 
 const ProtectedRoute = ({ children }) => {
-  const token = localStorage.getItem("token");
+  const { token } = useAuth();
   return token ? children : <Navigate to="/login" />;
 };
 
@@ -43,6 +45,7 @@ function StatusBarSync() {
 
 function App() {
   return (
+    <AuthProvider>
     <ThemeProvider>
       <StatusBarSync />
       <Router>
@@ -68,6 +71,7 @@ function App() {
         </Routes>
       </Router>
     </ThemeProvider>
+    </AuthProvider>
   );
 }
 

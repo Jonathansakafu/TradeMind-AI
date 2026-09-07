@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Sparkles, X, Send, Bot, User, BookOpen, History, HelpCircle, Image } from "lucide-react";
 import { streamAsk } from "../utils/streamAsk";
+import { useAuth } from "../hooks/useAuth";
 
 const SOURCE_ICONS = {
   book: <BookOpen size={11} className="text-purple-400" />,
@@ -15,7 +16,7 @@ function ChatWidget() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef(null);
-  const token = localStorage.getItem("token");
+  const { token } = useAuth();
 
   useEffect(() => {
     if (open) bottomRef.current?.scrollIntoView({ behavior: "smooth" });

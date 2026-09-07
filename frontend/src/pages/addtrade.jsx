@@ -5,6 +5,7 @@ import MainLayout from "../layouts/MainLayout";
 import { Upload, X, CheckCircle, Calculator, Camera, Sparkles, LineChart } from "lucide-react";
 import { API_URL } from "../config/api";
 import SnapshotCaptureModal from "../components/SnapshotCaptureModal";
+import { useAuth } from "../hooks/useAuth";
 
 const PAIRS = [
   "EURUSD","GBPUSD","USDJPY","USDCHF","AUDUSD",
@@ -105,7 +106,7 @@ function FormSelect({ label, name, value, onChange, options, required, optional 
 function AddTrade() {
   const navigate = useNavigate();
   const location = useLocation();
-  const token = localStorage.getItem("token");
+  const { token } = useAuth();
   const [loading, setLoading] = useState(false);
   const [screenshot, setScreenshot] = useState(null);
   const [preview, setPreview] = useState(null);

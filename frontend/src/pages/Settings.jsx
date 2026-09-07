@@ -8,17 +8,15 @@ import { API_URL } from "../config/api";
 import ThemeToggle from "../components/ThemeToggle";
 import LanguageToggle from "../components/LanguageToggle";
 import SpeakButton from "../components/SpeakButton";
+import { useAuth } from "../hooks/useAuth";
 
 function Settings() {
   const { t } = useTranslation(["settings", "common"]);
   const navigate = useNavigate();
-  const user = JSON.parse(localStorage.getItem("user") || "{}");
-  const token = localStorage.getItem("token");
-  const headers = { Authorization: `Bearer ${token}` };
+  const { user, headers, logout, updateUser } = useAuth();
 
   const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
+    logout();
     navigate("/login");
   };
 
@@ -43,7 +41,7 @@ function Settings() {
         { name: profile.name },
         { headers }
       );
-      localStorage.setItem("user", JSON.stringify(res.data));
+      updateUser(res.data);
       setProfileMsg({ type: "success", text: t("profile.updated", { ns: "settings" }) });
     } catch (err) {
       setProfileMsg({ type: "error", text: err.response?.data?.message || t("profile.failed", { ns: "settings" }) });

@@ -9,6 +9,7 @@ import {
 import NotificationBell from "../components/NotificationBell";
 import ChatWidget from "../components/ChatWidget";
 import ThemeToggle from "../components/ThemeToggle";
+import { useAuth } from "../hooks/useAuth";
 
 const navItems = [
   { path: "/dashboard", labelKey: "nav.dashboard", icon: LayoutDashboard },
@@ -101,11 +102,10 @@ function MainLayout({ children }) {
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const { user, logout } = useAuth();
 
   const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
+    logout();
     navigate("/login");
   };
 

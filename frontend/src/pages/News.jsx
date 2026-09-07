@@ -8,6 +8,7 @@ import {
   Bookmark, BookmarkCheck, Search, X
 } from "lucide-react";
 import { API_URL } from "../config/api";
+import { useAuth } from "../hooks/useAuth";
 
 function News() {
   const [news, setNews] = useState([]);
@@ -24,8 +25,7 @@ function News() {
   const [suppressSuggestions, setSuppressSuggestions] = useState(false);
   const [activeTab, setActiveTab] = useState("live");
   const analysisRef = useRef(null);
-  const token = localStorage.getItem("token");
-  const headers = { Authorization: `Bearer ${token}` };
+  const { headers } = useAuth();
 
   const fetchNews = async (query = "") => {
     setLoading(true);

@@ -1,37 +1,18 @@
-import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
-import axios from "axios";
 import { Bot, Zap, ChevronRight } from "lucide-react";
-import { API_URL } from "../config/api";
+import { useAuth } from "../hooks/useAuth";
+import { useResource } from "../hooks/useResource";
+import { fetchActiveSession } from "../api/resources";
 
 // Persistent at-a-glance status for an active trading session, shown across
 // Notifications/MT5/Dashboard so the trader always knows where they stand
 // without navigating to the Trading Robot page. Renders nothing if there's
 // no active session — className lets callers control outer spacing.
 function SessionBanner({ className = "" }) {
-  const token = localStorage.getItem("token");
-  const headers = { Authorization: `Bearer ${token}` };
-  const [session, setSession] = useState(null);
-  const [progress, setProgress] = useState({ currentPL: 0, tradeCount: 0 });
-
-  const fetchActiveSession = useCallback(async () => {
-    try {
-      const res = await axios.get(`${API_URL}/api/sessions/active`, { headers });
-      setSession(res.data.session);
-      if (res.data.progress) setProgress(res.data.progress);
-    } catch {
-      // Silent — this is a passive status widget, not the primary page
-    }
-  }, []);
-
-  useEffect(() => {
-    const timer = setTimeout(fetchActiveSession, 0);
-    const interval = setInterval(fetchActiveSession, 30000);
-    return () => {
-      clearTimeout(timer);
-      clearInterval(interval);
-    };
-  }, [fetchActiveSession]);
+  const { headers } = useAuth();
+  const { data } = useResource("sessions-active", () => fetchActiveSession(headers), 30000);
+  const session = data?.session ?? null;
+  const progress = data?.progress ?? { currentPL: 0, tradeCount: 0 };
 
   if (!session || session.status !== "active") return null;
 

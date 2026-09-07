@@ -3,10 +3,12 @@ import { Link, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import axios from "axios";
 import { API_URL } from "../config/api";
+import { useAuth } from "../hooks/useAuth";
 
 function Login() {
   const { t } = useTranslation(["auth", "common"]);
   const navigate = useNavigate();
+  const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -24,8 +26,7 @@ function Login() {
         `${API_URL}/api/auth/login`,
         { email, password }
       );
-      localStorage.setItem("token", res.data.token);
-      localStorage.setItem("user", JSON.stringify(res.data.user));
+      login(res.data.token, res.data.user);
       navigate("/dashboard");
     } catch (error) {
       setMessage({ type: "error", text: error.response?.data?.message || t("login.failed", { ns: "auth" }) });

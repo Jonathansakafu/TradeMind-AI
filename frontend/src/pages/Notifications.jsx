@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import MainLayout from "../layouts/MainLayout";
@@ -9,6 +9,9 @@ import {
 } from "lucide-react";
 import { API_URL } from "../config/api";
 import SessionBanner from "../components/SessionBanner";
+import { useAuth } from "../hooks/useAuth";
+import { useResource } from "../hooks/useResource";
+import { fetchNotifications as fetchNotificationsResource, fetchActiveSession } from "../api/resources";
 
 const SOURCE_ICONS = {
   past_trades: <History size={14} className="text-blue-400" />,
@@ -24,50 +27,39 @@ const SOURCE_COLORS = {
 
 function Notifications() {
   const navigate = useNavigate();
-  const [notifications, setNotifications] = useState([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const { headers } = useAuth();
+
+  // Shared "notifications" key with NotificationBell — mutations below
+  // (read/delete/generate) refetch this resource, so the bell dropdown and
+  // this page now always agree instead of holding two independent copies.
+  const {
+    data: notificationsData,
+    isLoading: notificationsLoading,
+    refetch: refetchNotifications,
+  } = useResource("notifications", () => fetchNotificationsResource(headers), 5 * 60 * 1000);
+  const notifications = notificationsData?.notifications || [];
+  const unreadCount = notificationsData?.unreadCount || 0;
+  // Only the very first load shows the full-page spinner — this resource
+  // is shared with (and polled every 5 min by) NotificationBell, and
+  // isLoading flips true on every one of those background poll ticks too.
+  const loading = notificationsData === undefined && notificationsLoading;
+
+  // Shared "sessions-active" key with SessionBanner (rendered just below) —
+  // previously this page's own copy was fetched once on mount and never
+  // refreshed, so the Won/Lost buttons could act on a stale session after
+  // it changed elsewhere.
+  const { data: sessionResourceData, refetch: refetchActiveSession } = useResource(
+    "sessions-active",
+    () => fetchActiveSession(headers),
+    30000
+  );
+  const activeSession = sessionResourceData?.session ?? null;
+
   const [generating, setGenerating] = useState(false);
   const [generateMessage, setGenerateMessage] = useState(null);
   const [filter, setFilter] = useState("all");
   const [sendingId, setSendingId] = useState(null);
   const [reportingId, setReportingId] = useState(null);
-  const [activeSession, setActiveSession] = useState(null);
-  const token = localStorage.getItem("token");
-  const headers = { Authorization: `Bearer ${token}` };
-
-  const fetchNotifications = async () => {
-    setLoading(true);
-    try {
-      const res = await axios.get(
-        `${API_URL}/api/notifications`,
-        { headers }
-      );
-      setNotifications(res.data.notifications || []);
-      setUnreadCount(res.data.unreadCount || 0);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchActiveSession = async () => {
-    try {
-      const res = await axios.get(`${API_URL}/api/sessions/active`, { headers });
-      setActiveSession(res.data.session);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchNotifications();
-      fetchActiveSession();
-    }, 0);
-    return () => clearTimeout(timer);
-  }, []);
 
   const generateAlerts = async () => {
     setGenerating(true);
@@ -82,7 +74,7 @@ function Notifications() {
         type: res.data.generated > 0 ? "success" : "info",
         text: res.data.message,
       });
-      await fetchNotifications();
+      await refetchNotifications();
     } catch (err) {
       setGenerateMessage({
         type: "error",
@@ -95,15 +87,8 @@ function Notifications() {
 
   const markAsRead = async (id) => {
     try {
-      await axios.put(
-        `${API_URL}/api/notifications/${id}/read`,
-        {},
-        { headers }
-      );
-      setNotifications(notifications.map((n) =>
-        n._id === id ? { ...n, read: true } : n
-      ));
-      setUnreadCount(Math.max(0, unreadCount - 1));
+      await axios.put(`${API_URL}/api/notifications/${id}/read`, {}, { headers });
+      await refetchNotifications();
     } catch (err) {
       console.error(err);
     }
@@ -111,13 +96,8 @@ function Notifications() {
 
   const markAllAsRead = async () => {
     try {
-      await axios.put(
-        `${API_URL}/api/notifications/read-all`,
-        {},
-        { headers }
-      );
-      setNotifications(notifications.map((n) => ({ ...n, read: true })));
-      setUnreadCount(0);
+      await axios.put(`${API_URL}/api/notifications/read-all`, {}, { headers });
+      await refetchNotifications();
     } catch (err) {
       console.error(err);
     }
@@ -125,13 +105,8 @@ function Notifications() {
 
   const deleteNotification = async (id) => {
     try {
-      await axios.delete(
-        `${API_URL}/api/notifications/${id}`,
-        { headers }
-      );
-      setNotifications(notifications.filter((n) => n._id !== id));
-      const deleted = notifications.find((n) => n._id === id);
-      if (deleted && !deleted.read) setUnreadCount(Math.max(0, unreadCount - 1));
+      await axios.delete(`${API_URL}/api/notifications/${id}`, { headers });
+      await refetchNotifications();
     } catch (err) {
       console.error(err);
     }
@@ -207,7 +182,7 @@ function Notifications() {
         { headers }
       );
       await markAsRead(notification._id);
-      await fetchActiveSession();
+      await refetchActiveSession();
     } catch {
       alert("Failed to log trade result");
     } finally {

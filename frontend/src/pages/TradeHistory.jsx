@@ -10,6 +10,10 @@ import { API_URL } from "../config/api";
 import { downloadFile } from "../utils/nativeDownload";
 import PriceTicker from "../components/PriceTicker";
 import SnapshotCaptureModal from "../components/SnapshotCaptureModal";
+import { useAuth } from "../hooks/useAuth";
+import { useResource } from "../hooks/useResource";
+import { useMediaQuery } from "../hooks/useMediaQuery";
+import { fetchMarketPrices } from "../api/resources";
 
 const PIP_DECIMALS = {
   USDJPY: 100, GBPJPY: 100, EURJPY: 100,
@@ -41,10 +45,18 @@ function TradeHistory() {
   const [exitPrice, setExitPrice] = useState("");
   const [closeLoading, setCloseLoading] = useState(false);
   const [showCloseSnapshot, setShowCloseSnapshot] = useState(false);
-  const [livePrices, setLivePrices] = useState({});
   const [fetchingCurrentPrice, setFetchingCurrentPrice] = useState(false);
-  const token = localStorage.getItem("token");
-  const headers = { Authorization: `Bearer ${token}` };
+  const { headers } = useAuth();
+  const isDesktop = useMediaQuery("(min-width: 1024px)");
+  // Shared with PriceTicker (also rendered on this page) — previously this
+  // page ran its own independent 60s poll of the same endpoint alongside
+  // PriceTicker's own 30s poll.
+  const { data: livePricesData, refetch: refetchPrices } = useResource(
+    "market-prices",
+    () => fetchMarketPrices(headers),
+    30000
+  );
+  const livePrices = livePricesData ?? {};
 
   const fetchTrades = useCallback(async (showRefresh = false) => {
     if (showRefresh) setRefreshing(true);
@@ -61,54 +73,28 @@ function TradeHistory() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
-
-  const fetchLivePrices = async () => {
-    try {
-      const res = await axios.get(
-        `${API_URL}/api/market/prices`,
-        { headers }
-      );
-      setLivePrices(res.data.prices || {});
-    } catch (err) {
-      console.error(err);
-    }
-  };
+  }, [headers]);
 
   // Fetch live price for a specific pair when closing trade
   const fetchCurrentPriceForPair = async (pair) => {
     setFetchingCurrentPrice(true);
     try {
-      const res = await axios.get(
-        `${API_URL}/api/market/prices`,
-        { headers }
-      );
-      const prices = res.data.prices || {};
-      const price = prices[pair];
+      const prices = await refetchPrices();
+      const price = prices?.[pair];
       if (price) {
         setExitPrice(String(price));
-        setLivePrices(prices);
       } else {
         alert(`Live price not available for ${pair} — market may be closed`);
       }
-    } catch {
-      alert("Failed to fetch live price");
     } finally {
       setFetchingCurrentPrice(false);
     }
   };
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchTrades();
-      fetchLivePrices();
-    }, 0);
-    const interval = setInterval(fetchLivePrices, 60000);
-    return () => {
-      clearTimeout(timer);
-      clearInterval(interval);
-    };
-  }, []);
+    const timer = setTimeout(fetchTrades, 0);
+    return () => clearTimeout(timer);
+  }, [fetchTrades]);
 
   const filtered = trades.filter((t) => {
     const matchSearch = t.pair?.toLowerCase().includes(search.toLowerCase());
@@ -280,8 +266,11 @@ function TradeHistory() {
             scroll table. The switch happens at lg (1024px), not md
             (768px), because md is also where the 256px sidebar appears —
             below lg there isn't actually enough room next to the sidebar
-            for a real trades table without it still needing to scroll. */}
-        <div className="lg:hidden space-y-3">
+            for a real trades table without it still needing to scroll.
+            Rendered conditionally (not just CSS-hidden) so only one of the
+            two layouts is ever actually mounted. */}
+        {!isDesktop && (
+        <div className="space-y-3">
           {filtered.map((trade, i) => {
             const livePrice = livePrices[trade.pair];
             const livePL = !trade.outcome && livePrice
@@ -388,9 +377,11 @@ function TradeHistory() {
             );
           })}
         </div>
+        )}
 
         {/* Desktop table */}
-        <div className="hidden lg:block bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden">
+        {isDesktop && (
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[640px]">
               <thead>
@@ -558,6 +549,7 @@ function TradeHistory() {
             </table>
           </div>
         </div>
+        )}
         </>
       )}
 

@@ -3,10 +3,12 @@ import { Link, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import axios from "axios";
 import { API_URL } from "../config/api";
+import { useAuth } from "../hooks/useAuth";
 
 function Register() {
   const { t } = useTranslation(["auth", "common"]);
   const navigate = useNavigate();
+  const { login } = useAuth();
 
   const [username, setUsername] =
     useState("");
@@ -44,17 +46,7 @@ function Register() {
         }
       );
 
-      // SAVE TOKEN
-      localStorage.setItem(
-        "token",
-        res.data.token
-      );
-
-      // SAVE USER
-      localStorage.setItem(
-        "user",
-        JSON.stringify(res.data.user)
-      );
+      login(res.data.token, res.data.user);
 
       setMessage({ type: "success", text: t("register.success", { ns: "auth" }) });
 

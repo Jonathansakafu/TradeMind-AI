@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import axios from "axios";
@@ -12,6 +12,7 @@ import PriceTicker from "../components/PriceTicker";
 import BrokerModal from "../components/BrokerModal";
 import SessionBanner from "../components/SessionBanner";
 import SpeakButton from "../components/SpeakButton";
+import { useAuth } from "../hooks/useAuth";
 
 function Dashboard() {
   const { t } = useTranslation(["dashboard", "common"]);
@@ -20,26 +21,28 @@ function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [showPL, setShowPL] = useState(false);
   const [showBrokers, setShowBrokers] = useState(false);
-  const token = localStorage.getItem("token");
+  const { headers } = useAuth();
 
   useEffect(() => {
     axios
-      .get(`${API_URL}/api/trades?limit=100`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      .get(`${API_URL}/api/trades?limit=100`, { headers })
       .then((res) => setTrades(res.data.trades || []))
       .catch((err) => console.log(err))
       .finally(() => setLoading(false));
-  }, []);
+  }, [headers]);
 
-  const closedTrades = trades.filter((t) => t.outcome);
-  const wins = trades.filter((t) => t.outcome === "win").length;
-  const losses = trades.filter((t) => t.outcome === "loss").length;
-  const winRate = closedTrades.length > 0
-    ? Math.round((wins / closedTrades.length) * 100)
-    : 0;
-  const totalPL = trades.reduce((sum, t) => sum + (Number(t.profitLoss) || 0), 0);
-  const recentTrades = trades.slice(0, 6);
+  const { wins, losses, winRate, totalPL, recentTrades } = useMemo(() => {
+    const closedTrades = trades.filter((t) => t.outcome);
+    const w = trades.filter((t) => t.outcome === "win").length;
+    const l = trades.filter((t) => t.outcome === "loss").length;
+    return {
+      wins: w,
+      losses: l,
+      winRate: closedTrades.length > 0 ? Math.round((w / closedTrades.length) * 100) : 0,
+      totalPL: trades.reduce((sum, t) => sum + (Number(t.profitLoss) || 0), 0),
+      recentTrades: trades.slice(0, 6),
+    };
+  }, [trades]);
 
   if (loading) {
     return (

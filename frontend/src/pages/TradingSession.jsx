@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import axios from "axios";
 import MainLayout from "../layouts/MainLayout";
@@ -9,6 +9,9 @@ import {
 } from "lucide-react";
 import { Clipboard } from "@capacitor/clipboard";
 import { API_URL } from "../config/api";
+import { useAuth } from "../hooks/useAuth";
+import { useResource } from "../hooks/useResource";
+import { fetchActiveSession as fetchActiveSessionResource } from "../api/resources";
 
 const FOREX_PAIRS = ["EURUSD", "GBPUSD", "USDJPY", "XAUUSD", "AUDUSD", "USDCAD"];
 const CRYPTO_PAIRS = ["BTCUSD", "ETHUSD", "XRPUSD"];
@@ -35,12 +38,44 @@ const STATUS_LABELS = {
 };
 
 function TradingSession() {
-  const token = localStorage.getItem("token");
-  const headers = { Authorization: `Bearer ${token}` };
+  const { headers } = useAuth();
+  const { data, isLoading: initialLoading, refetch: refetchActiveSession } = useResource(
+    "sessions-active",
+    () => fetchActiveSessionResource(headers),
+    30000
+  );
+  // Locally hides a finished session (so the create-session form shows
+  // again) without touching server state — the server still returns the
+  // finished session as "most recent" until the user actually starts a
+  // new one, at which point its _id changes and this no longer matches.
+  const [dismissedSessionId, setDismissedSessionId] = useState(null);
+  const rawSession = data?.session ?? null;
+  const session = rawSession?._id === dismissedSessionId ? null : rawSession;
+  const progress = data?.progress ?? { currentPL: 0, tradeCount: 0 };
+  // Only the very first load (no data yet) shows the full-page spinner —
+  // previously this page set loading=true on every 30s poll tick too,
+  // unmounting the whole page to a spinner every 30s while a session ran.
+  const loading = data === undefined && initialLoading;
 
-  const [loading, setLoading] = useState(true);
-  const [session, setSession] = useState(null);
-  const [progress, setProgress] = useState({ currentPL: 0, tradeCount: 0 });
+  // Date.now() can't be called during render (impure — see
+  // react-hooks/purity), so "is the bot still polling" is tracked as state,
+  // recomputed on a short timer rather than derived inline every render.
+  const [botConnected, setBotConnected] = useState(false);
+  useEffect(() => {
+    const checkConnected = () => {
+      setBotConnected(
+        !!session?.botLastPolledAt &&
+        Date.now() - new Date(session.botLastPolledAt).getTime() < 90000
+      );
+    };
+    const timer = setTimeout(checkConnected, 0);
+    const interval = setInterval(checkConnected, 15000);
+    return () => {
+      clearTimeout(timer);
+      clearInterval(interval);
+    };
+  }, [session?.botLastPolledAt]);
+
   const [sessionTrades, setSessionTrades] = useState([]);
   const [starting, setStarting] = useState(false);
   const [stopping, setStopping] = useState(false);
@@ -58,7 +93,6 @@ function TradingSession() {
   const [accountReady, setAccountReady] = useState(false);
   const [autoExecute, setAutoExecute] = useState(false);
   const [copiedField, setCopiedField] = useState(null);
-  const [botConnected, setBotConnected] = useState(false);
 
   const copyToClipboard = (text, field) => {
     Clipboard.write({ string: text });
@@ -72,38 +106,27 @@ function TradingSession() {
     );
   };
 
-  const fetchActiveSession = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await axios.get(`${API_URL}/api/sessions/active`, { headers });
-      setSession(res.data.session);
-      if (res.data.progress) setProgress(res.data.progress);
-      setBotConnected(
-        !!res.data.session?.botLastPolledAt &&
-        Date.now() - new Date(res.data.session.botLastPolledAt).getTime() < 90000
-      );
-      if (res.data.session) {
-        const tradesRes = await axios.get(
-          `${API_URL}/api/trades?tradingSessionId=${res.data.session._id}&limit=50`,
-          { headers }
-        );
-        setSessionTrades(tradesRes.data.trades || []);
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
+  // Session/progress come from the shared "sessions-active" resource
+  // (also polled by SessionBanner/Notifications) — only the trades list
+  // is page-unique, so it stays a local fetch. Re-runs on every shared
+  // poll tick (data?.updatedAt) too, so it keeps the same ~30s freshness
+  // it had before, not just when the session identity changes.
   useEffect(() => {
-    const timer = setTimeout(fetchActiveSession, 0);
-    const interval = setInterval(fetchActiveSession, 30000);
+    if (!session?._id) {
+      const timer = setTimeout(() => setSessionTrades([]), 0);
+      return () => clearTimeout(timer);
+    }
+    let cancelled = false;
+    axios
+      .get(`${API_URL}/api/trades?tradingSessionId=${session._id}&limit=50`, { headers })
+      .then((res) => {
+        if (!cancelled) setSessionTrades(res.data.trades || []);
+      })
+      .catch((err) => console.error(err));
     return () => {
-      clearTimeout(timer);
-      clearInterval(interval);
+      cancelled = true;
     };
-  }, [fetchActiveSession]);
+  }, [session?._id, data?.updatedAt, headers]);
 
   const startSession = async () => {
     setError(null);
@@ -138,7 +161,7 @@ function TradingSession() {
         },
         { headers }
       );
-      await fetchActiveSession();
+      await refetchActiveSession();
     } catch (err) {
       setError(err.response?.data?.message || "Failed to start session");
       setErrorCode(err.response?.data?.code || null);
@@ -152,7 +175,7 @@ function TradingSession() {
     setStopping(true);
     try {
       await axios.put(`${API_URL}/api/sessions/${session._id}/stop`, {}, { headers });
-      await fetchActiveSession();
+      await refetchActiveSession();
     } catch (err) {
       console.error(err);
     } finally {
@@ -161,9 +184,8 @@ function TradingSession() {
   };
 
   const startNewSession = () => {
-    setSession(null);
+    if (rawSession?._id) setDismissedSessionId(rawSession._id);
     setSessionTrades([]);
-    setProgress({ currentPL: 0, tradeCount: 0 });
   };
 
   if (loading) {

@@ -4,6 +4,9 @@ import { useLocation } from "react-router-dom";
 import axios from "axios";
 import { Search, X } from "lucide-react";
 import { API_URL } from "../config/api";
+import { useAuth } from "../hooks/useAuth";
+import { useResource } from "../hooks/useResource";
+import { fetchMarketPrices } from "../api/resources";
 
 const PAIRS = [
   // Forex majors
@@ -67,8 +70,8 @@ const PIP_VALUES = {
 function Charts() {
   const containerRef = useRef(null);
   const location = useLocation();
-  const token = localStorage.getItem("token");
-  const headers = { Authorization: `Bearer ${token}` };
+  const { headers } = useAuth();
+  const { data: prices } = useResource("market-prices", () => fetchMarketPrices(headers), 30000);
 
   const incomingSymbol = location.state?.symbol;
   const incomingPair = location.state?.pair;
@@ -82,7 +85,7 @@ function Charts() {
   const [selectedInterval, setSelectedInterval] = useState("60");
   const [openTrades, setOpenTrades] = useState([]);
   const [selectedTrade, setSelectedTrade] = useState(incomingTrade || null);
-  const [livePrice, setLivePrice] = useState(null);
+  const livePrice = prices?.[selectedPair.pair] ?? null;
   const [search, setSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const searchRef = useRef(null);
@@ -134,32 +137,9 @@ function Charts() {
     }
   };
 
-  // Fetch live price
-  const fetchLivePrice = async (pair) => {
-    try {
-      const res = await axios.get(
-        `${API_URL}/api/market/prices`,
-        { headers }
-      );
-      const prices = res.data.prices || {};
-      setLivePrice(prices[pair] || null);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
   useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchOpenTrades(selectedPair.pair);
-      fetchLivePrice(selectedPair.pair);
-    }, 0);
-    const interval = setInterval(() => {
-      fetchLivePrice(selectedPair.pair);
-    }, 30000);
-    return () => {
-      clearTimeout(timer);
-      clearInterval(interval);
-    };
+    const timer = setTimeout(() => fetchOpenTrades(selectedPair.pair), 0);
+    return () => clearTimeout(timer);
   }, [selectedPair]);
 
   // TradingView chart
