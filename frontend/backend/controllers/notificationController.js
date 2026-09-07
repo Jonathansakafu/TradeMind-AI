@@ -11,6 +11,9 @@ const { computeMomentum } = require("../services/marketAnalysis");
 const CRYPTO_PAIRS = ["BTCUSD", "ETHUSD", "XRPUSD"];
 // Forex zitatumika kama zinapatikana tu
 const FOREX_PAIRS = ["EURUSD", "GBPUSD", "XAUUSD"];
+// Stocks — same real-data pipeline as gold (marketService's Yahoo Finance
+// path), analyzed alongside forex/crypto rather than as a separate mode.
+const STOCK_PAIRS = marketService.STOCK_SYMBOLS;
 const LIMIT_STOPPED_STATUSES = ["stopped_profit", "stopped_risk", "stopped_trades"];
 
 // Pocket Option/Expert Option OTC instruments (e.g. "EUR/USD OTC") are
@@ -145,6 +148,9 @@ exports.autoGenerate = async (userId) => {
     for (const pair of FOREX_PAIRS) {
       if (prices[pair]) availablePairs.push(pair);
     }
+    for (const pair of STOCK_PAIRS) {
+      if (prices[pair]) availablePairs.push(pair);
+    }
 
     // Kama hakuna prices — tumia crypto tu bila price (AI auto mode)
     if (availablePairs.length === 0) {
@@ -152,9 +158,10 @@ exports.autoGenerate = async (userId) => {
       availablePairs.push(...CRYPTO_PAIRS);
     }
 
-    // Analyze every available pair (naturally capped at ~6 by
-    // CRYPTO_PAIRS+FOREX_PAIRS) — previously capped at 2 to dodge rate
-    // limits while solo-testing; no longer needed with cached news/prices.
+    // Analyze every available pair (naturally capped at ~14 by
+    // CRYPTO_PAIRS+FOREX_PAIRS+STOCK_PAIRS) — previously capped at 2 to
+    // dodge rate limits while solo-testing; no longer needed with cached
+    // news/prices.
     const pairsToAnalyze = availablePairs;
     const notifications = [];
 
@@ -173,7 +180,9 @@ exports.autoGenerate = async (userId) => {
     for (const pair of pairsToAnalyze) {
       try {
         const currentPrice = prices[pair] || null;
-        const formattedPair = pair.slice(0, 3) + "/" + pair.slice(3);
+        // Stock tickers aren't currency pairs -- the 3+3 slash split below
+        // is meaningless for them (and actively wrong: "AAPL" -> "AAP/L").
+        const formattedPair = STOCK_PAIRS.includes(pair) ? pair : pair.slice(0, 3) + "/" + pair.slice(3);
 
         // Historical data — optional, usisimamishe kama imeshindwa
         let historical = [];

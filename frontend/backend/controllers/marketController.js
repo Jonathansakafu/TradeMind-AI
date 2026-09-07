@@ -18,7 +18,10 @@ exports.getLivePrices = async (req, res) => {
 exports.analyzePair = async (req, res) => {
   try {
     const { pair } = req.params;
-    const formattedPair = pair.slice(0, 3) + "/" + pair.slice(3);
+    // Stock tickers aren't currency pairs -- the 3+3 slash split below is
+    // meaningless for them (and actively wrong: "AAPL" -> "AAP/L").
+    const isStock = marketService.STOCK_SYMBOLS.includes(pair.toUpperCase());
+    const formattedPair = isStock ? pair.toUpperCase() : pair.slice(0, 3) + "/" + pair.slice(3);
 
     const [priceData, pastTrades, newsArticles] = await Promise.all([
       marketService.getLivePrice(formattedPair),

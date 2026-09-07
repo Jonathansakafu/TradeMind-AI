@@ -66,13 +66,13 @@ const MARKET_TOOLS = [
     type: "function",
     function: {
       name: "get_market_snapshot",
-      description: "Fetch the current live price and a short-term price-action momentum/volatility read for a forex or crypto pair. Call this whenever the trader asks about a pair's current price, whether to trade it now, or wants any live read on market conditions — never guess a price or tell them to go look it up themselves; look it up.",
+      description: "Fetch the current live price and a short-term price-action momentum/volatility read for a forex pair, crypto pair, gold, or a stock. Call this whenever the trader asks about a pair or stock's current price, whether to trade/buy it now, or wants any live read on market conditions — never guess a price or tell them to go look it up themselves; look it up.",
       parameters: {
         type: "object",
         properties: {
           pair: {
             type: "string",
-            description: "The pair as a plain symbol, e.g. EURUSD, GBPUSD, XAUUSD. Convert names like \"gold\", \"euro dollar\", or \"bitcoin\" to this form.",
+            description: "The symbol as plain form: EURUSD, GBPUSD, XAUUSD (gold), BTCUSD, or a stock ticker like AAPL, TSLA, MSFT. Convert names like \"gold\", \"euro dollar\", \"bitcoin\", or \"apple stock\" to this form.",
           },
         },
         required: ["pair"],
@@ -100,7 +100,11 @@ async function executeMarketTool(name, rawArgs) {
     return { pair, error: "No live price available for this pair right now — market may be closed, or the symbol wasn't recognized." };
   }
 
-  const formattedPair = pair.length === 6 ? `${pair.slice(0, 3)}/${pair.slice(3)}` : pair;
+  // Stock tickers aren't currency pairs -- the 3+3 slash split is only
+  // meaningful (and only fires) for 6-char forex-style symbols.
+  const formattedPair = !marketService.STOCK_SYMBOLS.includes(pair) && pair.length === 6
+    ? `${pair.slice(0, 3)}/${pair.slice(3)}`
+    : pair;
   let historical = [];
   try {
     historical = await marketService.getHistoricalData(formattedPair, "1h", 10);

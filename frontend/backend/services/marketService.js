@@ -19,6 +19,12 @@ const CRYPTO_IDS = {
   "LTC/USD": "litecoin",
 };
 
+// Default stock tickers analyzed alongside forex/crypto -- large, liquid
+// US names so signals are for stocks with real volume, not thinly-traded
+// ones where technical levels are less meaningful.
+const STOCK_SYMBOLS = ["AAPL", "TSLA", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "NFLX"];
+exports.STOCK_SYMBOLS = STOCK_SYMBOLS;
+
 // Common names/aliases a user or the AI might use in free text, mapped to
 // this app's raw pair symbols (e.g. as returned by getAllPrices()).
 const SYMBOL_ALIASES = {
@@ -49,6 +55,7 @@ exports.normalizeSymbol = (raw) => {
 const priceCache = {
   forex: { data: {}, timestamp: 0 },
   crypto: { data: {}, timestamp: 0 },
+  stocks: { data: {}, timestamp: 0 },
 };
 const CACHE_TTL = 3 * 60 * 1000;
 
@@ -186,17 +193,19 @@ exports.getCryptoPrices = async () => {
 // Pata ALL prices
 exports.getAllPrices = async () => {
   try {
-    const [forexResult, cryptoResult] = await Promise.allSettled([
+    const [forexResult, cryptoResult, stockResult] = await Promise.allSettled([
       exports.getForexPrices(),
       exports.getCryptoPrices(),
+      exports.getStockPrices(),
     ]);
     return {
       ...(forexResult.status === "fulfilled" ? forexResult.value : priceCache.forex.data),
       ...(cryptoResult.status === "fulfilled" ? cryptoResult.value : priceCache.crypto.data),
+      ...(stockResult.status === "fulfilled" ? stockResult.value : priceCache.stocks.data),
     };
   } catch (err) {
     console.error("All prices error:", err.message);
-    return { ...priceCache.forex.data, ...priceCache.crypto.data };
+    return { ...priceCache.forex.data, ...priceCache.crypto.data, ...priceCache.stocks.data };
   }
 };
 
@@ -210,6 +219,12 @@ exports.getLivePrice = async (pair) => {
       const prices = await exports.getCryptoPrices();
       const price = prices[symbol];
       if (price) return { pair: symbol, price, timestamp: new Date() };
+      return null;
+    } else if (STOCK_SYMBOLS.includes(symbol.toUpperCase())) {
+      const ticker = symbol.toUpperCase();
+      const prices = await exports.getStockPrices();
+      const price = prices[ticker];
+      if (price) return { pair: ticker, price, timestamp: new Date() };
       return null;
     } else {
       // Angalia cache kwanza
@@ -252,21 +267,87 @@ exports.getLivePrice = async (pair) => {
     const symbol = pair.replace("/", "");
     const cached = priceCache.forex.data[symbol] ||
                    priceCache.crypto.data[symbol] ||
+                   priceCache.stocks.data[symbol.toUpperCase()] ||
                    FALLBACK_PRICES[symbol];
     if (cached) return { pair: symbol, price: cached, timestamp: new Date() };
     return null;
   }
 };
 
+// Yahoo Finance's unauthenticated chart endpoint -- works for any
+// recognized ticker (futures, stocks, ETFs, indices), not just gold, and
+// one request returns both a live quote (meta.regularMarketPrice) and a
+// real historical candle series. First used to work around Twelve Data
+// not supporting XAU/USD on time_series (same reason gold's *live* price
+// already gets routed through getGoldPrice() instead of Twelve Data), and
+// reused here as the historical/price source for stocks, which this app
+// otherwise has no data source for at all.
+const YAHOO_HEADERS = { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" };
+
+const fetchYahooChart = async (symbol, { interval = "60m", range = "5d" } = {}) => {
+  const res = await axios.get(
+    `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}`,
+    { params: { interval, range }, timeout: 10000, headers: YAHOO_HEADERS }
+  );
+  return res.data?.chart?.result?.[0] || null;
+};
+
+// Hours the market was closed (weekends, session gaps, pre/post market
+// depending on range) come back as nulls and are filtered out -- real
+// observed price movement, unlike buildSyntheticCandles below.
+const yahooResultToCandles = (result, outputsize) => {
+  const timestamps = result?.timestamp || [];
+  const quote = result?.indicators?.quote?.[0] || {};
+  const candles = [];
+  for (let i = 0; i < timestamps.length; i++) {
+    if (quote.close?.[i] == null) continue;
+    candles.push({
+      datetime: new Date(timestamps[i] * 1000).toISOString(),
+      open: quote.open[i], high: quote.high[i],
+      low: quote.low[i], close: quote.close[i],
+    });
+  }
+  return candles.slice(-outputsize);
+};
+
+const getGoldHistoricalCandles = async (outputsize) => {
+  const result = await fetchYahooChart("GC=F");
+  return yahooResultToCandles(result, outputsize);
+};
+
+// Pata stock prices — Yahoo Finance, one request per symbol (no free
+// multi-symbol batch quote endpoint available unauthenticated).
+exports.getStockPrices = async () => {
+  if (isCacheValid(priceCache.stocks)) return priceCache.stocks.data;
+
+  const prices = { ...priceCache.stocks.data };
+  await Promise.all(STOCK_SYMBOLS.map(async (symbol) => {
+    try {
+      const result = await fetchYahooChart(symbol, { interval: "1d", range: "1d" });
+      const price = result?.meta?.regularMarketPrice;
+      if (price != null) prices[symbol] = price;
+    } catch (err) {
+      console.error(`Stock price error for ${symbol}:`, err.message);
+    }
+  }));
+
+  if (Object.keys(prices).length > 0) {
+    priceCache.stocks.data = prices;
+    priceCache.stocks.timestamp = Date.now();
+  }
+  return priceCache.stocks.data;
+};
+
 // Turns a single known price into a minimal synthetic candle series --
-// used when a provider has no real historical series available at all
-// (this happens reliably for XAU/USD on Twelve Data's time_series
-// endpoint, the same gap already worked around for its *live* price via
-// getGoldPrice() -- but getHistoricalData had no equivalent fallback, so
-// gold analysis was silently starved of any candle data). Flat/near-flat
-// on purpose: computeMomentum should read this as "no real trend data
-// available" (near-zero momentum, low volatility) rather than fabricate
-// movement that never happened.
+// true last resort, only reached if even the real per-asset sources above
+// fail. Flat/near-flat on purpose: computeMomentum should read this as
+// "no real trend data available" (near-zero momentum, low volatility)
+// rather than fabricate movement that never happened -- but note this
+// still gets *described* by the AI as if it were an observed flat
+// market, since the prompt has no way to know the candles are synthetic.
+// Real data (Twelve Data, or getGoldHistoricalCandles for gold) should
+// cover the vast majority of requests; this exists only for a total
+// provider outage.
 const buildSyntheticCandles = (price, count = 10) => {
   if (!price) return [];
   const now = Date.now();
@@ -299,6 +380,11 @@ exports.getHistoricalData = async (pair, interval = "1h", outputsize = 20) => {
         open: price, high: price * 1.001,
         low: price * 0.999, close: price,
       }));
+    } else if (exports.normalizeSymbol(pair) === "XAUUSD") {
+      values = await getGoldHistoricalCandles(outputsize);
+    } else if (STOCK_SYMBOLS.includes(exports.normalizeSymbol(pair))) {
+      const result = await fetchYahooChart(exports.normalizeSymbol(pair));
+      values = yahooResultToCandles(result, outputsize);
     } else {
       const res = await axios.get(
         `https://api.twelvedata.com/time_series?symbol=${pair}&interval=${interval}&outputsize=${outputsize}&apikey=${TWELVE_DATA_KEY}`,
