@@ -34,24 +34,37 @@ const setCache = (key, data) => {
   cache.set(key, { data, timestamp: Date.now() });
 };
 
+// Groq periodically deprecates model IDs outright (llama-3.3-70b-versatile
+// was retired 2026-06-17, breaking every AI feature in this app with a
+// silent 404 until this was traced down) — unlike geminiVision.js's
+// floating "-latest" alias, Groq's model IDs are fixed snapshots with no
+// auto-updating alias, so this string needs a manual check against
+// console.groq.com/docs/deprecations if it ever 404s again.
+const GROQ_MODEL = "openai/gpt-oss-120b";
+
 const askGroq = async (prompt) => {
   const completion = await getGroqClient().chat.completions.create({
     messages: [{ role: "user", content: prompt }],
-    model: "llama-3.3-70b-versatile",
+    model: GROQ_MODEL,
     temperature: 0.3,
     max_tokens: 1500,
+    reasoning_effort: "low",
   });
   return completion.choices[0]?.message?.content || "";
 };
 
 // Yields text deltas as they arrive from Groq instead of waiting for the
 // full completion — lets the chat UI render the answer as it's written.
+// reasoning_effort keeps this fast for a chat UI; gpt-oss's reasoning
+// trace lands in a separate `reasoning` delta field, not `content`, so it
+// never leaks into the streamed text.
 async function* askGroqStream(prompt) {
   const stream = await getGroqClient().chat.completions.create({
     messages: [{ role: "user", content: prompt }],
-    model: "llama-3.3-70b-versatile",
+    model: GROQ_MODEL,
     temperature: 0.3,
     max_tokens: 1500,
+    reasoning_effort: "low",
     stream: true,
   });
   for await (const chunk of stream) {
@@ -61,12 +74,13 @@ async function* askGroqStream(prompt) {
 }
 
 // Analyze single trade
-exports.analyzeTrade = async (trade, history = [], retrievedChunks = []) => {
-  const cacheKey = `trade_${trade._id}_${retrievedChunks.map((c) => c.sourceId).join(",")}`;
+exports.analyzeTrade = async (trade, history = [], retrievedChunks = [], extra = {}) => {
+  const { bookSummary = "" } = extra;
+  const cacheKey = `trade_${trade._id}_${retrievedChunks.map((c) => c.sourceId).join(",")}_${bookSummary ? "b" : ""}`;
   const cached = getCached(cacheKey);
   if (cached) return cached;
 
-  const ragCtx = ragService.formatContext(retrievedChunks);
+  const ragCtx = ragService.buildPromptContext({ retrievedChunks, bookSummary });
 
   const prompt = `You are TradeMind AI, a professional forex trading coach. Analyze this trade and respond ONLY in JSON with no markdown:
 {
@@ -102,8 +116,9 @@ ${ragCtx ? "Ground patterns/riskFlags/suggestions in the retrieved context above
 };
 
 // Detect patterns
-exports.detectPatterns = async (trades, retrievedChunks = []) => {
-  const cacheKey = `patterns_${trades.length}_${trades[0]?._id}_${retrievedChunks.map((c) => c.sourceId).join(",")}`;
+exports.detectPatterns = async (trades, retrievedChunks = [], extra = {}) => {
+  const { bookSummary = "" } = extra;
+  const cacheKey = `patterns_${trades.length}_${trades[0]?._id}_${retrievedChunks.map((c) => c.sourceId).join(",")}_${bookSummary ? "b" : ""}`;
   const cached = getCached(cacheKey);
   if (cached) return cached;
 
@@ -112,7 +127,7 @@ exports.detectPatterns = async (trades, retrievedChunks = []) => {
     session: t.session, pnl: t.profitLoss, setup: t.setup,
   }));
 
-  const ragCtx = ragService.formatContext(retrievedChunks);
+  const ragCtx = ragService.buildPromptContext({ retrievedChunks, bookSummary });
 
   const prompt = `You are a professional forex analyst. Analyze this trading history and respond ONLY in JSON with no markdown:
 {
@@ -142,13 +157,14 @@ ${ragCtx ? "Cross-reference patterns with the retrieved context above. Add book-
 };
 
 // Trade suggestion
-exports.getTradeSuggestion = async (proposedTrade, history = [], retrievedChunks = []) => {
+exports.getTradeSuggestion = async (proposedTrade, history = [], retrievedChunks = [], extra = {}) => {
+  const { bookSummary = "" } = extra;
   const recent = history.slice(0, 20).map((t) => ({
     pair: t.pair, outcome: t.outcome, pnl: t.profitLoss,
     session: t.session, setup: t.setup,
   }));
 
-  const ragCtx = ragService.formatContext(retrievedChunks);
+  const ragCtx = ragService.buildPromptContext({ retrievedChunks, bookSummary });
 
   const prompt = `You are TradeMind AI. Should this trader take this trade? Respond ONLY in JSON with no markdown:
 {
@@ -198,45 +214,46 @@ Extract practical trading concepts, strategies, and rules that can improve tradi
   }
 };
 
-// Smart Market Analysis
-exports.analyzeMarketSmart = async (pair, currentPrice, historicalPrices, pastTrades, retrievedChunks = [], newsArticles = []) => {
+// Smart Market Analysis — signals are sized for an intraday trade the
+// trader closes within roughly 3-4 hours, not a multi-day swing position
+// (previously the prompt left holding period unstated, and the model
+// defaulted to wider, swing-style stops). Fuses every available context
+// source (RAG chunks — including the trader's own uploaded chart
+// screenshots, extracted book concepts, price-action momentum, and this
+// pair's own recent trade history) into one consistent block via
+// ragService.buildPromptContext, and reflects which of those sources
+// actually contributed in sourceLabel so that's visible, not just internal.
+exports.analyzeMarketSmart = async (pair, currentPrice, historicalPrices, pastTrades, retrievedChunks = [], newsArticles = [], extra = {}) => {
+  const { bookSummary = "", momentum = null, pairTrades = [] } = extra;
   const cacheKey = `market_${pair}_${Math.floor(Date.now() / (30 * 60 * 1000))}`;
   const cached = getCached(cacheKey);
   if (cached) return cached;
 
   const hasTrades = pastTrades && pastTrades.length > 0;
   const hasBookChunks = retrievedChunks.some((c) => c.source === "book");
+  const hasScreenshotChunks = retrievedChunks.some((c) => c.source === "screenshot");
+  const hasBooks = hasBookChunks || !!bookSummary;
   const hasNews = newsArticles && newsArticles.length > 0;
+  const hasMomentum = !!momentum?.summary;
 
-  let source = "ai_auto";
-  let sourceLabel = "AI Auto — ICT/SMC/Price Action";
-  let contextPrompt;
+  const usedSources = [];
+  if (hasBooks) usedSources.push("Books");
+  if (hasScreenshotChunks) usedSources.push("Screenshots");
+  if (hasTrades) usedSources.push("Trade History");
+  if (hasMomentum) usedSources.push("Momentum");
+  const source = hasBooks ? "books" : hasTrades ? "past_trades" : "ai_auto";
+  const sourceLabel = usedSources.length > 0
+    ? `AI Auto — ${usedSources.join(" + ")}`
+    : "AI Auto — ICT/SMC/Price Action";
 
-  const ragCtx = ragService.formatContext(retrievedChunks);
+  const tradeSummary = hasTrades
+    ? pastTrades.slice(0, 10).map((t) => ({
+        pair: t.pair, direction: t.direction, outcome: t.outcome,
+        entry: t.entryPrice, sl: t.stopLoss, tp: t.takeProfit, pnl: t.profitLoss,
+      }))
+    : [];
 
-  if (hasTrades && hasBookChunks) {
-    source = "past_trades";
-    sourceLabel = "Past Trades + Book Concepts";
-    const tradeSummary = pastTrades.slice(0, 10).map((t) => ({
-      pair: t.pair, direction: t.direction, outcome: t.outcome,
-      entry: t.entryPrice, sl: t.stopLoss, tp: t.takeProfit, pnl: t.profitLoss,
-    }));
-    contextPrompt = `Trader's past trades: ${JSON.stringify(tradeSummary)}\n${ragCtx}`;
-  } else if (hasTrades) {
-    source = "past_trades";
-    sourceLabel = "Past Trades Analysis";
-    const tradeSummary = pastTrades.slice(0, 10).map((t) => ({
-      pair: t.pair, direction: t.direction, outcome: t.outcome,
-      entry: t.entryPrice, sl: t.stopLoss, tp: t.takeProfit, pnl: t.profitLoss,
-    }));
-    contextPrompt = `Trader's past trades: ${JSON.stringify(tradeSummary)}`;
-  } else if (hasBookChunks) {
-    source = "books";
-    sourceLabel = "Book Concepts Analysis";
-    contextPrompt = ragCtx;
-  } else {
-    contextPrompt = "Use ICT, SMC, and Price Action analysis. AI Auto generated.";
-  }
+  const fusedContext = ragService.buildPromptContext({ retrievedChunks, bookSummary, momentum, pairTrades });
 
   const newsContext = hasNews
     ? `\nRecent news: ${newsArticles.slice(0, 3).map((a) => `- ${a.title}`).join("\n")}`
@@ -248,11 +265,12 @@ exports.analyzeMarketSmart = async (pair, currentPrice, historicalPrices, pastTr
       }))
     : [];
 
-  const prompt = `You are TradeMind AI, expert forex analyst. Analyze ${pair} and provide a trading signal.
+  const prompt = `You are TradeMind AI, expert forex analyst. Analyze ${pair} and provide a trading signal for an INTRADAY trade the trader intends to close within roughly 3-4 hours — this is not a multi-day swing position, so size stopLoss/takeProfit for that horizon (proportional to the recent volatility below, not arbitrary round numbers).
 
 Current ${pair} price: ${currentPrice}
 Recent candles (1H): ${JSON.stringify(recentCandles)}
-${contextPrompt}
+${hasTrades ? `Trader's recent past trades: ${JSON.stringify(tradeSummary)}` : ""}
+${fusedContext}
 ${newsContext}
 
 Respond ONLY in JSON with no markdown:
@@ -293,7 +311,13 @@ Respond ONLY in JSON with no markdown:
 // platforms (Pocket Option, Expert Option). No entry/SL/TP: the trader
 // executes on the platform themselves, so all that matters is direction,
 // confidence, and a suggested expiry window.
-exports.analyzeQuickSignal = async (pair, currentPrice, historicalPrices, newsArticles = []) => {
+// bookSummary/momentum only (extra) -- deliberately no RAG chunk retrieval
+// for this path. Quick Trade already iterates up to ~10 pairs per cycle;
+// adding a CPU-bound embedding call per pair on top of that would slow
+// every cycle for a lower payoff than it gives the (much less frequent)
+// forex/MT5 signal path, where the same fusion does include RAG.
+exports.analyzeQuickSignal = async (pair, currentPrice, historicalPrices, newsArticles = [], extra = {}) => {
+  const { bookSummary = "", momentum = null } = extra;
   const cacheKey = `quick_${pair}_${Math.floor(Date.now() / (5 * 60 * 1000))}`;
   const cached = getCached(cacheKey);
   if (cached) return cached;
@@ -307,11 +331,13 @@ exports.analyzeQuickSignal = async (pair, currentPrice, historicalPrices, newsAr
   const newsContext = newsArticles && newsArticles.length > 0
     ? `\nRecent news: ${newsArticles.slice(0, 3).map((a) => `- ${a.title}`).join("\n")}`
     : "";
+  const momentumContext = momentum?.summary ? `\nMarket pressure: ${momentum.summary}` : "";
 
   const prompt = `You are TradeMind AI, expert short-term market analyst. Predict the next short-term price direction for ${pair} for a quick up/down (binary-style) trade.
 
 Current ${pair} price: ${currentPrice}
-Recent candles (1H): ${JSON.stringify(recentCandles)}${newsContext}
+Recent candles (1H): ${JSON.stringify(recentCandles)}${newsContext}${momentumContext}
+${bookSummary}
 
 Respond ONLY in JSON with no markdown:
 {
@@ -387,10 +413,11 @@ const chunksToSources = (retrievedChunks) => retrievedChunks.map((c) => ({
 }));
 
 // RAG Q&A — answer any trading or app-usage question, grounded in
-// retrieved context (books/trades/guide) when there's relevant context,
-// falling back to general forex/trading knowledge otherwise.
-exports.answerQuestion = async (question, retrievedChunks = []) => {
-  const ragCtx = ragService.formatContext(retrievedChunks);
+// retrieved context (books/trades/guide/screenshots) plus extracted book
+// concepts when there's relevant context, falling back to general
+// forex/trading knowledge otherwise.
+exports.answerQuestion = async (question, retrievedChunks = [], extra = {}) => {
+  const ragCtx = ragService.buildPromptContext({ retrievedChunks, bookSummary: extra.bookSummary });
   const prompt = buildAnswerPrompt(question, ragCtx) + `
 
 Respond ONLY in JSON with no markdown:
@@ -413,8 +440,8 @@ Respond ONLY in JSON with no markdown:
 // generated, for the streaming (SSE) chat endpoint. No JSON wrapper here
 // -- partial JSON can't be rendered progressively, so this asks for and
 // streams plain prose directly.
-exports.streamAnswer = async function* (question, retrievedChunks = []) {
-  const ragCtx = ragService.formatContext(retrievedChunks);
+exports.streamAnswer = async function* (question, retrievedChunks = [], extra = {}) {
+  const ragCtx = ragService.buildPromptContext({ retrievedChunks, bookSummary: extra.bookSummary });
   const prompt = buildAnswerPrompt(question, ragCtx) +
     "\n\nRespond with plain prose only — no JSON, no markdown code fences.";
 
