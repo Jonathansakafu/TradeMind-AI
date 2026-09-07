@@ -116,7 +116,18 @@ async function pollCycle() {
 // again. Refreshing this tab (not just reloading the extension) fixes it.
 let pollTimer = null;
 
+// pollCycle can block for minutes at a time inside handleNotification (it
+// awaits the trade's full expiry before reporting back), but the interval
+// below fires unconditionally every 20s regardless. Without this guard,
+// each tick during that wait starts its own overlapping pollCycle — extra
+// redundant /poll requests, and if a second notification comes back, a
+// second concurrent handleNotification racing the first one's DOM writes
+// in selectors.js on the same page.
+let isPolling = false;
+
 async function safePollCycle() {
+  if (isPolling) return;
+  isPolling = true;
   try {
     await pollCycle();
   } catch (err) {
@@ -128,6 +139,8 @@ async function safePollCycle() {
       return;
     }
     console.error("[TradeMind AI] Unexpected error in poll cycle:", err);
+  } finally {
+    isPolling = false;
   }
 }
 
