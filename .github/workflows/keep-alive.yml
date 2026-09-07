@@ -1,0 +1,19 @@
+name: Keep backend alive
+
+# Render's free tier spins down the backend after ~15 min idle, then takes
+# 30-60s to cold-start on the next request — during that window the mobile
+# app, browser extension, and signal-generation cycle all silently stall.
+# This is a mitigation, not a fix: it just keeps the free-tier instance
+# warm. If reliability still isn't good enough, the real fix is upgrading
+# to a paid always-on Render plan.
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping health endpoint
+        run: curl -fsS --max-time 20 https://trademind-ai-backend-2tnj.onrender.com/api/health

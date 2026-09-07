@@ -20,6 +20,10 @@ workflows:
       node: latest
       xcode: latest
       cocoapods: default
+    cache:
+      cache_paths:
+        - $CM_BUILD_DIR/frontend/node_modules
+        - $CM_BUILD_DIR/frontend/ios/App/Pods
     triggering:
       events:
         - push
