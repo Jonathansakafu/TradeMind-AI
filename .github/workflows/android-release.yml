@@ -1,0 +1,87 @@
+name: Android build
+
+# Public repo -> unlimited free GitHub Actions minutes on any runner,
+# including Linux, which is all a Gradle/Android SDK build needs -- no
+# billing-tier restrictions like Codemagic's free plan (zero Linux
+# minutes) ran into. Builds a debug APK (no release keystore exists yet;
+# Gradle's default debug signing needs no secrets and is directly
+# sideloadable, which is what the website's download button needs) and
+# publishes it to a fixed Release tag/asset name using the token GitHub
+# injects into every run automatically -- no manually-created PAT needed.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: latest
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install npm dependencies
+        run: npm install
+
+      - name: Build web app (production)
+        # frontend/.env.production is gitignored (not present in a fresh
+        # checkout), so the production API URL is set here instead -- Vite
+        # picks up any VITE_-prefixed var from the environment automatically.
+        env:
+          VITE_API_URL: "https://trademind-ai-backend-2tnj.onrender.com"
+        run: npm run build
+
+      - name: Sync Capacitor Android project
+        run: npx cap sync android
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('frontend/android/**/*.gradle*') }}
+
+      - name: Build debug APK
+        working-directory: frontend/android
+        run: ./gradlew assembleDebug
+
+      - name: Publish APK to GitHub Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          TAG="android-latest"
+          # `gh release upload`'s `file#label` syntax only sets a display
+          # label, not the actual asset filename -- the uploaded file keeps
+          # its real name. Rename it here so the stored asset is actually
+          # trademind-ai.apk, matching the fixed URL the website links to.
+          APK_PATH="trademind-ai.apk"
+          cp "android/app/build/outputs/apk/debug/app-debug.apk" "$APK_PATH"
+
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$APK_PATH" --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$TAG" "$APK_PATH" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "Android app (latest)" \
+              --notes "Auto-built debug APK from the latest main branch build. Not a Play Store release -- allow \"install from unknown sources\" to install it." \
+              --prerelease
+          fi

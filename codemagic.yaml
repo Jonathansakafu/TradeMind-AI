@@ -54,92 +54,10 @@ workflows:
         auth: integration
         submit_to_testflight: true
 
-  android-release:
-    name: TradeMind AI - Android
-    max_build_duration: 30
-    # Two failed builds traced this down: Codemagic's free plan includes
-    # NO Linux build minutes at all (confirmed via their own pricing docs)
-    # -- linux_x2 and plain linux both failed with "instance type not
-    # available with the current billing plan", and no Linux instance
-    # would have worked. Only Apple Silicon Mac minutes are free. Android
-    # builds (Gradle/Android SDK/JDK) run fine on macOS, so this uses the
-    # same mac_mini_m2 instance as ios-release above instead.
-    instance_type: mac_mini_m2
-    working_directory: frontend
-    environment:
-      vars:
-        # See the ios-release workflow above for why this is set here
-        # rather than relying on a gitignored .env.production.
-        VITE_API_URL: "https://trademind-ai-backend-2tnj.onrender.com"
-      node: latest
-      java: 17
-    cache:
-      cache_paths:
-        - $CM_BUILD_DIR/frontend/node_modules
-        - $HOME/.gradle/caches
-    triggering:
-      events:
-        - push
-      branch_patterns:
-        - pattern: main
-          include: true
-    scripts:
-      - name: Install npm dependencies
-        script: npm install
-      - name: Build web app (production)
-        script: npm run build
-      - name: Sync Capacitor Android project
-        script: npx cap sync android
-      # Debug build, not a Play Store release: no release keystore exists
-      # for this project yet, and a debug-signed APK (Gradle's default
-      # debug signing config, no secrets needed) is directly installable
-      # via sideload -- which is what a "download from the website" button
-      # actually needs. Revisit with a real release keystore + Play
-      # Console listing if/when this should ship through the Play Store
-      # instead.
-      - name: Build debug APK
-        script: cd android && ./gradlew assembleDebug
-      # Publishes to a fixed GitHub Release tag (android-latest) so the
-      # website's download link never changes across builds -- re-running
-      # this replaces the previous APK on that same tag/asset name.
-      # Requires a GITHUB_TOKEN env var (repo-scoped PAT or fine-grained
-      # token with "Contents: write") set in Codemagic's environment
-      # variables for this workflow; the step no-ops with a clear message
-      # if it's missing, rather than failing the whole build.
-      - name: Publish APK to GitHub Releases
-        script: |
-          set -e
-          if [ -z "$GITHUB_TOKEN" ]; then
-            echo "GITHUB_TOKEN not set -- skipping GitHub Releases publish. The APK is still available as a build artifact below."
-            exit 0
-          fi
-          REPO="jonathansakafu/TradeMind-AI"
-          TAG="android-latest"
-          APK_PATH="android/app/build/outputs/apk/debug/app-debug.apk"
-          ASSET_NAME="trademind-ai.apk"
-          AUTH_HEADER="Authorization: token $GITHUB_TOKEN"
-
-          RELEASE_ID=$(curl -s -H "$AUTH_HEADER" \
-            "https://api.github.com/repos/$REPO/releases/tags/$TAG" \
-            | node -pe 'JSON.parse(require("fs").readFileSync(0,"utf8")).id || ""')
-
-          if [ -z "$RELEASE_ID" ]; then
-            RELEASE_ID=$(curl -s -X POST -H "$AUTH_HEADER" -H "Content-Type: application/json" \
-              -d "{\"tag_name\":\"$TAG\",\"name\":\"Android app (latest)\",\"body\":\"Auto-built debug APK from the latest main branch build. Not a Play Store release -- allow \\\"install from unknown sources\\\" to install it.\",\"prerelease\":true}" \
-              "https://api.github.com/repos/$REPO/releases" \
-              | node -pe 'JSON.parse(require("fs").readFileSync(0,"utf8")).id')
-          fi
-
-          ASSET_ID=$(curl -s -H "$AUTH_HEADER" \
-            "https://api.github.com/repos/$REPO/releases/$RELEASE_ID/assets" \
-            | node -pe "JSON.parse(require('fs').readFileSync(0,'utf8')).find(a=>a.name==='$ASSET_NAME')?.id || ''")
-          if [ -n "$ASSET_ID" ]; then
-            curl -s -X DELETE -H "$AUTH_HEADER" \
-              "https://api.github.com/repos/$REPO/releases/assets/$ASSET_ID"
-          fi
-
-          curl -s -X POST -H "$AUTH_HEADER" -H "Content-Type: application/vnd.android.package-archive" \
-            --data-binary @"$APK_PATH" \
-            "https://uploads.github.com/repos/$REPO/releases/$RELEASE_ID/assets?name=$ASSET_NAME"
-    artifacts:
-      - android/app/build/outputs/apk/debug/*.apk
+  # Android used to be built here too, but Codemagic's free plan has zero
+  # Linux build minutes (confirmed via two failed builds) and Mac queue
+  # times on the free tier were long. This repo is public, so GitHub
+  # Actions gives it unlimited free minutes on any runner including Linux,
+  # with much shorter queues and no manually-created token needed (Actions'
+  # built-in GITHUB_TOKEN can publish releases directly) -- see
+  # .github/workflows/android-release.yml instead.
