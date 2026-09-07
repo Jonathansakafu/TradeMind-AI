@@ -98,11 +98,16 @@ exports.updateSignalStatus = async (req, res) => {
 // Get stats
 exports.getStats = async (req, res) => {
   try {
-    const signals = await MT5Signal.find({ user: req.user._id });
-    const executed = signals.filter((s) => s.status === "executed").length;
-    const pending = signals.filter((s) => s.status === "pending" || s.status === "sent").length;
-    const failed = signals.filter((s) => s.status === "failed").length;
-    res.json({ total: signals.length, executed, pending, failed });
+    const counts = await MT5Signal.aggregate([
+      { $match: { user: req.user._id } },
+      { $group: { _id: "$status", count: { $sum: 1 } } },
+    ]);
+    const byStatus = Object.fromEntries(counts.map((c) => [c._id, c.count]));
+    const total = counts.reduce((sum, c) => sum + c.count, 0);
+    const executed = byStatus.executed || 0;
+    const pending = (byStatus.pending || 0) + (byStatus.sent || 0);
+    const failed = byStatus.failed || 0;
+    res.json({ total, executed, pending, failed });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

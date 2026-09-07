@@ -43,9 +43,12 @@ async function generateQuickTradeSignals(userId, session) {
   const candidatePairs = session.pairs?.length ? session.pairs : QUICK_TRADE_DEFAULT_PAIRS;
   const availablePairs = candidatePairs.filter((p) => prices[toMarketSymbol(p)]);
 
+  // No per-cycle cap — availablePairs is already naturally bounded (session
+  // pairs or the ~10 default pairs), and with indexed dedup lookups and
+  // cached news/prices (see marketService/newsService), analyzing all of
+  // them per cycle is cheap enough now that this isn't a single-tester app.
   let created = 0;
   for (const pair of availablePairs) {
-    if (created >= 2) break; // cap per cycle, but only counting pairs we actually generated for
     try {
       // Checked before doing any AI work, and against every candidate pair
       // (not just the first 2) — otherwise repeatedly generating within
@@ -144,8 +147,10 @@ exports.autoGenerate = async (userId) => {
       availablePairs.push(...CRYPTO_PAIRS);
     }
 
-    // Analyze pairs 2 tu ili kuepuka rate limits
-    const pairsToAnalyze = availablePairs.slice(0, 2);
+    // Analyze every available pair (naturally capped at ~6 by
+    // CRYPTO_PAIRS+FOREX_PAIRS) — previously capped at 2 to dodge rate
+    // limits while solo-testing; no longer needed with cached news/prices.
+    const pairsToAnalyze = availablePairs;
     const notifications = [];
 
     // Pata news mara moja tu

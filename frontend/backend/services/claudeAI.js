@@ -12,6 +12,9 @@ function getGroqClient() {
 
 const cache = new Map();
 const CACHE_DURATION = 2 * 60 * 60 * 1000;
+// Only evicted lazily on read otherwise — caps memory growth on the
+// long-lived server process across many users/pairs/questions.
+const CACHE_MAX_ENTRIES = 500;
 
 const getCached = (key) => {
   const cached = cache.get(key);
@@ -24,6 +27,10 @@ const getCached = (key) => {
 };
 
 const setCache = (key, data) => {
+  // Map preserves insertion order, so the first key is the oldest.
+  if (cache.size >= CACHE_MAX_ENTRIES) {
+    cache.delete(cache.keys().next().value);
+  }
   cache.set(key, { data, timestamp: Date.now() });
 };
 

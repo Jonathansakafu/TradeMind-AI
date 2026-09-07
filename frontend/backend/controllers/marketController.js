@@ -30,9 +30,11 @@ exports.analyzePair = async (req, res) => {
       return res.status(400).json({ message: "Currently no suggested trades for " + pair });
     }
 
-    const historical = await marketService.getHistoricalData(formattedPair, "1h", 20);
     const relevantNews = newsService.getNewsSentiment(newsArticles, pair);
-    const retrievedChunks = await ragService.retrieve(req.user._id, `${formattedPair} trading strategy signal`, { topK: 6 });
+    const [historical, retrievedChunks] = await Promise.all([
+      marketService.getHistoricalData(formattedPair, "1h", 20),
+      ragService.retrieve(req.user._id, `${formattedPair} trading strategy signal`, { topK: 6 }),
+    ]);
 
     const analysis = await claudeAI.analyzeMarketSmart(
       formattedPair, priceData.price, historical,

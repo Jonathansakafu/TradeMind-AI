@@ -27,4 +27,7 @@ const mt5SignalSchema = new mongoose.Schema({
   token: { type: String }, // unique token for MT5 to verify
 }, { timestamps: true });
 
+mt5SignalSchema.index({ user: 1, createdAt: -1 });
+mt5SignalSchema.index({ status: 1, createdAt: -1 });
+
 module.exports = mongoose.model("MT5Signal", mt5SignalSchema);

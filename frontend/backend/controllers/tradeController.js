@@ -122,31 +122,34 @@ exports.deleteTrade = async (req, res) => {
 // GET stats
 exports.getStats = async (req, res) => {
   try {
-    const trades = await Trade.find({ 
-      user: req.user._id, 
-      status: "closed" 
-    });
+    // Grouped by pair server-side instead of pulling every closed trade
+    // into Node and reducing in JS — this scales with distinct pairs, not
+    // with trade count.
+    const byPair = await Trade.aggregate([
+      { $match: { user: req.user._id, status: "closed" } },
+      {
+        $group: {
+          _id: "$pair",
+          total: { $sum: 1 },
+          wins: { $sum: { $cond: [{ $eq: ["$outcome", "win"] }, 1, 0] } },
+          losses: { $sum: { $cond: [{ $eq: ["$outcome", "loss"] }, 1, 0] } },
+          pl: { $sum: { $ifNull: ["$profitLoss", 0] } },
+        },
+      },
+    ]);
 
-    const wins = trades.filter((t) => t.outcome === "win").length;
-    const losses = trades.filter((t) => t.outcome === "loss").length;
-    const totalPL = trades.reduce((sum, t) => sum + (t.profitLoss || 0), 0);
-    const winRate = trades.length 
-      ? ((wins / trades.length) * 100).toFixed(1) 
-      : 0;
+    const total = byPair.reduce((sum, p) => sum + p.total, 0);
+    const wins = byPair.reduce((sum, p) => sum + p.wins, 0);
+    const losses = byPair.reduce((sum, p) => sum + p.losses, 0);
+    const totalPL = byPair.reduce((sum, p) => sum + p.pl, 0);
+    const winRate = total ? ((wins / total) * 100).toFixed(1) : 0;
 
-    // Best pair
-    const pairMap = {};
-    trades.forEach((t) => {
-      if (!pairMap[t.pair]) pairMap[t.pair] = { wins: 0, total: 0, pl: 0 };
-      pairMap[t.pair].total++;
-      pairMap[t.pair].pl += t.profitLoss || 0;
-      if (t.outcome === "win") pairMap[t.pair].wins++;
-    });
+    const bestPair = byPair.slice().sort((a, b) => b.pl - a.pl)[0]?._id || null;
+    const pairMap = Object.fromEntries(
+      byPair.map((p) => [p._id, { wins: p.wins, total: p.total, pl: p.pl }])
+    );
 
-    const bestPair = Object.entries(pairMap)
-      .sort((a, b) => b[1].pl - a[1].pl)[0]?.[0] || null;
-
-    res.json({ total: trades.length, wins, losses, winRate, totalPL, bestPair, pairMap });
+    res.json({ total, wins, losses, winRate, totalPL, bestPair, pairMap });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

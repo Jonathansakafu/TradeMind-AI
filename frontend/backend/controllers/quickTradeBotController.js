@@ -53,17 +53,17 @@ exports.getPending = async (req, res) => {
       return now - new Date(n.createdAt).getTime() < n.expiresInMinutes * 60 * 1000;
     });
 
-    const claimed = [];
-    for (const n of unexpired) {
-      n.botStatus = "claimed";
-      n.botClaimedAt = new Date();
-      await n.save();
-      claimed.push(n);
+    const claimedAt = new Date();
+    if (unexpired.length > 0) {
+      await Notification.updateMany(
+        { _id: { $in: unexpired.map((n) => n._id) } },
+        { botStatus: "claimed", botClaimedAt: claimedAt }
+      );
     }
 
     res.json({
       active: true,
-      notifications: claimed.map((n) => ({
+      notifications: unexpired.map((n) => ({
         id: n._id,
         pair: n.pair,
         signal: n.signal,

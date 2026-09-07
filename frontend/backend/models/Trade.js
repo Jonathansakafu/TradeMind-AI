@@ -58,4 +58,7 @@ const tradeSchema = new mongoose.Schema({
   closedAt: { type: Date },
 }, { timestamps: true });
 
+tradeSchema.index({ user: 1, createdAt: -1 });
+tradeSchema.index({ user: 1, status: 1 });
+
 module.exports = mongoose.model("Trade", tradeSchema);

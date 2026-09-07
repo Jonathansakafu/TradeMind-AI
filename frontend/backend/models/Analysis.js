@@ -23,4 +23,6 @@ const analysisSchema = new mongoose.Schema({
   strongestPairs: [{ pair: String, winRate: Number, avgPnl: Number }],
 }, { timestamps: true });
 
+analysisSchema.index({ user: 1, createdAt: -1 });
+
 module.exports = mongoose.model("Analysis", analysisSchema);

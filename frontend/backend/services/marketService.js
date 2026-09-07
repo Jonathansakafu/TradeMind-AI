@@ -185,6 +185,7 @@ exports.getLivePrice = async (pair) => {
         const goldPrice = await getGoldPrice();
         if (goldPrice) {
           priceCache.forex.data["XAUUSD"] = goldPrice;
+          priceCache.forex.timestamp = Date.now();
           return { pair: symbol, price: goldPrice, timestamp: new Date() };
         }
         return { pair: symbol, price: FALLBACK_PRICES["XAUUSD"], timestamp: new Date() };
@@ -198,6 +199,7 @@ exports.getLivePrice = async (pair) => {
       if (res.data?.price && !isNaN(parseFloat(res.data.price))) {
         const price = parseFloat(res.data.price);
         priceCache.forex.data[symbol] = price;
+        priceCache.forex.timestamp = Date.now();
         return { pair: symbol, price, timestamp: new Date() };
       }
 

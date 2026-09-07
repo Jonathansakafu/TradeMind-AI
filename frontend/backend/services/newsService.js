@@ -15,8 +15,18 @@ const PAIR_KEYWORDS = {
   EURJPY: ["EUR", "JPY", "euro", "yen"],
 };
 
+// Cache — dakika 20. Global news is identical for every user, so without
+// this every user's auto-generate cycle re-hits NewsAPI's free 100 req/day
+// quota for the exact same articles.
+const newsCache = { data: [], timestamp: 0 };
+const NEWS_CACHE_TTL = 20 * 60 * 1000;
+
 // Pata forex news
 exports.getForexNews = async () => {
+  if (Date.now() - newsCache.timestamp < NEWS_CACHE_TTL && newsCache.data.length > 0) {
+    return newsCache.data;
+  }
+
   try {
     const query = "forex OR currency OR \"Federal Reserve\" OR \"interest rate\" OR gold OR dollar";
     const res = await axios.get("https://newsapi.org/v2/everything", {
@@ -28,10 +38,15 @@ exports.getForexNews = async () => {
         apiKey: NEWS_API_KEY,
       },
     });
-    return res.data.articles || [];
+    const articles = res.data.articles || [];
+    if (articles.length > 0) {
+      newsCache.data = articles;
+      newsCache.timestamp = Date.now();
+    }
+    return articles;
   } catch (err) {
     console.error("News fetch error:", err.message);
-    return [];
+    return newsCache.data;
   }
 };
 

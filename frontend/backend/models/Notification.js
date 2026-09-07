@@ -44,4 +44,8 @@ const notificationSchema = new mongoose.Schema({
   botError: { type: String },
 }, { timestamps: true });
 
+notificationSchema.index({ user: 1, createdAt: -1 });
+notificationSchema.index({ pair: 1, type: 1, createdAt: -1 });
+notificationSchema.index({ tradingSessionId: 1, botStatus: 1 });
+
 module.exports = mongoose.model("Notification", notificationSchema);

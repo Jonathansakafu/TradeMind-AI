@@ -90,4 +90,6 @@ const tradingSessionSchema = new mongoose.Schema(
   }
 );
 
+tradingSessionSchema.index({ user: 1, mode: 1, createdAt: -1 });
+
 module.exports = mongoose.model("TradingSession", tradingSessionSchema);
