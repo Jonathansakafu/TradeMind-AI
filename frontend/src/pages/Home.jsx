@@ -1,7 +1,18 @@
 import { Link } from "react-router-dom";
-import { Brain, TrendingUp, Shield, BarChart2 } from "lucide-react";
+import { Capacitor } from "@capacitor/core";
+import { Brain, TrendingUp, Shield, BarChart2, Download } from "lucide-react";
+
+// Stable across builds -- the Android CI workflow (codemagic.yaml) always
+// publishes to this same GitHub Release tag/asset name, replacing the
+// previous APK, so this link never needs updating when a new build ships.
+const ANDROID_APK_URL = "https://github.com/jonathansakafu/TradeMind-AI/releases/download/android-latest/trademind-ai.apk";
 
 function Home() {
+  // Pointless (and confusing) to offer "download the app" from inside the
+  // app itself -- Home is the root route, so it does render in the native
+  // shell if that's ever the app's start URL.
+  const isNative = Capacitor.isNativePlatform();
+
   return (
     <div className="min-h-screen bg-white dark:bg-slate-950 text-slate-900 dark:text-white">
 
@@ -30,14 +41,28 @@ function Home() {
         <p className="text-slate-500 dark:text-slate-400 text-xl mb-10 max-w-xl mx-auto">
           Record trades, upload screenshots, and let AI analyze your patterns to make you a better trader.
         </p>
-        <div className="flex gap-4 justify-center">
+        <div className="flex flex-wrap gap-4 justify-center">
           <Link to="/register" className="bg-green-500 hover:bg-green-600 px-8 py-4 rounded-xl font-bold text-lg transition text-slate-950">
             Start Free
           </Link>
           <Link to="/login" className="bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 px-8 py-4 rounded-xl font-bold text-lg transition">
             Login
           </Link>
+          {!isNative && (
+            <a
+              href={ANDROID_APK_URL}
+              className="flex items-center gap-2 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 px-8 py-4 rounded-xl font-bold text-lg transition"
+            >
+              <Download size={20} className="text-green-600 dark:text-green-400" />
+              Download for Android
+            </a>
+          )}
         </div>
+        {!isNative && (
+          <p className="text-slate-400 dark:text-slate-600 text-xs mt-4">
+            Direct APK download — not on the Play Store yet, so you'll need to allow "install from unknown sources".
+          </p>
+        )}
       </div>
 
       {/* FEATURES */}
