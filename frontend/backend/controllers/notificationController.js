@@ -117,21 +117,34 @@ async function generateQuickTradeSignals(userId, session) {
 
 exports.autoGenerate = async (userId) => {
   try {
-    // A session (either mode) manages this user's signal budget once
-    // they've opted into one. If their most recent session hit a limit,
-    // stop suggesting new trades until they start a fresh session — users
-    // who've never used sessions are completely unaffected.
-    const latestSession = await TradingSession.findOne({ user: userId }).sort({ createdAt: -1 });
-    if (latestSession && LIMIT_STOPPED_STATUSES.includes(latestSession.status)) {
-      console.log(`⏸ Skipping signal generation for ${userId} — session limit reached`);
+    // Each mode manages its own signal budget once the trader opts into a
+    // session for it — scoped per mode (not "whichever session was most
+    // recently created, of either mode") because quick_trade and mt5 are
+    // independent trading contexts. A Quick Trade session hitting its
+    // limit (including just hitting its *profit target* — a win, not a
+    // failure) has nothing to do with the ordinary forex/MT5 signal loop,
+    // which doesn't require a session to run in the first place; blocking
+    // it too silently starved a user of all signals until they happened to
+    // know to start an unrelated new session. Users who've never used
+    // sessions at all are unaffected either way.
+    const [latestQuickTrade, latestMt5] = await Promise.all([
+      TradingSession.findOne({ user: userId, mode: "quick_trade" }).sort({ createdAt: -1 }),
+      TradingSession.findOne({ user: userId, mode: "mt5" }).sort({ createdAt: -1 }),
+    ]);
+
+    if (latestQuickTrade?.status === "active") {
+      const created = await generateQuickTradeSignals(userId, latestQuickTrade);
+      console.log(`✅ Generated ${created} quick trade notifications for user ${userId}`);
+      return { count: created, reason: created === 0 ? "quick_trade_no_signal" : null };
+    }
+    if (latestQuickTrade && LIMIT_STOPPED_STATUSES.includes(latestQuickTrade.status)) {
+      console.log(`⏸ Skipping Quick Trade signal generation for ${userId} — session limit reached`);
       return { count: 0, reason: "session_limit_reached" };
     }
 
-    const activeSession = latestSession?.status === "active" ? latestSession : null;
-    if (activeSession?.mode === "quick_trade") {
-      const created = await generateQuickTradeSignals(userId, activeSession);
-      console.log(`✅ Generated ${created} quick trade notifications for user ${userId}`);
-      return { count: created, reason: created === 0 ? "quick_trade_no_signal" : null };
+    if (latestMt5 && LIMIT_STOPPED_STATUSES.includes(latestMt5.status)) {
+      console.log(`⏸ Skipping forex/MT5 signal generation for ${userId} — session limit reached`);
+      return { count: 0, reason: "session_limit_reached" };
     }
 
     const [pastTrades, prices] = await Promise.all([
