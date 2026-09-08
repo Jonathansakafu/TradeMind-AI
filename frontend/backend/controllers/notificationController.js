@@ -53,6 +53,13 @@ async function generateQuickTradeSignals(userId, session) {
   // cached news/prices (see marketService/newsService), analyzing all of
   // them per cycle is cheap enough now that this isn't a single-tester app.
   let created = 0;
+  // A per-pair AI call failing (e.g. the model's daily quota exhausted)
+  // was being swallowed into a console.error only — the cycle would then
+  // report the exact same "no signal" reason as a legitimate "the AI saw
+  // nothing worth trading," making a real outage indistinguishable from
+  // ordinary quiet market conditions. Tracking the last error lets the
+  // caller surface it instead of masking it.
+  let lastError = null;
   for (const pair of availablePairs) {
     try {
       // Checked before doing any AI work, and against every candidate pair
@@ -110,9 +117,10 @@ async function generateQuickTradeSignals(userId, session) {
       await new Promise((resolve) => setTimeout(resolve, 2000));
     } catch (err) {
       console.error(`Error analyzing quick trade ${pair}:`, err.message);
+      lastError = err.message;
     }
   }
-  return created;
+  return { created, lastError };
 }
 
 exports.autoGenerate = async (userId) => {
@@ -133,9 +141,10 @@ exports.autoGenerate = async (userId) => {
     ]);
 
     if (latestQuickTrade?.status === "active") {
-      const created = await generateQuickTradeSignals(userId, latestQuickTrade);
+      const { created, lastError } = await generateQuickTradeSignals(userId, latestQuickTrade);
       console.log(`✅ Generated ${created} quick trade notifications for user ${userId}`);
-      return { count: created, reason: created === 0 ? "quick_trade_no_signal" : null };
+      const reason = created > 0 ? null : lastError ? `error: ${lastError}` : "quick_trade_no_signal";
+      return { count: created, reason };
     }
     if (latestQuickTrade && LIMIT_STOPPED_STATUSES.includes(latestQuickTrade.status)) {
       console.log(`⏸ Skipping Quick Trade signal generation for ${userId} — session limit reached`);
@@ -177,6 +186,11 @@ exports.autoGenerate = async (userId) => {
     // news/prices.
     const pairsToAnalyze = availablePairs;
     const notifications = [];
+    // Same reasoning as generateQuickTradeSignals' lastError: a per-pair AI
+    // failure was previously indistinguishable from the AI legitimately
+    // finding nothing worth trading -- both silently produced 0
+    // notifications and the same "no clear setup" message.
+    let lastError = null;
 
     // Pata news mara moja tu
     let newsArticles = [];
@@ -261,6 +275,7 @@ exports.autoGenerate = async (userId) => {
 
       } catch (err) {
         console.error(`Error analyzing ${pair}:`, err.message);
+        lastError = err.message;
       }
     }
 
@@ -300,7 +315,10 @@ exports.autoGenerate = async (userId) => {
     }
 
     console.log(`✅ Generated ${notifications.length} notifications for user ${userId}`);
-    return { count: notifications.length, reason: notifications.length === 0 ? "forex_no_signal" : null };
+    const reason = notifications.length > 0
+      ? null
+      : lastError ? `error: ${lastError}` : "forex_no_signal";
+    return { count: notifications.length, reason };
   } catch (err) {
     console.error("Auto generate error:", err.message);
     return { count: 0, reason: `error: ${err.message}` };

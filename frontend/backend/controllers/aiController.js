@@ -206,8 +206,20 @@ exports.analyzeScreenshot = async (req, res) => {
     fs.unlinkSync(req.file.path);
     const { base64: base64Image, mimeType } = await prepareImage(imageBuffer);
 
+    // The retrieve() call runs a local, CPU-bound embedding computation
+    // (see embeddingService.js) *before* Gemini is ever reached -- on this
+    // server's free-tier CPU, a cold model load alone measured ~9s, and it
+    // has no timeout of its own. If it's ever slower than that (heavier
+    // load, a colder start), it would hang the whole screenshot analysis
+    // without Gemini's own timeout/error handling ever getting a chance to
+    // apply. Retrieved book context is a nice-to-have enrichment here, not
+    // the point of the request, so a slow lookup degrades to "no book
+    // context this time" instead of failing the whole analysis.
     const [retrievedChunks, bookSummary] = await Promise.all([
-      ragService.retrieve(req.user._id, "chart pattern analysis", { topK: 6, sources: ["book"] }),
+      Promise.race([
+        ragService.retrieve(req.user._id, "chart pattern analysis", { topK: 6, sources: ["book"] }),
+        new Promise((resolve) => setTimeout(() => resolve([]), 10000)),
+      ]),
       ragService.getBookConceptSummary(req.user._id),
     ]);
     const result = await geminiVision.analyzeChartImage(
