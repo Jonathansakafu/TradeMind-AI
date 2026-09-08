@@ -1,4 +1,8 @@
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const {
+  GoogleGenerativeAI,
+  GoogleGenerativeAIAbortError,
+  GoogleGenerativeAIFetchError,
+} = require("@google/generative-ai");
 const ragService = require("./ragService");
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
@@ -13,13 +17,28 @@ const MODEL_NAME = "gemini-flash-latest";
 // slow-but-not-dead request (large image, model under load) could hang far
 // longer than a user would wait, surfacing only as "loading forever, then
 // a generic failure" once something else eventually cut the connection.
-const REQUEST_TIMEOUT_MS = 30000;
+// 40s (not a tighter value) because the very first request after a cold
+// start also has to load the local embedding model for RAG retrieval,
+// which alone was measured at ~9s -- a short timeout risked aborting
+// otherwise-healthy requests before Gemini ever got a real chance to
+// finish.
+const REQUEST_TIMEOUT_MS = 40000;
 
+// The SDK's own abort error class extends the plain `Error` constructor
+// without ever setting `.name`, so a caught instance reports `.name ===
+// "Error"` -- string/name-sniffing missed every real abort, letting the
+// raw "[GoogleGenerativeAI Error]: Request aborted when fetching ...:
+// This operation was aborted" reach the UI verbatim instead of a readable
+// message. Both classes are exported by the package specifically for
+// `instanceof` checks like this.
 function friendlyImageError(err) {
-  if (err?.name === "AbortError" || /timeout/i.test(err?.message || "")) {
+  if (err instanceof GoogleGenerativeAIAbortError) {
     return new Error("Chart analysis timed out — try again, or use a smaller/cropped screenshot.");
   }
-  if (err?.status === 429 || /quota|rate.?limit/i.test(err?.message || "")) {
+  if (err instanceof GoogleGenerativeAIFetchError && err.status === 429) {
+    return new Error("Chart analysis is temporarily at capacity — please try again in a few minutes.");
+  }
+  if (/quota|rate.?limit/i.test(err?.message || "")) {
     return new Error("Chart analysis is temporarily at capacity — please try again in a few minutes.");
   }
   return err;

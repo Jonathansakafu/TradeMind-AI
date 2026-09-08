@@ -124,7 +124,7 @@ function Analytics() {
       const res = await axios.post(
         `${API_URL}/api/ai/screenshot`,
         formData,
-        { headers: { ...headers, "Content-Type": "multipart/form-data" }, timeout: 45000 }
+        { headers: { ...headers, "Content-Type": "multipart/form-data" }, timeout: 55000 }
       );
       setScreenshotResult(res.data.analysis);
     } catch (err) {
