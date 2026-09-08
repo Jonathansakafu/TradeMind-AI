@@ -215,6 +215,13 @@ exports.analyzeScreenshot = async (req, res) => {
     // apply. Retrieved book context is a nice-to-have enrichment here, not
     // the point of the request, so a slow lookup degrades to "no book
     // context this time" instead of failing the whole analysis.
+    // Worst-case budget this endpoint can take: this 10s + geminiVision.js's
+    // REQUEST_TIMEOUT_MS (40s) = 50s. The frontend's axios `timeout` for
+    // this call (Analytics.jsx, addtrade.jsx) MUST stay comfortably above
+    // that sum -- it was left at a stale 45s once before after this RAG cap
+    // was added on top of an already-tight Gemini budget, so the client
+    // gave up (a raw "timeout of 45000ms exceeded") before ever seeing this
+    // endpoint's own properly formatted error response.
     const [retrievedChunks, bookSummary] = await Promise.all([
       Promise.race([
         ragService.retrieve(req.user._id, "chart pattern analysis", { topK: 6, sources: ["book"] }),
