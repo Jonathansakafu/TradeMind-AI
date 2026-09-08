@@ -166,6 +166,7 @@ function AddTrade() {
       fd.append("screenshot", file);
       const res = await axios.post(`${API_URL}/api/ai/detect-strategy`, fd, {
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "multipart/form-data" },
+        timeout: 45000,
       });
       setDetectedSetup(res.data);
       if (res.data.setup) {

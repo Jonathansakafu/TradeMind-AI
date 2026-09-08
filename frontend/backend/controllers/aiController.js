@@ -4,6 +4,7 @@ const BookConcept = require("../models/BookConcept");
 const claudeAI = require("../services/claudeAI");
 const ragService = require("../services/ragService");
 const geminiVision = require("../services/geminiVision");
+const { prepareImage } = require("../utils/prepareImage");
 const fs = require("fs");
 
 // Analyze single trade
@@ -202,9 +203,8 @@ exports.analyzeScreenshot = async (req, res) => {
       return res.status(400).json({ message: "Please upload a screenshot" });
     }
     const imageBuffer = fs.readFileSync(req.file.path);
-    const base64Image = imageBuffer.toString("base64");
-    const mimeType = req.file.mimetype;
     fs.unlinkSync(req.file.path);
+    const { base64: base64Image, mimeType } = await prepareImage(imageBuffer);
 
     const [retrievedChunks, bookSummary] = await Promise.all([
       ragService.retrieve(req.user._id, "chart pattern analysis", { topK: 6, sources: ["book"] }),
@@ -237,9 +237,8 @@ exports.detectStrategy = async (req, res) => {
       return res.status(400).json({ message: "Please provide a screenshot" });
     }
     const imageBuffer = fs.readFileSync(req.file.path);
-    const base64Image = imageBuffer.toString("base64");
-    const mimeType = req.file.mimetype;
     fs.unlinkSync(req.file.path);
+    const { base64: base64Image, mimeType } = await prepareImage(imageBuffer);
 
     const result = await geminiVision.detectTradeSetup(base64Image, mimeType);
     res.json(result);

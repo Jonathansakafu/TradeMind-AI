@@ -9,6 +9,22 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 // which concrete model backs it.
 const MODEL_NAME = "gemini-flash-latest";
 
+// The SDK sets no timeout at all unless one is passed explicitly -- a
+// slow-but-not-dead request (large image, model under load) could hang far
+// longer than a user would wait, surfacing only as "loading forever, then
+// a generic failure" once something else eventually cut the connection.
+const REQUEST_TIMEOUT_MS = 30000;
+
+function friendlyImageError(err) {
+  if (err?.name === "AbortError" || /timeout/i.test(err?.message || "")) {
+    return new Error("Chart analysis timed out — try again, or use a smaller/cropped screenshot.");
+  }
+  if (err?.status === 429 || /quota|rate.?limit/i.test(err?.message || "")) {
+    return new Error("Chart analysis is temporarily at capacity — please try again in a few minutes.");
+  }
+  return err;
+}
+
 // Groq (used everywhere else in this app) has no vision model -- chart
 // screenshot analysis needs an actual multimodal model, so this one
 // specific feature goes through Gemini instead, which is already
@@ -39,10 +55,15 @@ If the instrument/pair is identifiable on the chart (symbol label, watermark, et
     ragCtx ? " Note which retrieved source (cite by label) applies to this chart, in bookAlignment." : ""
   }`;
 
-  const result = await model.generateContent([
-    prompt,
-    { inlineData: { data: base64Image, mimeType } },
-  ]);
+  let result;
+  try {
+    result = await model.generateContent(
+      [prompt, { inlineData: { data: base64Image, mimeType } }],
+      { timeout: REQUEST_TIMEOUT_MS }
+    );
+  } catch (err) {
+    throw friendlyImageError(err);
+  }
 
   const text = result.response.text();
   try {
@@ -84,10 +105,15 @@ Respond ONLY in JSON with no markdown:
 
 "confidence" is 0-100. "reasoning" is one short sentence explaining what you saw that indicates this setup (e.g. a visible order block, a clean support bounce, structure break, etc). If the image isn't a readable trading chart at all, set "setup" to "Other", "confidence" to 0, and say so in reasoning.`;
 
-  const result = await model.generateContent([
-    prompt,
-    { inlineData: { data: base64Image, mimeType } },
-  ]);
+  let result;
+  try {
+    result = await model.generateContent(
+      [prompt, { inlineData: { data: base64Image, mimeType } }],
+      { timeout: REQUEST_TIMEOUT_MS }
+    );
+  } catch (err) {
+    throw friendlyImageError(err);
+  }
 
   const text = result.response.text();
   try {
