@@ -1,10 +1,16 @@
 import { useState, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
+import { Capacitor } from "@capacitor/core";
+import { TextToSpeech } from "@capacitor-community/text-to-speech";
 
-// Thin wrapper around the browser's built-in speech synthesis (works inside
-// the native app's WebView too, no extra plugin/API key needed). Picks a
-// voice matching the current UI language if the device has one installed;
-// falls back to the device default otherwise rather than failing silently.
+// `window.speechSynthesis` (the browser Web Speech API) is what the website
+// uses, but Android's Capacitor WebView doesn't reliably expose it -- on a
+// real device it's simply undefined, so the old implementation silently
+// hid the "read aloud" button in the native app while it worked fine on
+// the website. `@capacitor-community/text-to-speech` wraps the actual
+// native Android/iOS TTS engines instead, so it works inside the app too.
+const isNative = Capacitor.isNativePlatform();
+
 function useSpeech() {
   const { i18n } = useTranslation();
   const [speaking, setSpeaking] = useState(false);
@@ -17,7 +23,17 @@ function useSpeech() {
   }, [i18n.language]);
 
   const speak = useCallback((text) => {
-    if (typeof window === "undefined" || !window.speechSynthesis || !text) return;
+    if (!text) return;
+
+    if (isNative) {
+      setSpeaking(true);
+      TextToSpeech.speak({ text, lang: i18n.language })
+        .catch(() => {})
+        .finally(() => setSpeaking(false));
+      return;
+    }
+
+    if (typeof window === "undefined" || !window.speechSynthesis) return;
     window.speechSynthesis.cancel();
 
     const utterance = new SpeechSynthesisUtterance(text);
@@ -33,13 +49,15 @@ function useSpeech() {
   }, [pickVoice, i18n.language]);
 
   const stop = useCallback(() => {
-    if (typeof window !== "undefined" && window.speechSynthesis) {
+    if (isNative) {
+      TextToSpeech.stop().catch(() => {});
+    } else if (typeof window !== "undefined" && window.speechSynthesis) {
       window.speechSynthesis.cancel();
     }
     setSpeaking(false);
   }, []);
 
-  const isSupported = typeof window !== "undefined" && !!window.speechSynthesis;
+  const isSupported = isNative || (typeof window !== "undefined" && !!window.speechSynthesis);
 
   return { speak, stop, speaking, isSupported };
 }

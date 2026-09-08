@@ -40,19 +40,47 @@ const setCache = (key, data) => {
 // was retired 2026-06-17, breaking every AI feature in this app with a
 // silent 404 until this was traced down) — unlike geminiVision.js's
 // floating "-latest" alias, Groq's model IDs are fixed snapshots with no
-// auto-updating alias, so this string needs a manual check against
-// console.groq.com/docs/deprecations if it ever 404s again.
-const GROQ_MODEL = "openai/gpt-oss-120b";
+// auto-updating alias, so these strings need a manual check against
+// console.groq.com/docs/deprecations if either ever 404s again.
+//
+// Two models, deliberately: Groq's free/on-demand tier tracks the 200K
+// tokens/day cap separately PER MODEL, not per account. The automated
+// signal loop (server.js's 15-min interval, fanned out over every user and
+// ~10 pairs each) was pushing enough structured-JSON traffic through the
+// single model previously used here to exhaust that shared budget by
+// midday, which then 429'd Ask AI too since it was hitting the same pool.
+// Splitting the fast/background structured calls onto gpt-oss-20b (also
+// ~2x the tokens/sec, since it's the smaller model — a wash-negative for
+// latency-sensitive signal generation) and reserving gpt-oss-120b for the
+// slower, user-facing chat/RAG path effectively doubles total headroom and
+// stops the two workloads from starving each other.
+const GROQ_MODEL_FAST = "openai/gpt-oss-20b";
+const GROQ_MODEL_CHAT = "openai/gpt-oss-120b";
+
+// Surfaced instead of a raw provider error whenever a daily/rate quota is
+// hit — the previous behavior let Groq's raw JSON error body ("429
+// {\"error\":...}") reach the chat UI verbatim as if it were the AI's
+// answer.
+const RATE_LIMIT_MESSAGE = "The AI is temporarily at capacity — please try again in a few minutes.";
+
+function isRateLimitError(err) {
+  return err?.status === 429 || err?.error?.code === "rate_limit_exceeded";
+}
 
 const askGroq = async (prompt) => {
-  const completion = await getGroqClient().chat.completions.create({
-    messages: [{ role: "user", content: prompt }],
-    model: GROQ_MODEL,
-    temperature: 0.3,
-    max_tokens: 1500,
-    reasoning_effort: "low",
-  });
-  return completion.choices[0]?.message?.content || "";
+  try {
+    const completion = await getGroqClient().chat.completions.create({
+      messages: [{ role: "user", content: prompt }],
+      model: GROQ_MODEL_FAST,
+      temperature: 0.3,
+      max_tokens: 1500,
+      reasoning_effort: "low",
+    });
+    return completion.choices[0]?.message?.content || "";
+  } catch (err) {
+    if (isRateLimitError(err)) throw new Error(RATE_LIMIT_MESSAGE);
+    throw err;
+  }
 };
 
 // Gives Ask AI a real way to look up live market conditions instead of
@@ -120,35 +148,40 @@ async function executeMarketTool(name, rawArgs) {
 // tool-call round (fetch live data once, then answer) — this app's chat
 // endpoint doesn't need an open-ended agentic loop.
 async function askGroqWithTools(messages) {
-  const first = await getGroqClient().chat.completions.create({
-    model: GROQ_MODEL,
-    messages,
-    tools: MARKET_TOOLS,
-    tool_choice: "auto",
-    temperature: 0.3,
-    max_tokens: 1500,
-    reasoning_effort: "low",
-  });
-
-  const msg = first.choices[0]?.message;
-  if (msg?.tool_calls?.length) {
-    const toolResults = await Promise.all(msg.tool_calls.map(async (call) => ({
-      role: "tool",
-      tool_call_id: call.id,
-      content: JSON.stringify(await executeMarketTool(call.function.name, call.function.arguments)),
-    })));
-
-    const second = await getGroqClient().chat.completions.create({
-      model: GROQ_MODEL,
-      messages: [...messages, msg, ...toolResults],
+  try {
+    const first = await getGroqClient().chat.completions.create({
+      model: GROQ_MODEL_CHAT,
+      messages,
+      tools: MARKET_TOOLS,
+      tool_choice: "auto",
       temperature: 0.3,
       max_tokens: 1500,
       reasoning_effort: "low",
     });
-    return second.choices[0]?.message?.content || "";
-  }
 
-  return msg?.content || "";
+    const msg = first.choices[0]?.message;
+    if (msg?.tool_calls?.length) {
+      const toolResults = await Promise.all(msg.tool_calls.map(async (call) => ({
+        role: "tool",
+        tool_call_id: call.id,
+        content: JSON.stringify(await executeMarketTool(call.function.name, call.function.arguments)),
+      })));
+
+      const second = await getGroqClient().chat.completions.create({
+        model: GROQ_MODEL_CHAT,
+        messages: [...messages, msg, ...toolResults],
+        temperature: 0.3,
+        max_tokens: 1500,
+        reasoning_effort: "low",
+      });
+      return second.choices[0]?.message?.content || "";
+    }
+
+    return msg?.content || "";
+  } catch (err) {
+    if (isRateLimitError(err)) throw new Error(RATE_LIMIT_MESSAGE);
+    throw err;
+  }
 }
 
 // Streaming version of the above. Text deltas stream through immediately
@@ -157,16 +190,22 @@ async function askGroqWithTools(messages) {
 // per the OpenAI-compatible streaming shape, executed once the turn ends,
 // then a second streamed completion carries the actual answer.
 async function* streamGroqWithTools(messages) {
-  const stream = await getGroqClient().chat.completions.create({
-    model: GROQ_MODEL,
-    messages,
-    tools: MARKET_TOOLS,
-    tool_choice: "auto",
-    temperature: 0.3,
-    max_tokens: 1500,
-    reasoning_effort: "low",
-    stream: true,
-  });
+  let stream;
+  try {
+    stream = await getGroqClient().chat.completions.create({
+      model: GROQ_MODEL_CHAT,
+      messages,
+      tools: MARKET_TOOLS,
+      tool_choice: "auto",
+      temperature: 0.3,
+      max_tokens: 1500,
+      reasoning_effort: "low",
+      stream: true,
+    });
+  } catch (err) {
+    if (isRateLimitError(err)) throw new Error(RATE_LIMIT_MESSAGE);
+    throw err;
+  }
 
   const toolCalls = [];
   let finishReason = null;
@@ -194,14 +233,20 @@ async function* streamGroqWithTools(messages) {
       content: JSON.stringify(await executeMarketTool(call.function.name, call.function.arguments)),
     })));
 
-    const followup = await getGroqClient().chat.completions.create({
-      model: GROQ_MODEL,
-      messages: [...messages, assistantMsg, ...toolResults],
-      temperature: 0.3,
-      max_tokens: 1500,
-      reasoning_effort: "low",
-      stream: true,
-    });
+    let followup;
+    try {
+      followup = await getGroqClient().chat.completions.create({
+        model: GROQ_MODEL_CHAT,
+        messages: [...messages, assistantMsg, ...toolResults],
+        temperature: 0.3,
+        max_tokens: 1500,
+        reasoning_effort: "low",
+        stream: true,
+      });
+    } catch (err) {
+      if (isRateLimitError(err)) throw new Error(RATE_LIMIT_MESSAGE);
+      throw err;
+    }
     for await (const chunk of followup) {
       const delta = chunk.choices[0]?.delta?.content;
       if (delta) yield delta;

@@ -159,9 +159,16 @@ function MainLayout({ children }) {
       </aside>
 
       <div className="flex-1 min-w-0 md:ml-64 flex flex-col min-h-screen">
+        {/* `fixed` instead of `sticky`: the header stayed in the document
+            flow under `sticky`, which on Android's WebView could visibly
+            shift/glitch during the elastic overscroll bounce at the top of
+            the page. `fixed` anchors it to the viewport unconditionally, so
+            it never moves regardless of scroll or bounce. Positioned below
+            the status bar via `top` (not padding), so its own height stays
+            fixed and predictable for the spacer padding on <main> below. */}
         <div
-          className="md:hidden flex items-center justify-between px-4 py-3 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-20"
-          style={{ paddingTop: "calc(0.75rem + env(safe-area-inset-top))" }}
+          className="md:hidden fixed left-0 right-0 z-20 h-14 flex items-center justify-between px-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800"
+          style={{ top: "env(safe-area-inset-top)" }}
         >
           <button
             onClick={() => setSidebarOpen(true)}
@@ -175,7 +182,7 @@ function MainLayout({ children }) {
         </div>
 
         <main
-          className="flex-1 p-4 md:p-8"
+          className="flex-1 p-4 pt-[calc(3.5rem+env(safe-area-inset-top)+1rem)] md:p-8"
           style={{ paddingBottom: "max(1rem, calc(env(safe-area-inset-bottom) + 0.5rem))" }}
         >
           {children}
