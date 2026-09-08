@@ -185,19 +185,33 @@ const bruteForceSearch = async (userId, queryEmbedding, { topK, sources }) => {
 const searchScoped = async (userId, queryEmbedding, { topK, sources }) => {
   if (vectorSearchAvailable !== false) {
     try {
-      const vectorStage = {
-        index: VECTOR_INDEX_NAME,
-        path: "embedding",
-        queryVector: queryEmbedding,
-        numCandidates: Math.max(100, topK * 20),
-        limit: topK * 3,
-      };
-      if (userId) vectorStage.filter = { user: new mongoose.Types.ObjectId(userId) };
+      // `source` filtered *inside* $vectorSearch (a pre-filter, applied
+      // before the ANN ranking) rather than via a $match afterward — a
+      // post-hoc $match only narrows whatever the vector stage's own
+      // `limit` already returned, so a user with far more "trade" chunks
+      // than "book" chunks could have every one of the top candidates be
+      // trade chunks, leaving zero room for a genuinely relevant book
+      // passage that just didn't make that pre-filter cut. Filtering first
+      // means ranking only ever happens over the correctly-scoped pool.
+      const filter = userId
+        ? { $and: [{ source: { $in: sources } }, { user: new mongoose.Types.ObjectId(userId) }] }
+        : { source: { $in: sources } };
 
       const results = await DocumentChunk.aggregate([
-        { $vectorSearch: vectorStage },
-        { $match: { source: { $in: sources }, ...(userId ? {} : { user: { $exists: false } }) } },
-        { $limit: topK },
+        {
+          $vectorSearch: {
+            index: VECTOR_INDEX_NAME,
+            path: "embedding",
+            queryVector: queryEmbedding,
+            numCandidates: Math.max(100, topK * 20),
+            limit: topK,
+            filter,
+          },
+        },
+        // Belt-and-suspenders: no code path today creates a "guide" chunk
+        // with a `user` set, but $vectorSearch's filter has no $exists
+        // operator to assert that directly, unlike bruteForceSearch below.
+        ...(userId ? [] : [{ $match: { user: { $exists: false } } }]),
         {
           $project: {
             text: 1,
