@@ -24,6 +24,21 @@ const MODEL_NAME = "gemini-flash-latest";
 // finish.
 const REQUEST_TIMEOUT_MS = 40000;
 
+// Google's APIs return a structured google.rpc.RetryInfo error detail on
+// 429s (a `retryDelay` string like "42s"), the same standard pattern Groq
+// exposes via a retry-after header/message -- surfaced here the same way,
+// with the existing generic wording kept as the fallback if this specific
+// detail isn't present on a given response.
+function rateLimitWaitText(err) {
+  const retryInfo = err?.errorDetails?.find(
+    (d) => d["@type"]?.includes("RetryInfo") && d.retryDelay
+  );
+  const seconds = Number(retryInfo?.retryDelay?.replace(/s$/, ""));
+  if (!Number.isFinite(seconds) || seconds <= 0) return "a few minutes";
+  const minutes = Math.ceil(seconds / 60);
+  return minutes <= 1 ? "about a minute" : `about ${minutes} minutes`;
+}
+
 // The SDK's own abort error class extends the plain `Error` constructor
 // without ever setting `.name`, so a caught instance reports `.name ===
 // "Error"` -- string/name-sniffing missed every real abort, letting the
@@ -36,7 +51,7 @@ function friendlyImageError(err) {
     return new Error("Chart analysis timed out — try again, or use a smaller/cropped screenshot.");
   }
   if (err instanceof GoogleGenerativeAIFetchError && err.status === 429) {
-    return new Error("Chart analysis is temporarily at capacity — please try again in a few minutes.");
+    return new Error(`Chart analysis is temporarily at capacity — please try again in ${rateLimitWaitText(err)}.`);
   }
   if (/quota|rate.?limit/i.test(err?.message || "")) {
     return new Error("Chart analysis is temporarily at capacity — please try again in a few minutes.");
