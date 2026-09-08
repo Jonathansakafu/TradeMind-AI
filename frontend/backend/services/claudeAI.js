@@ -60,11 +60,32 @@ const GROQ_MODEL_CHAT = "openai/gpt-oss-120b";
 // Surfaced instead of a raw provider error whenever a daily/rate quota is
 // hit — the previous behavior let Groq's raw JSON error body ("429
 // {\"error\":...}") reach the chat UI verbatim as if it were the AI's
-// answer.
-const RATE_LIMIT_MESSAGE = "The AI is temporarily at capacity — please try again in a few minutes.";
-
+// answer. Groq tells us exactly how long the wait is (a `retry-after`
+// header, seconds; the error message also spells it out as e.g. "Please
+// try again in 13m22.223999999s") — worth surfacing so "try again in a
+// few minutes" doesn't read as a guess when it might really be much
+// longer (or much shorter).
 function isRateLimitError(err) {
   return err?.status === 429 || err?.error?.code === "rate_limit_exceeded";
+}
+
+function rateLimitMessage(err) {
+  let seconds = Number(err?.headers?.get?.("retry-after"));
+  if (!Number.isFinite(seconds) || seconds <= 0) {
+    const text = err?.error?.error?.message || err?.message || "";
+    const match = text.match(/try again in (?:(\d+)m)?([\d.]+)s/i);
+    if (match) {
+      seconds = (match[1] ? Number(match[1]) * 60 : 0) + Number(match[2]);
+    }
+  }
+
+  let wait = "a few minutes";
+  if (Number.isFinite(seconds) && seconds > 0) {
+    const minutes = Math.ceil(seconds / 60);
+    wait = minutes <= 1 ? "about a minute" : `about ${minutes} minutes`;
+  }
+
+  return `The AI is temporarily at capacity — please try again in ${wait}.`;
 }
 
 const askGroq = async (prompt) => {
@@ -78,7 +99,7 @@ const askGroq = async (prompt) => {
     });
     return completion.choices[0]?.message?.content || "";
   } catch (err) {
-    if (isRateLimitError(err)) throw new Error(RATE_LIMIT_MESSAGE);
+    if (isRateLimitError(err)) throw new Error(rateLimitMessage(err));
     throw err;
   }
 };
@@ -179,7 +200,7 @@ async function askGroqWithTools(messages) {
 
     return msg?.content || "";
   } catch (err) {
-    if (isRateLimitError(err)) throw new Error(RATE_LIMIT_MESSAGE);
+    if (isRateLimitError(err)) throw new Error(rateLimitMessage(err));
     throw err;
   }
 }
@@ -203,7 +224,7 @@ async function* streamGroqWithTools(messages) {
       stream: true,
     });
   } catch (err) {
-    if (isRateLimitError(err)) throw new Error(RATE_LIMIT_MESSAGE);
+    if (isRateLimitError(err)) throw new Error(rateLimitMessage(err));
     throw err;
   }
 
@@ -244,7 +265,7 @@ async function* streamGroqWithTools(messages) {
         stream: true,
       });
     } catch (err) {
-      if (isRateLimitError(err)) throw new Error(RATE_LIMIT_MESSAGE);
+      if (isRateLimitError(err)) throw new Error(rateLimitMessage(err));
       throw err;
     }
     for await (const chunk of followup) {
