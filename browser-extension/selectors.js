@@ -3,18 +3,21 @@
 // touch the polling/safety/reporting logic in content.js.
 //
 // STATUS: demo-mode detection, Buy/Sell, expiry presets, pair selection
-// (including a post-switch verification check), reading a closed trade's
-// win/loss result, and amount entry are all confirmed against real
-// markup/screenshots from the user's live Pocket Option account. Amount
-// entry took three attempts: direct .value-set and simulated keystrokes
-// both silently failed live tests (DOM property updated, visible field
-// didn't); a scan of the live page while the Amount popup was open
-// revealed the real mechanism -- a ".virtual-keyboard" panel of real
-// clickable buttons -- which setAmount now clicks directly, the same
-// technique already proven for Buy/Sell. This click-based rework still
-// needs one live test to fully confirm before this file can be
-// considered done. Every function fails closed (returns null/false)
-// rather than guessing, and content.js reports "failed" with a clear
+// (including a post-switch verification check), and reading a closed
+// trade's win/loss result are all confirmed against real markup/
+// screenshots from the user's live Pocket Option account.
+//
+// Amount entry is deliberately NOT automated. Three different live-tested
+// approaches (direct .value-set, simulated keystrokes, and real clicks on
+// the on-screen ".virtual-keyboard" digit/backspace buttons -- confirmed
+// real markup, same click technique that works for Buy/Sell) all left the
+// field completely unchanged, including the keypad's own internal
+// display not reacting to its own buttons being clicked -- evidence
+// Pocket Option filters out script-dispatched clicks specifically for
+// this control. checkAmountIsSet (see its own comment) verifies a stake
+// is already set rather than trying to set one. Every function fails
+// closed (returns null/false) rather than guessing, and content.js
+// reports "failed" with a clear
 // reason whenever that happens instead of pretending to have placed or
 // read a trade.
 
@@ -110,87 +113,35 @@
     return findRowValue("Time", ".value__val");
   }
 
-  // Confirmed live, across two separate tests: neither a raw .value set +
-  // input/change event, nor simulated per-character keydown/keyup events,
-  // actually update Pocket Option's real trade amount -- the DOM property
-  // read back the new value both times, but the visible field (and
-  // presumably the real trade amount) stayed unchanged either way.
+  // Setting the Amount field programmatically was tried three separate
+  // ways in live tests -- direct .value-set, simulated per-character
+  // keydown/keyup, and real clicks on the on-screen ".virtual-keyboard"
+  // digit/backspace buttons (confirmed real markup, and the same
+  // humanClick technique that works for Buy/Sell and pair selection) --
+  // and all three left the field, and even the keypad's own internal "$1"
+  // running-total display, completely unchanged. That last result in
+  // particular (the site's own widget not reacting to its own buttons
+  // being clicked) points to Pocket Option filtering out
+  // script-dispatched clicks specifically for this control, which no
+  // amount of further event-sequence tweaking can work around from a
+  // content script.
   //
-  // The actual mechanism, confirmed by scanning the live page while the
-  // Amount popup was open: clicking the Amount input opens a
-  // ".virtual-keyboard" panel, where every digit key is a
-  // ".virtual-keyboard__input" showing its own digit as plain text, and
-  // the backspace key is the one ".virtual-keyboard__input" with no text
-  // and an icon child. Real clicks on these -- the same humanClick
-  // technique already proven for Buy/Sell and pair selection -- are what
-  // actually drive Pocket Option's own click handlers, which is
-  // presumably what its real internal state actually listens to.
+  // Deliberately not attempted further: the extension now leaves Amount
+  // alone entirely and just confirms a real (non-zero) value is already
+  // showing -- the trader sets their stake once in Pocket Option before
+  // starting a session (see the extension README), and it's expected to
+  // persist across trades the same way it already does for manual
+  // trading, same as this session's own `stake` setting already implies.
   function findAmountInput() {
     return findRowValue("Amount", "input[type='text']");
   }
 
-  function findVirtualKeyboard() {
-    return document.querySelector(".virtual-keyboard");
-  }
-
-  function findKeypadDigit(char) {
-    const panel = findVirtualKeyboard();
-    if (!panel) return null;
-    for (const key of panel.querySelectorAll(".virtual-keyboard__input")) {
-      if (key.textContent?.trim() === char) return key;
-    }
-    return null;
-  }
-
-  function findKeypadBackspace() {
-    const panel = findVirtualKeyboard();
-    if (!panel) return null;
-    for (const key of panel.querySelectorAll(".virtual-keyboard__input")) {
-      if (!key.textContent?.trim() && key.querySelector("svg, img")) return key;
-    }
-    return null;
-  }
-
-  // Opens the virtual keyboard (if not already open), clears whatever
-  // amount is currently entered via real backspace clicks, types the
-  // target stake digit by digit via real digit clicks, then verifies the
-  // real Amount input shows the target value -- never assumes the clicks
-  // took.
-  async function setAmount(stake) {
+  function checkAmountIsSet() {
     const input = findAmountInput();
     if (!input) return { ok: false, reason: "Amount input not found" };
-
-    if (!findVirtualKeyboard()) {
-      await humanClick(input);
-      const opened = await waitForCondition(() => !!findVirtualKeyboard(), { timeout: 2000 });
-      if (!opened) return { ok: false, reason: "Virtual keyboard didn't open after clicking Amount" };
-    }
-
-    // More backspaces than any realistic existing amount could need --
-    // harmless once the field is already empty/zero.
-    for (let i = 0; i < 12; i++) {
-      const backspace = findKeypadBackspace();
-      if (!backspace) return { ok: false, reason: "Backspace key not found on virtual keyboard" };
-      await humanClick(backspace);
-      await new Promise((r) => setTimeout(r, 80));
-    }
-
-    for (const char of String(stake)) {
-      const key = findKeypadDigit(char);
-      if (!key) return { ok: false, reason: `Keypad key "${char}" not found` };
-      await humanClick(key);
-      await new Promise((r) => setTimeout(r, 80));
-    }
-
-    // Closing the keyboard (click elsewhere, not on a keypad key) is
-    // expected to commit the value -- confirmed by re-reading the Amount
-    // input afterward rather than assumed.
-    document.body.click();
-    await new Promise((r) => setTimeout(r, 200));
-
-    const finalInput = findAmountInput();
-    if (!finalInput || finalInput.value.replace(/,/g, "") !== String(stake)) {
-      return { ok: false, reason: `Amount field shows "${finalInput?.value}" instead of ${stake} after using the virtual keyboard` };
+    const value = Number(String(input.value).replace(/,/g, ""));
+    if (!value || value <= 0) {
+      return { ok: false, reason: `No stake amount set in Pocket Option (shows "${input.value}") -- set one manually before starting a session` };
     }
     return { ok: true };
   }
@@ -319,7 +270,12 @@
 
   // Attempts to place a trade. Returns { ok: true } or { ok: false, reason }
   // — never throws, never guesses success.
-  async function placeTrade({ pair, signal, stake, expiresInMinutes }) {
+  //
+  // Note there's no `stake` param, unlike an earlier version of this
+  // function: it no longer tries to set the trade amount at all (see
+  // checkAmountIsSet's comment for why), so it just confirms whatever the
+  // trader last set manually in Pocket Option is a real, non-zero value.
+  async function placeTrade({ pair, signal, expiresInMinutes }) {
     if (isDemoMode() !== true) {
       return { ok: false, reason: "Could not confirm Demo mode — refusing to trade" };
     }
@@ -334,7 +290,7 @@
     if (!expiryOption) return { ok: false, reason: `No ${expiresInMinutes}-minute expiry preset available` };
     await humanClick(expiryOption);
 
-    const amountResult = await setAmount(stake);
+    const amountResult = checkAmountIsSet();
     if (!amountResult.ok) return amountResult;
 
     const targetButton = signal === "buy" ? findBuyButton() : findSellButton();

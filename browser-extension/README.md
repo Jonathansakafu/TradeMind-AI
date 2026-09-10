@@ -4,16 +4,18 @@ Sideloaded Chrome/Edge extension that auto-executes Quick Trade signals on a **P
 
 ## Status
 
-**Phase 1 (this code): backend contract, safety gating, and extension skeleton — done and testable.**
-**Phase 2: the actual Pocket Option selectors in `selectors.js` — placeholder.** Pocket Option's trading UI is behind login, so its real markup can't be researched without a live, logged-in session. Every selector in `selectors.js` is an educated guess and is expected to need correcting against the real site before trades can actually be placed. Until then, the extension will connect, poll, and correctly report every signal as `"failed"` with a clear reason in the popup's status log — nothing will silently misbehave.
+Backend contract, safety gating, and the extension skeleton are done. `selectors.js`'s real Pocket Option markup — demo-mode detection, pair selection, expiry, Buy/Sell, and reading a trade's win/loss result — has been confirmed against the live site and is expected to work.
+
+**One deliberate limitation: the extension does not set your stake amount.** Three different ways of doing that programmatically (direct value assignment, simulated typing, and real clicks on the on-screen number pad) were all tested live and none of them worked — including the number pad's own on-screen total not updating when its buttons were clicked via script, which points to Pocket Option specifically blocking script-triggered clicks on that control. **Set your stake once in Pocket Option before starting a session** — it should stay in place across trades the same way it already does when you trade manually. The extension checks that a real (non-zero) amount is showing before every trade, and refuses with a clear error if it isn't, rather than trading with $0 or an unexpected amount.
 
 ## Install (Developer Mode — this can't go through the Chrome Web Store)
 
 1. Open `chrome://extensions`, turn on **Developer mode** (top right).
 2. Click **Load unpacked**, select this `browser-extension` folder.
 3. Open a Pocket Option demo account tab and log in.
-4. Click the extension's icon, paste the Session ID and Bot Token shown on the app's Trading Robot page (only appears when you start a Quick Trade session with "Auto-Execute" checked), click Connect.
-5. Keep the Pocket Option tab open and visible/focused — Chrome throttles timers in hidden/backgrounded tabs to about once a minute, which is too slow relative to trade expiries.
+4. Set your desired stake amount in Pocket Option's own Amount field — the extension won't set this for you (see Status above), so it needs to already be showing the amount you want to trade.
+5. Click the extension's icon, paste the Session ID and Bot Token shown on the app's Trading Robot page (only appears when you start a Quick Trade session with "Auto-Execute" checked), click Connect.
+6. Keep the Pocket Option tab open and visible/focused — Chrome throttles timers in hidden/backgrounded tabs to about once a minute, which is too slow relative to trade expiries.
 
 **After updating the extension** (Reload in `chrome://extensions`), also **refresh any already-open Pocket Option tab** (F5) — the old content script left running in that tab doesn't get the update and becomes unable to talk to the extension at all ("Extension context invalidated" in the console), which otherwise fails silently.
 
