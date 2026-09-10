@@ -416,6 +416,62 @@ Extract practical trading concepts, strategies, and rules that can improve tradi
   }
 };
 
+// Self-verification pass — a second, independent LLM call that checks a
+// freshly generated signal against the exact context it was generated
+// from, catching a real failure mode of single-pass generation: reasoning
+// that drifts from (or contradicts) its own retrieved context, or
+// confidence that isn't actually earned by the evidence given. This is a
+// genuinely different technique from RAG (retrieval) -- it's
+// critique/self-consistency, run after generation rather than before it.
+// Scoped to the main forex/MT5 path only, not Quick Trade: that loop
+// already iterates up to ~10 pairs/cycle and deliberately skips extra
+// per-pair cost for latency (see analyzeQuickSignal's own comment);
+// doubling its LLM calls would compound that further for a lower-stakes
+// binary direction call with no entry/SL/TP to sanity-check anyway.
+async function verifySignal(pair, signal, fusedContext) {
+  const { signal: direction, entry, stopLoss, takeProfit } = signal;
+
+  // Free, instant, deterministic check first: does the trade geometry
+  // even make sense for the stated direction? Skipped when any level is
+  // unset/0 (real prices are never exactly 0, so this is a safe "no
+  // levels to check" signal rather than a false positive).
+  if (entry && stopLoss && takeProfit) {
+    const geometryOk = direction === "buy"
+      ? stopLoss < entry && entry < takeProfit
+      : direction === "sell"
+      ? takeProfit < entry && entry < stopLoss
+      : true;
+    if (!geometryOk) {
+      return { verified: false, note: "Stop-loss/take-profit levels are on the wrong side of entry for this trade direction." };
+    }
+  }
+
+  const prompt = `You are a risk-review checker for TradeMind AI. A trading signal was just generated from the context below. Check whether the signal's own reasoning is actually supported by this context, and whether its confidence level seems earned (not overstated). Respond ONLY in JSON with no markdown:
+{
+  "verified": true or false,
+  "note": ""
+}
+
+Context the signal was generated from:
+${fusedContext || "(no additional context beyond price action was available)"}
+
+Generated signal for ${pair}:
+${JSON.stringify({ signal: direction, confidence: signal.confidence, reasoning: signal.reasoning, entry, stopLoss, takeProfit })}
+
+Set verified=false only if the reasoning contradicts the given context, cites something not actually present in it, or the confidence is clearly overstated relative to the evidence. A signal resting on price action alone (no book/trade context) can still be verified=true if its own reasoning is internally consistent. Keep note under 20 words.`;
+
+  try {
+    const text = await askGroq(prompt);
+    const result = JSON.parse(text.replace(/```json|```/g, "").trim());
+    return { verified: result.verified !== false, note: result.note || "" };
+  } catch {
+    // A failed verification call (rate limit, bad JSON) shouldn't cost the
+    // trader the underlying signal -- surfaced as "not verified" rather
+    // than "verification found a problem."
+    return { verified: null, note: "" };
+  }
+}
+
 // Smart Market Analysis — signals are sized for an intraday trade the
 // trader closes within roughly 3-4 hours, not a multi-day swing position
 // (previously the prompt left holding period unstated, and the model
@@ -498,6 +554,13 @@ Respond ONLY in JSON with no markdown:
     const result = JSON.parse(text.replace(/```json|```/g, "").trim());
     result.source = source;
     result.sourceLabel = sourceLabel;
+
+    if (result.signal && result.signal !== "wait") {
+      const verification = await verifySignal(pair, result, fusedContext);
+      result.verified = verification.verified;
+      result.verificationNote = verification.note;
+    }
+
     setCache(cacheKey, result);
     return result;
   } catch {

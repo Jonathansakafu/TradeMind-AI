@@ -261,6 +261,8 @@ exports.autoGenerate = async (userId) => {
               confidence: analysis.confidence || 60,
               source: analysis.source || "ai_auto",
               sourceLabel: analysis.sourceLabel || "AI Auto",
+              verified: analysis.verified ?? null,
+              verificationNote: analysis.verificationNote,
               read: false,
             });
             notifications.push(notification);

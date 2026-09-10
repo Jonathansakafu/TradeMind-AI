@@ -19,6 +19,13 @@ const notificationSchema = new mongoose.Schema({
     default: "ai_auto",
   },
   sourceLabel: { type: String },
+  // Set by a second, independent LLM pass that checks the signal's own
+  // reasoning against the same context it was generated from (see
+  // claudeAI.js's verifySignal) -- null means verification wasn't run or
+  // itself failed (e.g. a rate limit), which is deliberately distinct from
+  // false (the check ran and found a real problem).
+  verified: { type: Boolean, default: null },
+  verificationNote: { type: String },
   read: { type: Boolean, default: false },
   type: {
     type: String,

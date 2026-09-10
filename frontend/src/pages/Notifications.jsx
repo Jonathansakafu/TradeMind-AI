@@ -6,6 +6,7 @@ import {
   Bell, RefreshCw, BookOpen, Brain,
   History, X, CheckCheck, PlusCircle, Zap,
   TrendingUp, TrendingDown, Clock,
+  ShieldCheck, ShieldAlert,
 } from "lucide-react";
 import { API_URL } from "../config/api";
 import SessionBanner from "../components/SessionBanner";
@@ -386,11 +387,36 @@ function Notifications() {
 
               {/* Footer */}
               <div className="flex items-center justify-between flex-wrap gap-2">
-                <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium ${
-                  SOURCE_COLORS[n.source] || SOURCE_COLORS.ai_auto
-                }`}>
-                  {SOURCE_ICONS[n.source] || SOURCE_ICONS.ai_auto}
-                  <span>{n.sourceLabel || "AI Auto"}</span>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium ${
+                    SOURCE_COLORS[n.source] || SOURCE_COLORS.ai_auto
+                  }`}>
+                    {SOURCE_ICONS[n.source] || SOURCE_ICONS.ai_auto}
+                    <span>{n.sourceLabel || "AI Auto"}</span>
+                  </div>
+                  {/* A second, independent AI pass checks each forex/MT5
+                      signal against its own context before it's shown --
+                      null (Quick Trade signals, or older records from
+                      before this existed) shows nothing rather than a
+                      misleading "unverified" warning. */}
+                  {n.verified === true && (
+                    <div
+                      title="A second AI pass confirmed this signal's reasoning matches its context"
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
+                    >
+                      <ShieldCheck size={14} />
+                      <span>AI-verified</span>
+                    </div>
+                  )}
+                  {n.verified === false && (
+                    <div
+                      title={n.verificationNote || "A second AI pass flagged a possible issue with this signal"}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium text-amber-400 bg-amber-500/10 border-amber-500/20"
+                    >
+                      <ShieldAlert size={14} />
+                      <span>Unverified</span>
+                    </div>
+                  )}
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                   {!n.read && (
