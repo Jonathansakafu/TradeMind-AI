@@ -106,14 +106,55 @@
     return findRowValue("Time", ".value__val");
   }
 
-  // The main-panel Amount box is a real <input>, not just a display div —
-  // worth trying to set its value directly (focus + set .value + dispatch
-  // "input") before assuming the on-screen keypad inside the dropdown
-  // modal is required. Not yet confirmed whether Pocket Option's Vue app
-  // actually reacts to a programmatic value change here; that's the next
-  // thing to verify live.
+  // Confirmed live: a raw .value set + "input"/"change" event on the
+  // Amount <input> does NOT update Pocket Option's actual trade amount --
+  // the DOM property reads back the new value, but the visible field
+  // stays unchanged. That points to a masked/formatted-input widget that
+  // only reacts to genuine keystrokes, not a bulk value assignment --
+  // exactly the situation typeIntoField (below) already handles for the
+  // pair search box, confirmed working there. setAmount reuses that same
+  // per-character keydown/input/keyup technique rather than the earlier
+  // (now-disproven) direct-assignment approach.
+  //
+  // Deliberately NOT using the on-screen "Calculator" keypad seen in a
+  // live screenshot -- its digit keys are plain matchable text (0-9, ".",
+  // same technique as Buy/Sell) but its backspace key's actual DOM
+  // representation (icon vs. text, e.g. possibly an <svg> with no
+  // matchable textContent at all) was never confirmed, so hard-coding a
+  // guess for it risked a second silent failure. Simulated keystrokes
+  // sidestep that entirely.
   function findAmountInput() {
     return findRowValue("Amount", "input[type='text']");
+  }
+
+  // Clears whatever's currently entered with real Backspace keystrokes
+  // (never a bulk .value reset -- that's exactly what didn't work above),
+  // types the target stake digit by digit via typeIntoField, then
+  // verifies the field actually shows the target value rather than
+  // assuming the keystrokes took.
+  async function setAmount(stake) {
+    const input = findAmountInput();
+    if (!input) return { ok: false, reason: "Amount input not found" };
+
+    input.focus();
+    // More backspaces than any realistic existing amount could need --
+    // harmless once the field is already empty.
+    for (let i = 0; i < 12; i++) {
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Backspace", bubbles: true }));
+      input.value = input.value.slice(0, -1);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new KeyboardEvent("keyup", { key: "Backspace", bubbles: true }));
+      await new Promise((r) => setTimeout(r, 40));
+    }
+
+    await typeIntoField(input, String(stake));
+    input.blur();
+    await new Promise((r) => setTimeout(r, 200));
+
+    if (input.value.replace(/,/g, "") !== String(stake)) {
+      return { ok: false, reason: `Amount field shows "${input.value}" instead of ${stake} after simulated typing` };
+    }
+    return { ok: true };
   }
 
   // Confirmed from the live site: the search box inside the pair picker is
@@ -255,21 +296,8 @@
     if (!expiryOption) return { ok: false, reason: `No ${expiresInMinutes}-minute expiry preset available` };
     await humanClick(expiryOption);
 
-    const amountEl = findAmountInput();
-    if (!amountEl) return { ok: false, reason: "Amount input not found (selectors.js needs updating for this site)" };
-    amountEl.focus();
-    amountEl.value = String(stake);
-    amountEl.dispatchEvent(new Event("input", { bubbles: true }));
-    amountEl.dispatchEvent(new Event("change", { bubbles: true }));
-    amountEl.blur();
-    // TODO Phase 2, verify live: if Pocket Option's Vue app doesn't pick
-    // up this programmatic value change, fall back to clicking the
-    // on-screen keypad digits (.virtual-keyboard__input, inside the
-    // ".amount-list-modal" opened by clicking this same input) instead.
-    await new Promise((r) => setTimeout(r, 300));
-    if (amountEl.value.replace(/,/g, "") !== String(stake)) {
-      return { ok: false, reason: `Amount field shows "${amountEl.value}" instead of ${stake} — direct value-set didn't take, needs the on-screen keypad fallback` };
-    }
+    const amountResult = await setAmount(stake);
+    if (!amountResult.ok) return amountResult;
 
     const targetButton = signal === "buy" ? findBuyButton() : findSellButton();
     if (!targetButton) return { ok: false, reason: `${signal === "buy" ? "Buy" : "Sell"} button not found` };
