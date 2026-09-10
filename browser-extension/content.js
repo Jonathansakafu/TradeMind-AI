@@ -52,11 +52,32 @@ async function handleNotification(config, notification) {
   const waitMs = (notification.expiresInMinutes || 5) * 60 * 1000 + EXPIRY_BUFFER_MS;
   await new Promise((r) => setTimeout(r, waitMs));
 
-  const outcome = window.TradeMindSelectors.readLastResult();
-  await appendStatusLog(
-    outcome === "unknown" ? "warn" : "info",
-    `${notification.pair}: result = ${outcome}${outcome === "unknown" ? " (falling back to manual Won/Lost in the app)" : ""}`
-  );
+  // A placed trade must never go unreported just because reading its
+  // result threw -- confirmed live: a trade placed successfully but never
+  // appeared in Session Trades or moved the session's Risk counter,
+  // because readLastResult (or something after it) failed silently and
+  // the report below was never reached, leaving the notification
+  // "claimed" on the backend forever with no resolution. "unknown" is
+  // the same safe fallback readLastResult itself already returns when it
+  // can't confidently read a result -- this just guarantees that fallback
+  // is actually reported instead of lost.
+  let outcome = "unknown";
+  try {
+    outcome = window.TradeMindSelectors.readLastResult();
+  } catch (err) {
+    console.error("[TradeMind AI] Reading trade result failed:", err);
+  }
+
+  try {
+    await appendStatusLog(
+      outcome === "unknown" ? "warn" : "info",
+      `${notification.pair}: result = ${outcome}${outcome === "unknown" ? " (falling back to manual Won/Lost in the app)" : ""}`
+    );
+  } catch {
+    // Storage itself may be the thing that's broken (e.g. extension
+    // context invalidated) -- a logging failure must not block the
+    // actual report below, which is the part that matters.
+  }
 
   await sendToBackground({
     type: "report",
