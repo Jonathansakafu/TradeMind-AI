@@ -15,7 +15,12 @@ function renderStatus({ sessionId, lastHeartbeat }) {
   } else if (connected) {
     statusTextEl.textContent = "Connected";
   } else {
-    statusTextEl.textContent = "Connected, waiting for the Pocket Option tab...";
+    // The single most common cause: the content script only injects into
+    // tabs opened (or refreshed) after the extension was loaded/updated —
+    // a Pocket Option tab that was already open when "Load unpacked" ran
+    // never got it, and silently never will until refreshed. Saying this
+    // directly here avoids a round of "why is nothing happening" digging.
+    statusTextEl.textContent = "Connected, waiting for the Pocket Option tab... If this doesn't clear in ~20s, refresh (Cmd+R) the Pocket Option tab — it needs a reload to pick up the extension.";
   }
 }
 

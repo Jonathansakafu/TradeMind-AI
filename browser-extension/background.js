@@ -44,7 +44,17 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name !== "heartbeat-check") return;
   const { sessionId, lastHeartbeat } = await chrome.storage.local.get(["sessionId", "lastHeartbeat"]);
   if (!sessionId) return; // not connected yet, nothing to check
-  if (!lastHeartbeat || Date.now() - lastHeartbeat > 90 * 1000) {
+
+  // Distinguished because the likely cause differs: a heartbeat that was
+  // arriving and then stopped means the tab was probably closed,
+  // backgrounded, or navigated away; one that NEVER arrived at all is the
+  // single most common cause -- the tab was already open before the
+  // extension was loaded/reloaded, so its content script was never
+  // actually injected (a well-known MV3 gotcha, not a real failure), and
+  // no amount of waiting fixes that without a refresh.
+  if (!lastHeartbeat) {
+    appendStatusLog("warn", "No response yet from the Pocket Option tab — if it was already open before you loaded/reloaded the extension, refresh it (Cmd+R) so the extension's code actually gets injected.");
+  } else if (Date.now() - lastHeartbeat > 90 * 1000) {
     appendStatusLog("warn", "No response from the Pocket Option tab in over 90s — is it still open and focused?");
   }
 });
