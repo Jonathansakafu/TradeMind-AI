@@ -3,14 +3,17 @@
 // touch the polling/safety/reporting logic in content.js.
 //
 // STATUS: demo-mode detection, Buy/Sell, expiry presets, pair selection
-// (including a post-switch verification check), and reading a closed
-// trade's win/loss result are all confirmed against real markup/
-// screenshots from the user's live Pocket Option account. Amount entry
-// (setAmount) was reworked to simulated keystrokes after a live test
-// showed the original direct-value-set approach silently failed
-// (DOM property updated, visible field didn't) -- the keystroke rework
-// itself still needs one live test to confirm before this whole file can
-// be considered done. Every function fails closed (returns null/false)
+// (including a post-switch verification check), reading a closed trade's
+// win/loss result, and amount entry are all confirmed against real
+// markup/screenshots from the user's live Pocket Option account. Amount
+// entry took three attempts: direct .value-set and simulated keystrokes
+// both silently failed live tests (DOM property updated, visible field
+// didn't); a scan of the live page while the Amount popup was open
+// revealed the real mechanism -- a ".virtual-keyboard" panel of real
+// clickable buttons -- which setAmount now clicks directly, the same
+// technique already proven for Buy/Sell. This click-based rework still
+// needs one live test to fully confirm before this file can be
+// considered done. Every function fails closed (returns null/false)
 // rather than guessing, and content.js reports "failed" with a clear
 // reason whenever that happens instead of pretending to have placed or
 // read a trade.
@@ -107,53 +110,87 @@
     return findRowValue("Time", ".value__val");
   }
 
-  // Confirmed live: a raw .value set + "input"/"change" event on the
-  // Amount <input> does NOT update Pocket Option's actual trade amount --
-  // the DOM property reads back the new value, but the visible field
-  // stays unchanged. That points to a masked/formatted-input widget that
-  // only reacts to genuine keystrokes, not a bulk value assignment --
-  // exactly the situation typeIntoField (below) already handles for the
-  // pair search box, confirmed working there. setAmount reuses that same
-  // per-character keydown/input/keyup technique rather than the earlier
-  // (now-disproven) direct-assignment approach.
+  // Confirmed live, across two separate tests: neither a raw .value set +
+  // input/change event, nor simulated per-character keydown/keyup events,
+  // actually update Pocket Option's real trade amount -- the DOM property
+  // read back the new value both times, but the visible field (and
+  // presumably the real trade amount) stayed unchanged either way.
   //
-  // Deliberately NOT using the on-screen "Calculator" keypad seen in a
-  // live screenshot -- its digit keys are plain matchable text (0-9, ".",
-  // same technique as Buy/Sell) but its backspace key's actual DOM
-  // representation (icon vs. text, e.g. possibly an <svg> with no
-  // matchable textContent at all) was never confirmed, so hard-coding a
-  // guess for it risked a second silent failure. Simulated keystrokes
-  // sidestep that entirely.
+  // The actual mechanism, confirmed by scanning the live page while the
+  // Amount popup was open: clicking the Amount input opens a
+  // ".virtual-keyboard" panel, where every digit key is a
+  // ".virtual-keyboard__input" showing its own digit as plain text, and
+  // the backspace key is the one ".virtual-keyboard__input" with no text
+  // and an icon child. Real clicks on these -- the same humanClick
+  // technique already proven for Buy/Sell and pair selection -- are what
+  // actually drive Pocket Option's own click handlers, which is
+  // presumably what its real internal state actually listens to.
   function findAmountInput() {
     return findRowValue("Amount", "input[type='text']");
   }
 
-  // Clears whatever's currently entered with real Backspace keystrokes
-  // (never a bulk .value reset -- that's exactly what didn't work above),
-  // types the target stake digit by digit via typeIntoField, then
-  // verifies the field actually shows the target value rather than
-  // assuming the keystrokes took.
+  function findVirtualKeyboard() {
+    return document.querySelector(".virtual-keyboard");
+  }
+
+  function findKeypadDigit(char) {
+    const panel = findVirtualKeyboard();
+    if (!panel) return null;
+    for (const key of panel.querySelectorAll(".virtual-keyboard__input")) {
+      if (key.textContent?.trim() === char) return key;
+    }
+    return null;
+  }
+
+  function findKeypadBackspace() {
+    const panel = findVirtualKeyboard();
+    if (!panel) return null;
+    for (const key of panel.querySelectorAll(".virtual-keyboard__input")) {
+      if (!key.textContent?.trim() && key.querySelector("svg, img")) return key;
+    }
+    return null;
+  }
+
+  // Opens the virtual keyboard (if not already open), clears whatever
+  // amount is currently entered via real backspace clicks, types the
+  // target stake digit by digit via real digit clicks, then verifies the
+  // real Amount input shows the target value -- never assumes the clicks
+  // took.
   async function setAmount(stake) {
     const input = findAmountInput();
     if (!input) return { ok: false, reason: "Amount input not found" };
 
-    input.focus();
-    // More backspaces than any realistic existing amount could need --
-    // harmless once the field is already empty.
-    for (let i = 0; i < 12; i++) {
-      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Backspace", bubbles: true }));
-      input.value = input.value.slice(0, -1);
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-      input.dispatchEvent(new KeyboardEvent("keyup", { key: "Backspace", bubbles: true }));
-      await new Promise((r) => setTimeout(r, 40));
+    if (!findVirtualKeyboard()) {
+      await humanClick(input);
+      const opened = await waitForCondition(() => !!findVirtualKeyboard(), { timeout: 2000 });
+      if (!opened) return { ok: false, reason: "Virtual keyboard didn't open after clicking Amount" };
     }
 
-    await typeIntoField(input, String(stake));
-    input.blur();
+    // More backspaces than any realistic existing amount could need --
+    // harmless once the field is already empty/zero.
+    for (let i = 0; i < 12; i++) {
+      const backspace = findKeypadBackspace();
+      if (!backspace) return { ok: false, reason: "Backspace key not found on virtual keyboard" };
+      await humanClick(backspace);
+      await new Promise((r) => setTimeout(r, 80));
+    }
+
+    for (const char of String(stake)) {
+      const key = findKeypadDigit(char);
+      if (!key) return { ok: false, reason: `Keypad key "${char}" not found` };
+      await humanClick(key);
+      await new Promise((r) => setTimeout(r, 80));
+    }
+
+    // Closing the keyboard (click elsewhere, not on a keypad key) is
+    // expected to commit the value -- confirmed by re-reading the Amount
+    // input afterward rather than assumed.
+    document.body.click();
     await new Promise((r) => setTimeout(r, 200));
 
-    if (input.value.replace(/,/g, "") !== String(stake)) {
-      return { ok: false, reason: `Amount field shows "${input.value}" instead of ${stake} after simulated typing` };
+    const finalInput = findAmountInput();
+    if (!finalInput || finalInput.value.replace(/,/g, "") !== String(stake)) {
+      return { ok: false, reason: `Amount field shows "${finalInput?.value}" instead of ${stake} after using the virtual keyboard` };
     }
     return { ok: true };
   }
