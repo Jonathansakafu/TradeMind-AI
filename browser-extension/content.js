@@ -26,6 +26,38 @@ async function getConfig() {
   return { sessionId, botToken, backendUrl };
 }
 
+// Unlike the "poll" message, "report" was never checked for success --
+// if the MV3 service worker in background.js happened to be killed and
+// restarted by Chrome right at that moment (it's non-persistent and can
+// be terminated at any time, unrelated to whether this tab is still
+// open), the report could vanish with nothing noticing or retrying.
+// Confirmed live: real trades placed on Pocket Option never showed up as
+// Trade records in the app at all, meaning the report itself -- not just
+// reading the result -- can be the thing that's lost. Retries with
+// backoff before giving up, and logs clearly either way instead of
+// failing silently.
+async function reportOutcome(config, notificationId, outcome) {
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const response = await sendToBackground({
+      type: "report",
+      backendUrl: config.backendUrl,
+      sessionId: config.sessionId,
+      token: config.botToken,
+      notificationId,
+      outcome,
+    });
+    if (response?.ok) return true;
+    if (attempt < 3) await new Promise((r) => setTimeout(r, 2000 * attempt));
+  }
+  console.error(`[TradeMind AI] Failed to report outcome "${outcome}" for notification ${notificationId} after 3 attempts`);
+  try {
+    await appendStatusLog("error", "Could not report a trade result to the backend after retrying — it may be stuck unresolved in your session.");
+  } catch {
+    // best-effort only
+  }
+  return false;
+}
+
 async function handleNotification(config, notification) {
   const result = await window.TradeMindSelectors.placeTrade({
     pair: notification.pair,
@@ -36,14 +68,7 @@ async function handleNotification(config, notification) {
 
   if (!result.ok) {
     await appendStatusLog("error", `${notification.pair}: ${result.reason}`);
-    await sendToBackground({
-      type: "report",
-      backendUrl: config.backendUrl,
-      sessionId: config.sessionId,
-      token: config.botToken,
-      notificationId: notification.id,
-      outcome: "failed",
-    });
+    await reportOutcome(config, notification.id, "failed");
     return;
   }
 
@@ -79,14 +104,7 @@ async function handleNotification(config, notification) {
     // actual report below, which is the part that matters.
   }
 
-  await sendToBackground({
-    type: "report",
-    backendUrl: config.backendUrl,
-    sessionId: config.sessionId,
-    token: config.botToken,
-    notificationId: notification.id,
-    outcome,
-  });
+  await reportOutcome(config, notification.id, outcome);
 }
 
 async function pollCycle() {

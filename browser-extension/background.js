@@ -10,11 +10,27 @@ async function appendStatusLog(level, message) {
   await chrome.storage.local.set({ statusLog: next });
 }
 
+// fetch() only rejects on a genuine network failure -- a 400/404/500
+// response is still a "successful" fetch as far as it's concerned, and
+// r.json() happily parses this app's error responses too (they're always
+// JSON, e.g. {message: "..."}). Without checking r.ok, a real backend
+// error (the notification already resolved, an invalid token, whatever)
+// would still resolve this promise chain and report {ok: true} back to
+// content.js -- which would then treat a trade's outcome as successfully
+// recorded when the backend actually rejected it and never created
+// anything. Confirmed as a real gap: trades placed on Pocket Option
+// weren't reliably becoming Trade records in the app.
+async function fetchJson(url, options) {
+  const r = await fetch(url, options);
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data?.message || `HTTP ${r.status}`);
+  return data;
+}
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === "poll") {
     const { backendUrl, sessionId, token } = message;
-    fetch(`${backendUrl}/api/quick-trade-bot/pending?sessionId=${sessionId}&token=${token}`)
-      .then((r) => r.json())
+    fetchJson(`${backendUrl}/api/quick-trade-bot/pending?sessionId=${sessionId}&token=${token}`)
       .then((data) => sendResponse({ ok: true, data }))
       .catch((err) => sendResponse({ ok: false, error: err.message }));
     return true; // keep the message channel open for the async response
@@ -22,12 +38,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   if (message.type === "report") {
     const { backendUrl, sessionId, token, notificationId, outcome } = message;
-    fetch(`${backendUrl}/api/quick-trade-bot/executed`, {
+    fetchJson(`${backendUrl}/api/quick-trade-bot/executed`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ sessionId, token, notificationId, outcome }),
     })
-      .then((r) => r.json())
       .then((data) => sendResponse({ ok: true, data }))
       .catch((err) => sendResponse({ ok: false, error: err.message }));
     return true;
