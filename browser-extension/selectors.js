@@ -2,17 +2,18 @@
 // (once we have real selectors from the live site) stay localized and never
 // touch the polling/safety/reporting logic in content.js.
 //
-// STATUS: demo-mode detection, Buy/Sell, expiry presets, and pair
-// selection (including a post-switch verification check) are all
-// confirmed against real markup/screenshots from the user's live Pocket
-// Option account. Amount entry is a best-effort first attempt (a real
-// <input>, direct value-set not yet verified live) with a documented
-// on-screen-keypad fallback if it doesn't work — that, plus reading back
-// the win/loss result (readLastResult), are the two remaining pieces that
-// need a first live test to confirm. Every function fails closed (returns
-// null/false) rather than guessing, and content.js reports "failed" with
-// a clear reason whenever that happens instead of pretending to have
-// placed or read a trade.
+// STATUS: demo-mode detection, Buy/Sell, expiry presets, pair selection
+// (including a post-switch verification check), and reading a closed
+// trade's win/loss result are all confirmed against real markup/
+// screenshots from the user's live Pocket Option account. Amount entry
+// (setAmount) was reworked to simulated keystrokes after a live test
+// showed the original direct-value-set approach silently failed
+// (DOM property updated, visible field didn't) -- the keystroke rework
+// itself still needs one live test to confirm before this whole file can
+// be considered done. Every function fails closed (returns null/false)
+// rather than guessing, and content.js reports "failed" with a clear
+// reason whenever that happens instead of pretending to have placed or
+// read a trade.
 
 (function () {
   // Try a list of candidate selectors in order, return the first match.
@@ -308,11 +309,28 @@
     return { ok: true };
   }
 
-  // Attempts to read the outcome of the most recent trade. Returns
-  // "win" | "loss" | "unknown" — never guesses between win/loss.
+  // Confirmed live (real markup from the trade history list): each closed
+  // trade is a ".deals-list__item", ordered newest-first (matches the
+  // on-screen top-to-bottom order). A win's row contains a
+  // ".price-up" element reading "+$X.XX" (seen twice -- once as
+  // "centered price-up" showing the total payout, once as plain
+  // "price-up" showing just the profit with the "+" prefix). content.js
+  // only calls this after waiting out the trade's expiry + a buffer, so
+  // the most recent item is expected to already be this trade's result,
+  // not a still-open one.
+  //
+  // The loss row's exact markup was never separately confirmed (only its
+  // "$0" text, inferred from a screenshot) -- rather than guess a class
+  // name for it too, "not a win" is treated as "loss" here, matching how
+  // a loss visibly has no "+"-prefixed price-up text. If a real loss ever
+  // gets misread, tighten this to require a confirmed loss-specific
+  // marker instead of inferring it by absence.
   function readLastResult() {
-    // TODO Phase 2: locate the real result/history readout once known.
-    return "unknown";
+    const items = document.querySelectorAll(".deals-list__item");
+    if (items.length === 0) return "unknown";
+
+    const profitText = items[0].querySelector(".item-row .price-up")?.textContent?.trim();
+    return profitText?.startsWith("+") ? "win" : "loss";
   }
 
   window.TradeMindSelectors = {
