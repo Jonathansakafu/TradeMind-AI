@@ -40,6 +40,7 @@ app.use("/api/mt5", require("./routes/mt5Routes"));
 app.use("/api/mt5", require("./routes/mt5PublicRoutes"));
 app.use("/api/sessions", require("./routes/sessionRoutes"));
 app.use("/api/quick-trade-bot", require("./routes/quickTradeBotRoutes"));
+app.use("/api/cron", require("./routes/cronRoutes"));
 
 app.get("/api/health", (req, res) =>
   res.json({ status: "ok", app: "TradeMind AI" })
@@ -62,27 +63,9 @@ app.listen(PORT, async () => {
     .then((count) => console.log(`📘 User guide indexed (${count} chunks)`))
     .catch((err) => console.warn("Guide indexing skipped:", err.message));
 
-  const User = require("./models/User");
-  const { autoGenerate } = require("./controllers/notificationController");
-
-  const runAutoGenerate = async () => {
-    try {
-      const users = await User.find({}).select("_id");
-      if (users.length === 0) {
-        console.log("No users found — skipping auto-generate");
-        return;
-      }
-      console.log(`🔔 Auto-generating for ${users.length} user(s)...`);
-      for (const user of users) {
-        await autoGenerate(user._id);
-        // Pumzika sekunde 5 kati ya users
-        await new Promise((resolve) => setTimeout(resolve, 5000));
-      }
-      console.log("✅ Auto-generate complete");
-    } catch (err) {
-      console.error("Auto-generate error:", err.message);
-    }
-  };
+  const { runAutoGenerateForAllUsers } = require("./services/cronJobs");
+  const runAutoGenerate = () =>
+    runAutoGenerateForAllUsers().catch((err) => console.error("Auto-generate error:", err.message));
 
   // Anza mara moja baada ya sekunde 30
   setTimeout(runAutoGenerate, 30 * 1000);
@@ -92,5 +75,14 @@ app.listen(PORT, async () => {
   // app has multiple users: every-15-min generation for every user
   // multiplies AI (Groq) and market-data (Twelve Data/CoinGecko) API calls
   // accordingly and could hit rate limits or run up costs at real scale.
+  //
+  // This alone is NOT reliable on Render's free tier: the whole process
+  // (this timer included) suspends after ~15 minutes with no incoming
+  // HTTP request, so it only actually fires while something else happens
+  // to be keeping the server awake. routes/cronRoutes.js's external-
+  // triggerable endpoint (see .github/workflows/cron-generate.yml) is
+  // what makes generation reliable when nobody's actively using the app --
+  // this interval is left in place as a harmless bonus for whenever the
+  // server is already awake between those external pings.
   setInterval(runAutoGenerate, 15 * 60 * 1000);
 });

@@ -1,0 +1,28 @@
+name: Trigger signal generation
+
+# Render's free tier suspends the whole backend process after ~15 minutes
+# with no incoming HTTP request -- including its own in-process
+# setInterval, which is what used to drive automatic signal generation.
+# This workflow is the reliable trigger instead: it runs on a schedule
+# regardless of whether anyone has the app open, and hitting the endpoint
+# both wakes the backend up (if asleep) and runs generation directly,
+# rather than hoping the in-process timer happened to survive.
+#
+# GitHub's own schedule trigger isn't perfectly precise (it can run a few
+# minutes late under load), but that's a much smaller gap than "never,
+# unless someone happens to have the app open."
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call the backend's cron-generate endpoint
+        run: |
+          curl -sS -f "https://trademind-ai-backend-2tnj.onrender.com/api/cron/generate?secret=${{ secrets.CRON_SECRET }}" \
+            -o response.json -w "\nHTTP %{http_code}\n"
+          cat response.json
