@@ -23,7 +23,20 @@ const allowedOrigins = (process.env.FRONTEND_URL || "http://localhost:5173")
 
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+    // A missing Origin header (most non-browser HTTP clients, e.g. the
+    // MT5 EA, or an external cron ping) was already allowed. A Chrome
+    // extension's fetch IS a real browser context though, and Chrome
+    // sends a genuine Origin: chrome-extension://<id> header with it --
+    // confirmed live, this was silently rejecting every one of the
+    // browser extension's backend calls (poll and report alike) with a
+    // generic "Failed to fetch" client-side, no error visible server-side
+    // at all. Restricting cross-origin browser access only matters for
+    // this app's own cookie/JWT-based routes; the extension talks only to
+    // token-protected public routes (bot token, cron secret) where Origin
+    // was never the real access control to begin with.
+    if (!origin || allowedOrigins.includes(origin) || origin.startsWith("chrome-extension://")) {
+      return callback(null, true);
+    }
     callback(new Error("Not allowed by CORS"));
   },
 }));
