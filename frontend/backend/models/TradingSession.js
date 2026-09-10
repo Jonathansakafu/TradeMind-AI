@@ -50,6 +50,20 @@ const tradingSessionSchema = new mongoose.Schema(
       type: Number,
     },
 
+    // MT5 only -- when true, a freshly generated forex signal that passes
+    // the AI self-verification check (claudeAI.js's verifySignal) is sent
+    // straight to the trader's MT5 EA without waiting for a manual "Send
+    // to MT5" click. Off by default; the trader opts in per session.
+    autoSendToMT5: {
+      type: Boolean,
+      default: false,
+    },
+
+    mt5LotSize: {
+      type: Number,
+      default: 0.01,
+    },
+
     status: {
       type: String,
       enum: ["active", "stopped_profit", "stopped_risk", "stopped_trades", "stopped_manual"],

@@ -9,6 +9,7 @@ const startSession = async (req, res) => {
     const {
       mode, profitTarget, riskLimit, maxTrades, pairs,
       stake, payoutPercent, accountType, accountReady, autoExecute,
+      autoSendToMT5, mt5LotSize,
     } = req.body;
 
     if (!mode || !profitTarget || !riskLimit || !maxTrades) {
@@ -72,6 +73,8 @@ const startSession = async (req, res) => {
       autoExecute: canAutoExecute,
       botToken: canAutoExecute ? crypto.randomBytes(32).toString("hex") : undefined,
       botTokenCreatedAt: canAutoExecute ? new Date() : undefined,
+      autoSendToMT5: mode === "mt5" && !!autoSendToMT5,
+      mt5LotSize: mode === "mt5" && mt5LotSize ? Number(mt5LotSize) : 0.01,
     });
 
     res.status(201).json(session);

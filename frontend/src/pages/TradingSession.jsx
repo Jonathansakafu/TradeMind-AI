@@ -92,6 +92,8 @@ function TradingSession() {
   const [accountType, setAccountType] = useState("demo");
   const [accountReady, setAccountReady] = useState(false);
   const [autoExecute, setAutoExecute] = useState(false);
+  const [autoSendToMT5, setAutoSendToMT5] = useState(false);
+  const [mt5LotSize, setMt5LotSize] = useState("0.01");
   const [copiedField, setCopiedField] = useState(null);
 
   const copyToClipboard = (text, field) => {
@@ -158,6 +160,8 @@ function TradingSession() {
           autoExecute: mode === "quick_trade" && accountType === "demo" && autoExecute,
           stake: mode === "quick_trade" ? Number(stake) : undefined,
           payoutPercent: mode === "quick_trade" ? Number(payoutPercent) : undefined,
+          autoSendToMT5: mode === "mt5" && autoSendToMT5,
+          mt5LotSize: mode === "mt5" ? Number(mt5LotSize) : undefined,
         },
         { headers }
       );
@@ -306,10 +310,46 @@ function TradingSession() {
                 )}
               </>
             ) : (
-              <p className="text-xs text-slate-400 dark:text-slate-500">
-                Requires your MT5 EA to have connected at least once — set it up on the{" "}
-                <Link to="/mt5" className="text-green-600 dark:text-green-400 hover:underline">MT5 page</Link> first if you haven't.
-              </p>
+              <>
+                <p className="text-xs text-slate-400 dark:text-slate-500 mb-4">
+                  Requires your MT5 EA to have connected at least once — set it up on the{" "}
+                  <Link to="/mt5" className="text-green-600 dark:text-green-400 hover:underline">MT5 page</Link> first if you haven't.
+                </p>
+
+                <label className="flex items-start gap-3 cursor-pointer bg-slate-100 dark:bg-slate-950/50 rounded-xl p-3 mb-3">
+                  <input
+                    type="checkbox"
+                    checked={autoSendToMT5}
+                    onChange={(e) => setAutoSendToMT5(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 accent-green-500 flex-shrink-0"
+                  />
+                  <span className="text-sm text-slate-600 dark:text-slate-300">
+                    <span className="font-semibold text-slate-900 dark:text-white flex items-center gap-1.5">
+                      <Bot size={14} /> Auto-send AI-verified signals
+                    </span>
+                    Skip the manual "Send to MT5" tap for signals that pass the AI's own verification check — your EA executes them immediately. Unverified signals still wait for you to review.
+                    {accountType === "real" && (
+                      <span className="block mt-1.5 text-amber-500 dark:text-amber-400 font-medium">
+                        Real account — trades will execute with real money, with no manual check in between.
+                      </span>
+                    )}
+                  </span>
+                </label>
+
+                {autoSendToMT5 && (
+                  <div>
+                    <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Lot size per trade</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      value={mt5LotSize}
+                      onChange={(e) => setMt5LotSize(e.target.value)}
+                      className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-xl outline-none focus:border-green-500 transition text-slate-900 dark:text-white"
+                    />
+                  </div>
+                )}
+              </>
             )}
           </div>
 

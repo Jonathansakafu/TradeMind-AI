@@ -1,6 +1,8 @@
+const crypto = require("crypto");
 const Notification = require("../models/Notification");
 const Trade = require("../models/Trade");
 const TradingSession = require("../models/TradingSession");
+const MT5Signal = require("../models/MT5Signal");
 const marketService = require("../services/marketService");
 const newsService = require("../services/newsService");
 const claudeAI = require("../services/claudeAI");
@@ -121,6 +123,36 @@ async function generateQuickTradeSignals(userId, session) {
     }
   }
   return { created, lastError };
+}
+
+// Mirrors mt5Controller.sendSignal's MT5Signal shape exactly -- this is the
+// same record the trader's EA polls for via /api/mt5/pending, just created
+// automatically instead of from a manual "Send to MT5" click. A failure
+// here is logged and swallowed rather than thrown: it must never cost the
+// trader the Notification itself, which already exists by the time this
+// runs.
+async function autoForwardToMT5(userId, session, notification) {
+  try {
+    await MT5Signal.create({
+      user: userId,
+      pair: notification.pair.replace("/", ""),
+      action: notification.signal,
+      accountType: session.accountType === "real" ? "real" : "demo",
+      entry: notification.entry,
+      stopLoss: notification.stopLoss || null,
+      takeProfit: notification.takeProfit || null,
+      lotSize: session.mt5LotSize || 0.01,
+      confidence: notification.confidence,
+      source: notification.source,
+      sourceLabel: `${notification.sourceLabel || "AI Auto"} (auto-sent)`,
+      reasoning: notification.reasoning,
+      status: "sent",
+      token: crypto.randomBytes(32).toString("hex"),
+    });
+    console.log(`🤖 Auto-forwarded AI-verified signal to MT5: ${notification.signal} ${notification.pair}`);
+  } catch (err) {
+    console.error(`Auto-forward to MT5 failed for ${notification.pair}:`, err.message);
+  }
 }
 
 exports.autoGenerate = async (userId) => {
@@ -267,6 +299,15 @@ exports.autoGenerate = async (userId) => {
             });
             notifications.push(notification);
             console.log(`✅ Notification created: ${analysis.signal} ${pair}`);
+
+            // Hands-off automation, opt-in per session: only forward a
+            // signal that passed the AI's own self-verification pass
+            // (claudeAI.js's verifySignal) -- an unverified or
+            // verification-unavailable (null) signal still waits for
+            // manual review via the "Send to MT5" button, same as today.
+            if (analysis.verified === true && latestMt5?.status === "active" && latestMt5.autoSendToMT5) {
+              await autoForwardToMT5(userId, latestMt5, notification);
+            }
           } else {
             console.log(`⏭ Skipped duplicate: ${pair} ${analysis.signal}`);
           }
