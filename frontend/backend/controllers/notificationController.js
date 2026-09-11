@@ -99,7 +99,16 @@ async function generateQuickTradeSignals(userId, session) {
         formattedPair, currentPrice, historical, [], { bookSummary, momentum }
       );
 
-      if (analysis.direction && analysis.direction !== "wait") {
+      // Every non-"wait" signal was auto-executed regardless of how
+      // confident the AI actually was in it. Live results (mostly losses
+      // out of the trades the system itself placed) are the real
+      // evidence this needed tightening -- a plain confidence floor is
+      // the simplest, cheapest lever to try first.
+      const MIN_QUICK_TRADE_CONFIDENCE = 65;
+      if (
+        analysis.direction && analysis.direction !== "wait" &&
+        (analysis.confidence || 0) >= MIN_QUICK_TRADE_CONFIDENCE
+      ) {
         await Notification.create({
           user: userId,
           pair,

@@ -48,22 +48,47 @@ exports.getPending = async (req, res) => {
       $or: [{ botStatus: { $exists: false } }, { botStatus: "pending" }],
     }).sort({ createdAt: 1 });
 
-    const unexpired = candidates.filter((n) => {
-      if (!n.expiresInMinutes) return true;
-      return now - new Date(n.createdAt).getTime() < n.expiresInMinutes * 60 * 1000;
-    });
+    // A Quick Trade signal is a short-term momentum read -- by the time
+    // the extension's poll picks it up (normally within ~20s, but
+    // confirmed live this can stretch to minutes when the tab/connection
+    // is flaky), acting on a stale one means trading against momentum
+    // that's no longer current. expiresInMinutes alone doesn't catch
+    // this: that field is the PLACED TRADE's own duration (e.g. a
+    // 5-minute binary option), not how long the signal itself stays
+    // valid to act on -- a signal can still be well inside its own
+    // expiresInMinutes window while being based on a read that's
+    // minutes old. This is a separate, much shorter freshness gate.
+    const SIGNAL_FRESHNESS_MS = 90 * 1000;
+    const fresh = [];
+    const stale = [];
+    for (const n of candidates) {
+      const age = now - new Date(n.createdAt).getTime();
+      const withinOwnExpiry = !n.expiresInMinutes || age < n.expiresInMinutes * 60 * 1000;
+      if (withinOwnExpiry && age <= SIGNAL_FRESHNESS_MS) fresh.push(n);
+      else stale.push(n);
+    }
+
+    if (stale.length > 0) {
+      await Notification.updateMany(
+        { _id: { $in: stale.map((n) => n._id) } },
+        {
+          botStatus: "failed",
+          botError: "Signal went stale before the extension could act on it (connection was likely too slow or interrupted)",
+        }
+      );
+    }
 
     const claimedAt = new Date();
-    if (unexpired.length > 0) {
+    if (fresh.length > 0) {
       await Notification.updateMany(
-        { _id: { $in: unexpired.map((n) => n._id) } },
+        { _id: { $in: fresh.map((n) => n._id) } },
         { botStatus: "claimed", botClaimedAt: claimedAt }
       );
     }
 
     res.json({
       active: true,
-      notifications: unexpired.map((n) => ({
+      notifications: fresh.map((n) => ({
         id: n._id,
         pair: n.pair,
         signal: n.signal,
