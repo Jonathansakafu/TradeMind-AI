@@ -98,6 +98,15 @@ const tradingSessionSchema = new mongoose.Schema(
     botLastPolledAt: {
       type: Date,
     },
+
+    // Tracks when a Quick Trade generation cycle was last triggered from
+    // the extension's own poll (see quickTradeBotController.getPending) --
+    // not from the (unreliable, confirmed live) external cron. Lets that
+    // poll-triggered generation self-throttle to roughly once every few
+    // minutes instead of firing on literally every 20s poll tick.
+    lastQuickTradeGenAt: {
+      type: Date,
+    },
   },
   {
     timestamps: true,

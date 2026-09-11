@@ -38,8 +38,33 @@ exports.getPending = async (req, res) => {
       return res.json({ active: false });
     }
 
-    session.botLastPolledAt = new Date();
+    const pollTime = new Date();
+    session.botLastPolledAt = pollTime;
+
+    // Piggybacks Quick Trade signal generation on the extension's own
+    // poll, which is already reliably hitting this endpoint every ~20s
+    // whenever it's connected -- confirmed live to be far more dependable
+    // than the external GitHub Actions cron (real gaps of 1.5-3+ hours
+    // instead of the configured 10 minutes, a known limitation of
+    // frequent scheduled triggers on smaller repos). Self-throttled to
+    // roughly once every 3 minutes via lastQuickTradeGenAt, set BEFORE
+    // the (unawaited) generation call so back-to-back polls within that
+    // window don't all trigger their own cycle. Fire-and-forget: this
+    // response must not block on a multi-pair AI generation cycle just to
+    // return whatever's already pending.
+    const GENERATION_THROTTLE_MS = 3 * 60 * 1000;
+    const dueForGeneration = !session.lastQuickTradeGenAt ||
+      pollTime - session.lastQuickTradeGenAt > GENERATION_THROTTLE_MS;
+    if (dueForGeneration) session.lastQuickTradeGenAt = pollTime;
+
     await session.save();
+
+    if (dueForGeneration) {
+      const { generateQuickTradeSignals } = require("./notificationController");
+      generateQuickTradeSignals(session.user, session).catch((err) =>
+        console.error("Poll-triggered quick trade generation failed:", err.message)
+      );
+    }
 
     const now = Date.now();
     const candidates = await Notification.find({

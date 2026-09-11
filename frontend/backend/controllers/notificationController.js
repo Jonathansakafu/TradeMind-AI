@@ -133,6 +133,12 @@ async function generateQuickTradeSignals(userId, session) {
   }
   return { created, lastError };
 }
+// Exported so quickTradeBotController.getPending can trigger generation
+// directly, tied to the extension's own poll -- see that file's comment
+// for why (GitHub Actions' scheduled cron doesn't fire reliably enough
+// at a 10-minute cadence for this repo, confirmed live: real gaps were
+// 1.5-3+ hours, not 10 minutes).
+exports.generateQuickTradeSignals = generateQuickTradeSignals;
 
 // Mirrors mt5Controller.sendSignal's MT5Signal shape exactly -- this is the
 // same record the trader's EA polls for via /api/mt5/pending, just created
