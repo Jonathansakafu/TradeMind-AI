@@ -4,7 +4,7 @@ import axios from "axios";
 import MainLayout from "../layouts/MainLayout";
 import {
   TrendingUp, TrendingDown, Search, Download,
-  X, CheckCircle, RefreshCw, LineChart
+  X, CheckCircle, RefreshCw, LineChart, Pencil
 } from "lucide-react";
 import { API_URL } from "../config/api";
 import { downloadFile } from "../utils/nativeDownload";
@@ -46,6 +46,15 @@ function TradeHistory() {
   const [closeLoading, setCloseLoading] = useState(false);
   const [showCloseSnapshot, setShowCloseSnapshot] = useState(false);
   const [fetchingCurrentPrice, setFetchingCurrentPrice] = useState(false);
+  // Separate from the price-based Close Trade flow above (that one
+  // computes P&L from entry/exit price and pip values, which quick-trade
+  // binary outcomes don't have at all) -- this is a direct correction for
+  // an already-closed trade whose outcome/P&L was recorded wrong, e.g. by
+  // the browser extension misreading a result live on Pocket Option.
+  const [editingTrade, setEditingTrade] = useState(null);
+  const [editOutcome, setEditOutcome] = useState("win");
+  const [editProfitLoss, setEditProfitLoss] = useState("");
+  const [editLoading, setEditLoading] = useState(false);
   const { headers } = useAuth();
   const isDesktop = useMediaQuery("(min-width: 1024px)");
   // Shared with PriceTicker (also rendered on this page) — previously this
@@ -165,6 +174,30 @@ function TradeHistory() {
   const previewClose = exitPrice && closingTrade
     ? calculateClosePL(closingTrade, exitPrice)
     : null;
+
+  const openEditTrade = (trade) => {
+    setEditingTrade(trade);
+    setEditOutcome(trade.outcome || "win");
+    setEditProfitLoss(String(trade.profitLoss ?? ""));
+  };
+
+  const saveEditTrade = async () => {
+    if (!editingTrade || editProfitLoss === "") return;
+    setEditLoading(true);
+    try {
+      await axios.put(
+        `${API_URL}/api/trades/${editingTrade._id}`,
+        { outcome: editOutcome, profitLoss: Number(editProfitLoss) },
+        { headers }
+      );
+      setEditingTrade(null);
+      await fetchTrades();
+    } catch {
+      alert("Failed to update trade");
+    } finally {
+      setEditLoading(false);
+    }
+  };
 
   const formatPrice = (pair, price) => {
     if (!price) return "—";
@@ -358,7 +391,7 @@ function TradeHistory() {
                     >
                       <LineChart size={14} />
                     </button>
-                    {!trade.outcome && (
+                    {!trade.outcome ? (
                       <button
                         onClick={() => {
                           setClosingTrade(trade);
@@ -369,6 +402,14 @@ function TradeHistory() {
                         className="px-3 py-2 rounded-lg text-xs font-bold bg-green-500/10 border border-green-500/30 text-green-400"
                       >
                         Close
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => openEditTrade(trade)}
+                        aria-label="Correct this trade's result"
+                        className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400"
+                      >
+                        <Pencil size={14} />
                       </button>
                     )}
                   </div>
@@ -525,7 +566,7 @@ function TradeHistory() {
                           >
                             <LineChart size={13} />
                           </button>
-                          {!trade.outcome && (
+                          {!trade.outcome ? (
                             <button
                               onClick={() => {
                                 setClosingTrade(trade);
@@ -538,6 +579,15 @@ function TradeHistory() {
                               className="px-3 py-1.5 rounded-lg text-xs font-bold bg-green-500/10 border border-green-500/30 text-green-400 hover:bg-green-500/20 transition whitespace-nowrap"
                             >
                               Close
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => openEditTrade(trade)}
+                              title="Correct this trade's result"
+                              aria-label="Correct this trade's result"
+                              className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition"
+                            >
+                              <Pencil size={13} />
                             </button>
                           )}
                         </div>
@@ -763,6 +813,81 @@ function TradeHistory() {
           pips={previewClose.pips}
           outcome={previewClose.outcome}
         />
+      )}
+
+      {/* Edit Result Modal — corrects an already-closed trade's outcome/
+          P&L directly (e.g. the auto-execute extension misread a Pocket
+          Option result). Session progress (Risk/Profit/Trades) recalculates
+          automatically server-side once this saves. */}
+      {editingTrade && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl w-full max-w-sm shadow-2xl">
+            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-200 dark:border-slate-800">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white">Correct Result</h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+                  {editingTrade.pair} — {editingTrade.direction?.toUpperCase()}
+                </p>
+              </div>
+              <button
+                onClick={() => setEditingTrade(null)}
+                aria-label="Close"
+                className="p-2 rounded-xl text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="text-sm text-slate-500 dark:text-slate-400 mb-2 block font-medium">Outcome</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {["win", "loss", "breakeven"].map((o) => (
+                    <button
+                      key={o}
+                      onClick={() => setEditOutcome(o)}
+                      className={`py-2.5 rounded-xl text-sm font-bold capitalize transition ${
+                        editOutcome === o
+                          ? o === "win" ? "bg-green-500 text-slate-950"
+                            : o === "loss" ? "bg-red-500 text-white"
+                            : "bg-slate-500 text-white"
+                          : "bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400"
+                      }`}
+                    >
+                      {o}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm text-slate-500 dark:text-slate-400 mb-2 block font-medium">
+                  Profit / Loss ($)
+                </label>
+                <input
+                  type="number"
+                  step="any"
+                  value={editProfitLoss}
+                  onChange={(e) => setEditProfitLoss(e.target.value)}
+                  placeholder="e.g. -10 for a $10 loss"
+                  className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:border-green-500 p-3.5 rounded-xl outline-none transition text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 font-mono text-sm"
+                />
+              </div>
+
+              <button
+                onClick={saveEditTrade}
+                disabled={editProfitLoss === "" || editLoading}
+                className="w-full bg-green-500 hover:bg-green-600 disabled:opacity-40 text-slate-950 font-bold py-4 rounded-xl transition flex items-center justify-center gap-2 text-base"
+              >
+                {editLoading ? (
+                  <div className="w-5 h-5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <><CheckCircle size={18} /> Save Correction</>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
     </MainLayout>
