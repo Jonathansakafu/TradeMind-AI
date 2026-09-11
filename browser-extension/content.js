@@ -88,7 +88,7 @@ async function handleNotification(config, notification) {
   // is actually reported instead of lost.
   let outcome = "unknown";
   try {
-    outcome = window.TradeMindSelectors.readLastResult();
+    outcome = await window.TradeMindSelectors.readLastResult(notification.pair);
   } catch (err) {
     console.error("[TradeMind AI] Reading trade result failed:", err);
   }

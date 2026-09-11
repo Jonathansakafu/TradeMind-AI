@@ -318,12 +318,35 @@
   // a loss visibly has no "+"-prefixed price-up text. If a real loss ever
   // gets misread, tighten this to require a confirmed loss-specific
   // marker instead of inferring it by absence.
-  function readLastResult() {
-    const items = document.querySelectorAll(".deals-list__item");
-    if (items.length === 0) return "unknown";
+  //
+  // Confirmed live this CAN misfire: a trade was reported as a win when
+  // Pocket Option's own history showed it as a loss ($0/$0, no "+" text
+  // anywhere) -- the status log's heartbeat warnings around the same
+  // moment point at the tab/connection being unstable right then, most
+  // likely leaving items[0] as a DIFFERENT, already-resolved trade that
+  // hadn't been pushed out of top position yet by this trade's real
+  // result landing late. Matching the top item's pair name (plain text
+  // in the same row, e.g. "AUD/USD OTC") against the pair this specific
+  // trade was actually placed on catches that mismatch -- with a short
+  // retry first, in case it's just a normal timing lag rather than a
+  // genuine mismatch -- instead of confidently reporting whatever trade
+  // happens to be on top.
+  async function readLastResult(pair) {
+    const read = () => {
+      const items = document.querySelectorAll(".deals-list__item");
+      if (items.length === 0) return null;
+      const topPair = items[0].querySelector(".item-row a")?.textContent?.trim();
+      if (pair && topPair !== pair) return null;
+      const profitText = items[0].querySelector(".item-row .price-up")?.textContent?.trim();
+      return profitText?.startsWith("+") ? "win" : "loss";
+    };
 
-    const profitText = items[0].querySelector(".item-row .price-up")?.textContent?.trim();
-    return profitText?.startsWith("+") ? "win" : "loss";
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const outcome = read();
+      if (outcome) return outcome;
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+    return "unknown";
   }
 
   window.TradeMindSelectors = {
