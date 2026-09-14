@@ -46,13 +46,21 @@ exports.getPending = async (req, res) => {
     // whenever it's connected -- confirmed live to be far more dependable
     // than the external GitHub Actions cron (real gaps of 1.5-3+ hours
     // instead of the configured 10 minutes, a known limitation of
-    // frequent scheduled triggers on smaller repos). Self-throttled to
-    // roughly once every 3 minutes via lastQuickTradeGenAt, set BEFORE
-    // the (unawaited) generation call so back-to-back polls within that
-    // window don't all trigger their own cycle. Fire-and-forget: this
-    // response must not block on a multi-pair AI generation cycle just to
-    // return whatever's already pending.
-    const GENERATION_THROTTLE_MS = 3 * 60 * 1000;
+    // frequent scheduled triggers on smaller repos). Set BEFORE the
+    // (unawaited) generation call so back-to-back polls within the
+    // throttle window don't all trigger their own cycle. Fire-and-forget:
+    // this response must not block on a multi-pair AI generation cycle
+    // just to return whatever's already pending.
+    //
+    // 15 minutes, not the original 3: confirmed live that 3-minute
+    // reliable firing (across every active quick_trade session, each
+    // analyzing up to ~10 pairs) burned through Groq's shared daily
+    // token quota by mid-morning -- "reliable" and "frequent" were
+    // conflated. Reliability was the actual problem being solved (the
+    // external cron's multi-hour real gaps); it doesn't require firing
+    // this often. 15 minutes restores the original intended cadence
+    // while keeping the reliability fix.
+    const GENERATION_THROTTLE_MS = 15 * 60 * 1000;
     const dueForGeneration = !session.lastQuickTradeGenAt ||
       pollTime - session.lastQuickTradeGenAt > GENERATION_THROTTLE_MS;
     if (dueForGeneration) session.lastQuickTradeGenAt = pollTime;
