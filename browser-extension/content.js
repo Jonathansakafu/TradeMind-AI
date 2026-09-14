@@ -6,6 +6,7 @@ const POLL_INTERVAL_MS = 20000;
 const EXPIRY_BUFFER_MS = 5000;
 
 let lastDemoWarningAt = 0;
+let lastIdleLogAt = 0;
 
 function sendToBackground(message) {
   return new Promise((resolve) => {
@@ -139,7 +140,21 @@ async function pollCycle() {
 
   if (!response.data.active) return; // session stopped/hit a limit — stop signal, not an error
 
-  for (const notification of response.data.notifications || []) {
+  const notifications = response.data.notifications || [];
+  if (notifications.length === 0) {
+    // A successful poll with nothing to act on left zero trace before --
+    // confirmed live, this made "quietly working, nothing to do right
+    // now" and "actually stuck" indistinguishable from the popup's log
+    // alone, since only trades/errors were ever logged. Throttled (not
+    // every 20s poll) so it stays a reassurance signal, not spam.
+    if (Date.now() - lastIdleLogAt > 3 * 60 * 1000) {
+      await appendStatusLog("info", "Still watching — checked for signals, none right now.");
+      lastIdleLogAt = Date.now();
+    }
+    return;
+  }
+
+  for (const notification of notifications) {
     await handleNotification(config, notification);
   }
 }
