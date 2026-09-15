@@ -50,8 +50,19 @@ function friendlyImageError(err) {
   if (err instanceof GoogleGenerativeAIAbortError) {
     return new Error("Chart analysis timed out — try again, or use a smaller/cropped screenshot.");
   }
-  if (err instanceof GoogleGenerativeAIFetchError && err.status === 429) {
-    return new Error(`Chart analysis is temporarily at capacity — please try again in ${rateLimitWaitText(err)}.`);
+  if (err instanceof GoogleGenerativeAIFetchError) {
+    // 429 (quota) carries a real retry-after estimate; other 5xx (503
+    // "high demand", 500, etc.) are Google-side and transient but carry
+    // no such estimate -- without this branch a bare 503's raw
+    // "[GoogleGenerativeAI Error]: ... This model is currently
+    // experiencing high demand ..." reaches the UI verbatim, the same
+    // gap confirmed live in claudeAI.js's equivalent handler.
+    if (err.status === 429) {
+      return new Error(`Chart analysis is temporarily at capacity — please try again in ${rateLimitWaitText(err)}.`);
+    }
+    if (err.status >= 500) {
+      return new Error("Chart analysis is temporarily unavailable — please try again in a moment.");
+    }
   }
   if (/quota|rate.?limit/i.test(err?.message || "")) {
     return new Error("Chart analysis is temporarily at capacity — please try again in a few minutes.");
