@@ -59,12 +59,11 @@ exports.getPending = async (req, res) => {
     // conflated. Reliability was the actual problem being solved (the
     // external cron's multi-hour real gaps); it doesn't require firing
     // this often. 15 minutes restores the original intended cadence
-    // while keeping the reliability fix. Now on Gemini (same
-    // GEMINI_API_KEY already used for screenshot vision, still a
-    // free-tier key with its own per-minute/per-day quotas) the original
-    // quota-exhaustion risk is still real, not just a cost concern -- keep
-    // this throttle at 15 minutes rather than lowering it without
-    // confirming the actual Gemini quota first.
+    // while keeping the reliability fix. Now on Claude (pay-as-you-go,
+    // no shared daily token cap) the original quota-exhaustion failure
+    // mode is gone, but the throttle is still worth keeping as-is: it
+    // caps real API cost and avoids redundant back-to-back generation
+    // cycles for signals that are still fresh.
     const GENERATION_THROTTLE_MS = 15 * 60 * 1000;
     const dueForGeneration = !session.lastQuickTradeGenAt ||
       pollTime - session.lastQuickTradeGenAt > GENERATION_THROTTLE_MS;
