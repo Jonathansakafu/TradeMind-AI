@@ -261,7 +261,7 @@ exports.formatContext = (chunks) => {
     .join("\n\n")}`;
 };
 
-// The curated concepts/strategies/rules Claude already extracted at
+// The curated concepts/strategies/rules Claude/Groq already extracted at
 // upload time (see aiController.analyzeDocument) were previously only
 // ever read back by the "My Books" list UI -- disconnected from every
 // actual signal/analysis/answer path. This makes that extraction
