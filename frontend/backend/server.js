@@ -86,7 +86,7 @@ app.listen(PORT, async () => {
   // Kisha kila dakika 15 — shortened from 2h while there's a single user
   // (testing the Quick Trade auto-execute extension). Revisit before this
   // app has multiple users: every-15-min generation for every user
-  // multiplies AI (Claude) and market-data (Twelve Data/CoinGecko) API calls
+  // multiplies AI (Gemini) and market-data (Twelve Data/CoinGecko) API calls
   // accordingly and could hit rate limits or run up costs at real scale.
   //
   // This alone is NOT reliable on Render's free tier: the whole process

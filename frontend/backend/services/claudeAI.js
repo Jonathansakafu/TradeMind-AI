@@ -1,16 +1,32 @@
-const Anthropic = require("@anthropic-ai/sdk");
+const {
+  GoogleGenerativeAI,
+  GoogleGenerativeAIAbortError,
+  GoogleGenerativeAIFetchError,
+  SchemaType,
+} = require("@google/generative-ai");
 const ragService = require("./ragService");
 const marketService = require("./marketService");
 const { computeMomentum } = require("./marketAnalysis");
 
-// Constructed lazily (not at module load) so the server doesn't crash on
-// startup if ANTHROPIC_API_KEY isn't set — it only throws when a request
-// that actually needs the AI is made, which callers already wrap in try/catch.
-let _anthropic = null;
-function getAnthropicClient() {
-  if (!_anthropic) _anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-  return _anthropic;
-}
+// Migrated off Anthropic Claude: Anthropic requires government ID
+// verification before API billing is enabled in some regions, which
+// blocked this account from ever getting credits. Reusing Gemini instead
+// -- GEMINI_API_KEY already exists and is already proven working here for
+// screenshot analysis (geminiVision.js) with no ID/billing gate. One
+// model (gemini-flash-latest) now covers every text-based AI feature in
+// the app, same as geminiVision.js already does for image analysis.
+// (This file keeps its old name -- claudeAI.js -- purely to avoid
+// touching its three import sites under time pressure while production
+// AI features were fully down; a rename is cosmetic cleanup, not
+// urgent.)
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+// An alias, not a pinned version -- confirmed working directly against
+// this project's key (see geminiVision.js, which hit 404s on pinned
+// snapshots like gemini-2.5-flash despite them being listed available).
+const MODEL_NAME = "gemini-flash-latest";
+
+// The SDK sets no timeout at all unless one is passed explicitly.
+const REQUEST_TIMEOUT_MS = 40000;
 
 const cache = new Map();
 const CACHE_DURATION = 2 * 60 * 60 * 1000;
@@ -36,55 +52,40 @@ const setCache = (key, data) => {
   cache.set(key, { data, timestamp: Date.now() });
 };
 
-// Migrated off Groq entirely (previously openai/gpt-oss-20b + 120b): Groq's
-// free/on-demand tier tracked a 200K-tokens/day cap shared across every
-// user and pair, which kept getting exhausted mid-morning no matter how
-// the traffic was split across models -- a structural ceiling, not a bug
-// to fix. Claude API is pay-as-you-go with no equivalent fixed daily
-// token cap, so one model now covers every call site (no more
-// fast/background vs. chat split). "low" effort throughout keeps latency
-// and cost reasonable for these frequent, short structured-JSON calls
-// (per the API's own guidance: chat/classification/high-volume routes
-// don't benefit from higher effort the way long-horizon reasoning does).
-const MODEL = "claude-opus-5";
-const EFFORT = "low";
-const MAX_TOKENS = 1500;
-
-// Surfaced instead of a raw provider error whenever a rate limit is hit —
-// the earlier Groq-era behavior let the provider's raw error body reach
-// the chat UI verbatim as if it were the AI's answer. Claude's 429s carry
-// a standard `retry-after` header (seconds) so "try again in a few
-// minutes" doesn't read as a guess when it might really be much longer
-// (or much shorter).
-function isRateLimitError(err) {
-  return err instanceof Anthropic.RateLimitError || err?.status === 429;
+// Same pattern as geminiVision.js's rateLimitWaitText/friendlyImageError:
+// Google's APIs surface a structured google.rpc.RetryInfo detail on 429s
+// (a `retryDelay` string like "42s"); the abort-error class never sets
+// `.name` so it must be caught via `instanceof`, not string-sniffing.
+function rateLimitWaitText(err) {
+  const retryInfo = err?.errorDetails?.find(
+    (d) => d["@type"]?.includes("RetryInfo") && d.retryDelay
+  );
+  const seconds = Number(retryInfo?.retryDelay?.replace(/s$/, ""));
+  if (!Number.isFinite(seconds) || seconds <= 0) return "a few minutes";
+  const minutes = Math.ceil(seconds / 60);
+  return minutes <= 1 ? "about a minute" : `about ${minutes} minutes`;
 }
 
-function rateLimitMessage(err) {
-  const seconds = Number(err?.headers?.get?.("retry-after"));
-
-  let wait = "a few minutes";
-  if (Number.isFinite(seconds) && seconds > 0) {
-    const minutes = Math.ceil(seconds / 60);
-    wait = minutes <= 1 ? "about a minute" : `about ${minutes} minutes`;
+function friendlyTextError(err) {
+  if (err instanceof GoogleGenerativeAIAbortError) {
+    return new Error("The AI took too long to respond — please try again.", { cause: err });
   }
-
-  return `The AI is temporarily at capacity — please try again in ${wait}.`;
+  if (err instanceof GoogleGenerativeAIFetchError && err.status === 429) {
+    return new Error(`The AI is temporarily at capacity — please try again in ${rateLimitWaitText(err)}.`, { cause: err });
+  }
+  if (/quota|rate.?limit/i.test(err?.message || "")) {
+    return new Error("The AI is temporarily at capacity — please try again in a few minutes.", { cause: err });
+  }
+  return err;
 }
 
-const askClaude = async (prompt) => {
+const askGemini = async (prompt) => {
+  const model = genAI.getGenerativeModel({ model: MODEL_NAME });
   try {
-    const message = await getAnthropicClient().messages.create({
-      model: MODEL,
-      max_tokens: MAX_TOKENS,
-      output_config: { effort: EFFORT },
-      messages: [{ role: "user", content: prompt }],
-    });
-    const block = message.content.find((b) => b.type === "text");
-    return block?.text || "";
+    const result = await model.generateContent(prompt, { timeout: REQUEST_TIMEOUT_MS });
+    return result.response.text();
   } catch (err) {
-    if (isRateLimitError(err)) throw new Error(rateLimitMessage(err), { cause: err });
-    throw err;
+    throw friendlyTextError(err);
   }
 };
 
@@ -95,25 +96,27 @@ const askClaude = async (prompt) => {
 // directly as prompt context and don't need it.
 const MARKET_TOOLS = [
   {
-    name: "get_market_snapshot",
-    description: "Fetch the current live price and a short-term price-action momentum/volatility read for a forex pair, crypto pair, gold, or a stock. Call this whenever the trader asks about a pair or stock's current price, whether to trade/buy it now, or wants any live read on market conditions — never guess a price or tell them to go look it up themselves; look it up.",
-    input_schema: {
-      type: "object",
-      properties: {
-        pair: {
-          type: "string",
-          description: "The symbol as plain form: EURUSD, GBPUSD, XAUUSD (gold), BTCUSD, or a stock ticker like AAPL, TSLA, MSFT. Convert names like \"gold\", \"euro dollar\", \"bitcoin\", or \"apple stock\" to this form.",
+    functionDeclarations: [
+      {
+        name: "get_market_snapshot",
+        description: "Fetch the current live price and a short-term price-action momentum/volatility read for a forex pair, crypto pair, gold, or a stock. Call this whenever the trader asks about a pair or stock's current price, whether to trade/buy it now, or wants any live read on market conditions — never guess a price or tell them to go look it up themselves; look it up.",
+        parameters: {
+          type: SchemaType.OBJECT,
+          properties: {
+            pair: {
+              type: SchemaType.STRING,
+              description: "The symbol as plain form: EURUSD, GBPUSD, XAUUSD (gold), BTCUSD, or a stock ticker like AAPL, TSLA, MSFT. Convert names like \"gold\", \"euro dollar\", \"bitcoin\", or \"apple stock\" to this form.",
+            },
+          },
+          required: ["pair"],
         },
       },
-      required: ["pair"],
-    },
+    ],
   },
 ];
 
-// `args` arrives already parsed (an object, not a JSON string) — Claude's
-// tool_use.input is guaranteed to match the declared input_schema, unlike
-// Groq's OpenAI-compatible function-calling shape which handed back a raw
-// string that needed its own JSON.parse.
+// `args` arrives already parsed (a plain object) — Gemini's FunctionCall.args
+// is typed `object`, not a JSON string, so no JSON.parse is needed here.
 async function executeMarketTool(name, args) {
   if (name !== "get_market_snapshot") {
     return { error: `Unknown tool "${name}"` };
@@ -146,101 +149,71 @@ async function executeMarketTool(name, args) {
 // follow-up completion with the tool's result folded in. Caps at a single
 // tool-call round (fetch live data once, then answer) — this app's chat
 // endpoint doesn't need an open-ended agentic loop.
-async function askClaudeWithTools(system, messages) {
+async function askGeminiWithTools(systemInstruction, questionText) {
+  const model = genAI.getGenerativeModel({
+    model: MODEL_NAME,
+    systemInstruction,
+    tools: MARKET_TOOLS,
+  });
+
   try {
-    const first = await getAnthropicClient().messages.create({
-      model: MODEL,
-      max_tokens: MAX_TOKENS,
-      output_config: { effort: EFFORT },
-      system,
-      messages,
-      tools: MARKET_TOOLS,
-    });
+    const contents = [{ role: "user", parts: [{ text: questionText }] }];
+    const first = await model.generateContent({ contents }, { timeout: REQUEST_TIMEOUT_MS });
+    const calls = first.response.functionCalls();
 
-    if (first.stop_reason === "tool_use") {
-      const toolUseBlocks = first.content.filter((b) => b.type === "tool_use");
-      const toolResults = await Promise.all(toolUseBlocks.map(async (block) => ({
-        type: "tool_result",
-        tool_use_id: block.id,
-        content: JSON.stringify(await executeMarketTool(block.name, block.input)),
-      })));
+    if (calls && calls.length > 0) {
+      const call = calls[0];
+      const toolResult = await executeMarketTool(call.name, call.args);
+      contents.push({ role: "model", parts: [{ functionCall: call }] });
+      contents.push({ role: "user", parts: [{ functionResponse: { name: call.name, response: toolResult } }] });
 
-      const second = await getAnthropicClient().messages.create({
-        model: MODEL,
-        max_tokens: MAX_TOKENS,
-        output_config: { effort: EFFORT },
-        system,
-        messages: [
-          ...messages,
-          { role: "assistant", content: first.content },
-          { role: "user", content: toolResults },
-        ],
-      });
-
-      const textBlock = second.content.find((b) => b.type === "text");
-      return textBlock?.text || "";
+      const second = await model.generateContent({ contents }, { timeout: REQUEST_TIMEOUT_MS });
+      return second.response.text();
     }
 
-    const textBlock = first.content.find((b) => b.type === "text");
-    return textBlock?.text || "";
+    return first.response.text();
   } catch (err) {
-    if (isRateLimitError(err)) throw new Error(rateLimitMessage(err), { cause: err });
-    throw err;
+    throw friendlyTextError(err);
   }
 }
 
 // Streaming version of the above. Text deltas stream through immediately
 // (the common case — no tool needed); a tool-call turn instead ends the
-// first stream with stop_reason "tool_use", which is executed once, then
-// a second stream carries the actual answer.
-async function* streamClaudeWithTools(system, messages) {
-  try {
-    const stream = getAnthropicClient().messages.stream({
-      model: MODEL,
-      max_tokens: MAX_TOKENS,
-      output_config: { effort: EFFORT },
-      system,
-      messages,
-      tools: MARKET_TOOLS,
-    });
+// first stream with a functionCalls() result and no text, which is
+// executed once, then a second stream carries the actual answer.
+async function* streamGeminiWithTools(systemInstruction, questionText) {
+  const model = genAI.getGenerativeModel({
+    model: MODEL_NAME,
+    systemInstruction,
+    tools: MARKET_TOOLS,
+  });
 
-    for await (const event of stream) {
-      if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
-        yield event.delta.text;
-      }
+  try {
+    const contents = [{ role: "user", parts: [{ text: questionText }] }];
+    const first = await model.generateContentStream({ contents }, { timeout: REQUEST_TIMEOUT_MS });
+
+    for await (const chunk of first.stream) {
+      const text = chunk.text();
+      if (text) yield text;
     }
 
-    const finalMessage = await stream.finalMessage();
+    const finalResponse = await first.response;
+    const calls = finalResponse.functionCalls();
 
-    if (finalMessage.stop_reason === "tool_use") {
-      const toolUseBlocks = finalMessage.content.filter((b) => b.type === "tool_use");
-      const toolResults = await Promise.all(toolUseBlocks.map(async (block) => ({
-        type: "tool_result",
-        tool_use_id: block.id,
-        content: JSON.stringify(await executeMarketTool(block.name, block.input)),
-      })));
+    if (calls && calls.length > 0) {
+      const call = calls[0];
+      const toolResult = await executeMarketTool(call.name, call.args);
+      contents.push({ role: "model", parts: [{ functionCall: call }] });
+      contents.push({ role: "user", parts: [{ functionResponse: { name: call.name, response: toolResult } }] });
 
-      const followup = getAnthropicClient().messages.stream({
-        model: MODEL,
-        max_tokens: MAX_TOKENS,
-        output_config: { effort: EFFORT },
-        system,
-        messages: [
-          ...messages,
-          { role: "assistant", content: finalMessage.content },
-          { role: "user", content: toolResults },
-        ],
-      });
-
-      for await (const event of followup) {
-        if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
-          yield event.delta.text;
-        }
+      const followup = await model.generateContentStream({ contents }, { timeout: REQUEST_TIMEOUT_MS });
+      for await (const chunk of followup.stream) {
+        const text = chunk.text();
+        if (text) yield text;
       }
     }
   } catch (err) {
-    if (isRateLimitError(err)) throw new Error(rateLimitMessage(err), { cause: err });
-    throw err;
+    throw friendlyTextError(err);
   }
 }
 
@@ -276,7 +249,7 @@ ${ragCtx}
 
 ${ragCtx ? "Ground patterns/riskFlags/suggestions in the retrieved context above where relevant, and cite the source label in bookInsights." : ""}`;
 
-  const text = await askClaude(prompt);
+  const text = await askGemini(prompt);
   try {
     const result = JSON.parse(text.replace(/```json|```/g, "").trim());
     setCache(cacheKey, result);
@@ -317,7 +290,7 @@ ${ragCtx}
 
 ${ragCtx ? "Cross-reference patterns with the retrieved context above. Add book-based recommendations in bookRecommendations, citing source labels." : ""}`;
 
-  const text = await askClaude(prompt);
+  const text = await askGemini(prompt);
   try {
     const result = JSON.parse(text.replace(/```json|```/g, "").trim());
     setCache(cacheKey, result);
@@ -353,7 +326,7 @@ ${ragCtx}
 
 ${ragCtx ? "Check if this trade aligns with the retrieved context above (books and/or similar past trades). Add alignment note in bookAlignment, citing source labels." : ""}`;
 
-  const text = await askClaude(prompt);
+  const text = await askGemini(prompt);
   try {
     return JSON.parse(text.replace(/```json|```/g, "").trim());
   } catch {
@@ -377,7 +350,7 @@ Trader context: ${userContext}
 
 Extract practical trading concepts, strategies, and rules that can improve trading decisions.`;
 
-  const text = await askClaude(prompt);
+  const text = await askGemini(prompt);
   try {
     return JSON.parse(text.replace(/```json|```/g, "").trim());
   } catch {
@@ -430,7 +403,7 @@ ${JSON.stringify({ signal: direction, confidence: signal.confidence, reasoning: 
 Set verified=false only if the reasoning contradicts the given context, cites something not actually present in it, or the confidence is clearly overstated relative to the evidence. A signal resting on price action alone (no book/trade context) can still be verified=true if its own reasoning is internally consistent. Keep note under 20 words.`;
 
   try {
-    const text = await askClaude(prompt);
+    const text = await askGemini(prompt);
     const result = JSON.parse(text.replace(/```json|```/g, "").trim());
     return { verified: result.verified !== false, note: result.note || "" };
   } catch {
@@ -518,7 +491,7 @@ Respond ONLY in JSON with no markdown:
   "newsImpact": ""
 }`;
 
-  const text = await askClaude(prompt);
+  const text = await askGemini(prompt);
   try {
     const result = JSON.parse(text.replace(/```json|```/g, "").trim());
     result.source = source;
@@ -581,7 +554,7 @@ Respond ONLY in JSON with no markdown:
   "expiresInMinutes": 5
 }`;
 
-  const text = await askClaude(prompt);
+  const text = await askGemini(prompt);
   try {
     const result = JSON.parse(text.replace(/```json|```/g, "").trim());
     setCache(cacheKey, result);
@@ -625,7 +598,7 @@ News: ${article.title}
 Content: ${article.description || ""}
 Pairs to analyze: ${pairs.join(", ")}${priceContext}`;
 
-  const text = await askClaude(prompt);
+  const text = await askGemini(prompt);
   try {
     const result = JSON.parse(text.replace(/```json|```/g, "").trim());
     setCache(cacheKey, result);
@@ -643,8 +616,8 @@ exports.analyzeLiveMarket = async (pair, currentPrice, historicalPrices, pastTra
   return exports.analyzeMarketSmart(pair, currentPrice, historicalPrices, pastTrades, [], []);
 };
 
-// Persona/context lives in the top-level `system` param (Claude's system
-// prompt, not a message with role "system") so it persists across a
+// Persona/context lives in Gemini's systemInstruction (equivalent to
+// Claude's/OpenAI's top-level system param) so it persists across a
 // tool-call round-trip without being re-stated.
 const buildAnswerSystem = (ragCtx, { jsonMode } = {}) => {
   const persona = ragCtx
@@ -677,7 +650,7 @@ exports.answerQuestion = async (question, retrievedChunks = [], extra = {}) => {
   const ragCtx = ragService.buildPromptContext({ retrievedChunks, bookSummary: extra.bookSummary });
   const system = buildAnswerSystem(ragCtx, { jsonMode: true });
 
-  const text = await askClaudeWithTools(system, [{ role: "user", content: question }]);
+  const text = await askGeminiWithTools(system, question);
   const sources = chunksToSources(retrievedChunks);
 
   try {
@@ -696,7 +669,7 @@ exports.streamAnswer = async function* (question, retrievedChunks = [], extra = 
   const ragCtx = ragService.buildPromptContext({ retrievedChunks, bookSummary: extra.bookSummary });
   const system = buildAnswerSystem(ragCtx, { jsonMode: false });
 
-  yield* streamClaudeWithTools(system, [{ role: "user", content: question }]);
+  yield* streamGeminiWithTools(system, question);
 };
 
 exports.answerSourcesFor = chunksToSources;
