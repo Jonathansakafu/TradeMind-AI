@@ -70,20 +70,8 @@ function friendlyTextError(err) {
   if (err instanceof GoogleGenerativeAIAbortError) {
     return new Error("The AI took too long to respond — please try again.", { cause: err });
   }
-  if (err instanceof GoogleGenerativeAIFetchError) {
-    // 429 (quota) carries a real retry-after estimate; other 5xx (503
-    // "high demand" seen live, 500, etc.) are Google-side and transient
-    // but carry no such estimate -- confirmed live that a bare 503's raw
-    // "[GoogleGenerativeAI Error]: ... This model is currently
-    // experiencing high demand ..." was reaching the UI verbatim before
-    // this branch existed, the same anti-pattern already fixed for 429s
-    // and for Gemini's vision pipeline (geminiVision.js).
-    if (err.status === 429) {
-      return new Error(`The AI is temporarily at capacity — please try again in ${rateLimitWaitText(err)}.`, { cause: err });
-    }
-    if (err.status >= 500) {
-      return new Error("The AI service is temporarily unavailable — please try again in a moment.", { cause: err });
-    }
+  if (err instanceof GoogleGenerativeAIFetchError && err.status === 429) {
+    return new Error(`The AI is temporarily at capacity — please try again in ${rateLimitWaitText(err)}.`, { cause: err });
   }
   if (/quota|rate.?limit/i.test(err?.message || "")) {
     return new Error("The AI is temporarily at capacity — please try again in a few minutes.", { cause: err });
