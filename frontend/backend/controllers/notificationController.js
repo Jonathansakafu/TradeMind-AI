@@ -417,8 +417,30 @@ exports.generateNotifications = async (req, res) => {
 };
 
 // Get notifications
+// Piggybacks forex/MT5 signal generation on this endpoint's own poll --
+// hit every 5 minutes by both the Notifications page and NotificationBell
+// (the latter lives in MainLayout, so this covers every page in the app,
+// not just one). Mirrors the fix already made for Quick Trade (tied to
+// the browser extension's poll instead), since the external cron alone
+// proved unreliable (confirmed live: real gaps of 1.5-3+ hours despite a
+// 10-minute schedule). Throttled per-user via lastAutoGenAt so it doesn't
+// fire on literally every poll; fire-and-forget so this response never
+// blocks on a multi-pair AI generation cycle just to return whatever
+// notifications already exist. The external cron stays in place as a
+// backup for whenever nobody has the app open at all.
+const NOTIF_POLL_GENERATION_THROTTLE_MS = 15 * 60 * 1000;
+
 exports.getNotifications = async (req, res) => {
   try {
+    const now = new Date();
+    if (!req.user.lastAutoGenAt || now - req.user.lastAutoGenAt > NOTIF_POLL_GENERATION_THROTTLE_MS) {
+      req.user.lastAutoGenAt = now;
+      req.user.save().catch((err) => console.error("Failed to save lastAutoGenAt:", err.message));
+      exports.autoGenerate(req.user._id).catch((err) =>
+        console.error("Poll-triggered auto-generate failed:", err.message)
+      );
+    }
+
     const notifications = await Notification.find({ user: req.user._id })
       .sort({ createdAt: -1 }).limit(20);
     const unreadCount = await Notification.countDocuments({
