@@ -47,6 +47,18 @@ const userSchema = new mongoose.Schema(
     lastLearningAt: {
       type: Date,
     },
+
+    // Identifies this user on incoming TradingView webhook alerts, which
+    // carry no auth header of their own -- the user pastes this token
+    // into their own alert's JSON message body, and the webhook looks
+    // the user up by it instead of a JWT. select:false since it's a
+    // standing credential (like a password), not exposed on normal user
+    // reads. Generated lazily on first request rather than at signup, so
+    // existing accounts don't need a migration.
+    tradingViewToken: {
+      type: String,
+      select: false,
+    },
   },
   {
     timestamps: true,

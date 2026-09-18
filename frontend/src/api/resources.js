@@ -32,3 +32,8 @@ export async function fetchMt5Dashboard(headers) {
   ]);
   return { signals: signalsRes.data || [], stats: statsRes.data || null };
 }
+
+export async function fetchTradingViewInfo(headers) {
+  const res = await axios.get(`${API_URL}/api/tradingview/info`, { headers });
+  return res.data;
+}

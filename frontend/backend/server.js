@@ -54,6 +54,7 @@ app.use("/api/mt5", require("./routes/mt5PublicRoutes"));
 app.use("/api/sessions", require("./routes/sessionRoutes"));
 app.use("/api/quick-trade-bot", require("./routes/quickTradeBotRoutes"));
 app.use("/api/cron", require("./routes/cronRoutes"));
+app.use("/api/tradingview", require("./routes/tradingviewRoutes"));
 
 app.get("/api/health", (req, res) =>
   res.json({ status: "ok", app: "TradeMind AI" })

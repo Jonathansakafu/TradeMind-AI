@@ -56,6 +56,13 @@ const tradeSchema = new mongoose.Schema({
   notes: { type: String },
   openedAt: { type: Date, default: Date.now },
   closedAt: { type: Date },
+  // MT5's own position ticket number, set only on trades the EA reports
+  // automatically (see mt5Controller.reportClosedTrade) -- every other
+  // trade-creation path (manual entry, Quick Trade, edits) leaves this
+  // unset. sparse+unique so repeated EA reports of the same closed
+  // position upsert instead of duplicating, without forcing every other
+  // trade to carry a null-clashing unique field.
+  mt5Ticket: { type: Number, unique: true, sparse: true },
 }, { timestamps: true });
 
 tradeSchema.index({ user: 1, createdAt: -1 });

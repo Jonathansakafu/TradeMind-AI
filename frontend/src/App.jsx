@@ -21,6 +21,7 @@ import LiveAnalysis from "./pages/liveAnalysis";
 import News from "./pages/News";
 import Notifications from "./pages/Notifications";
 import MT5 from "./pages/MT5";
+import TradingView from "./pages/TradingView";
 import AskAI from "./pages/AskAI";
 import Guide from "./pages/Guide";
 import TradingSession from "./pages/TradingSession";
@@ -65,6 +66,7 @@ function App() {
           <Route path="/charts" element={<ProtectedRoute><Charts /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
           <Route path="/mt5" element={<ProtectedRoute><MT5 /></ProtectedRoute>} />
+          <Route path="/tradingview" element={<ProtectedRoute><TradingView /></ProtectedRoute>} />
           <Route path="/session" element={<ProtectedRoute><TradingSession /></ProtectedRoute>} />
           <Route path="/ask-ai" element={<ProtectedRoute><AskAI /></ProtectedRoute>} />
           <Route path="/guide" element={<ProtectedRoute><Guide /></ProtectedRoute>} />

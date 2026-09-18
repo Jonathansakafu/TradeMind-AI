@@ -1,5 +1,6 @@
 const router = require("express").Router();
 const MT5Signal = require("../models/MT5Signal");
+const { reportClosedTrade } = require("../controllers/mt5Controller");
 
 // MT5 EA inapata signals zinazongoja — bila JWT auth
 router.get("/pending", async (req, res) => {
@@ -41,5 +42,9 @@ router.post("/executed", async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
+
+// MT5 EA inaripoti closed positions zote -- si tu zile zilizotumwa na
+// TradeMind (angalia mt5Controller.reportClosedTrade)
+router.post("/report-trade", reportClosedTrade);
 
 module.exports = router;

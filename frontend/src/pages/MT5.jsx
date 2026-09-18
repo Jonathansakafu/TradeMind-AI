@@ -47,6 +47,7 @@ function MT5() {
   const SERVER_URL = API_URL;
   const MT5_ENDPOINT = `${SERVER_URL}/api/mt5/pending?userId=${user._id}`;
   const MT5_EXECUTED_ENDPOINT = `${SERVER_URL}/api/mt5/executed`;
+  const MT5_REPORT_TRADE_ENDPOINT = `${SERVER_URL}/api/mt5/report-trade`;
 
   const copyToClipboard = (text, field) => {
     Clipboard.write({ string: text });
@@ -87,7 +88,7 @@ function MT5() {
 //|                              TradeMind AI — Auto Trading EA      |
 //+------------------------------------------------------------------+
 #property copyright "TradeMind AI"
-#property version   "1.00"
+#property version   "2.00"
 
 #include <Trade\\Trade.mqh>
 
@@ -95,6 +96,8 @@ CTrade trade;
 
 input string ServerURL = "${MT5_ENDPOINT}";
 input string ExecutedURL = "${MT5_EXECUTED_ENDPOINT}";
+input string ReportTradeURL = "${MT5_REPORT_TRADE_ENDPOINT}";
+input string AccountUserId = "${user._id}";
 input double DefaultLotSize = ${lotSize};
 input int    CheckIntervalSeconds = 10;
 input bool   EnableAutoTrading = true;
@@ -105,6 +108,86 @@ int OnInit() {
    Print("TradeMind AI EA Started");
    EventSetTimer(CheckIntervalSeconds);
    return(INIT_SUCCEEDED);
+}
+
+// Fires on every deal in the account -- not just ones this EA placed.
+// This is what makes a copy-traded position (from an MQL5 Signal
+// Provider subscription running in the same terminal) or any trade
+// placed manually in this account count toward your TradeMind journal
+// and weekly self-learning summary, the same as an app-logged trade.
+void OnTradeTransaction(const MqlTradeTransaction& trans,
+                        const MqlTradeRequest& request,
+                        const MqlTradeResult& result) {
+   if(trans.type != TRADE_TRANSACTION_DEAL_ADD) return;
+   if(!HistoryDealSelect(trans.deal)) return;
+
+   long entryType = HistoryDealGetInteger(trans.deal, DEAL_ENTRY);
+   // Only closing deals -- DEAL_ENTRY_OUT (a full/partial close) or
+   // DEAL_ENTRY_OUT_BY (closed by an opposite position). Opening deals
+   // (DEAL_ENTRY_IN) aren't reported; only finished trades have an
+   // outcome worth learning from.
+   if(entryType != DEAL_ENTRY_OUT && entryType != DEAL_ENTRY_OUT_BY) return;
+
+   long positionId = HistoryDealGetInteger(trans.deal, DEAL_POSITION_ID);
+   string symbol = HistoryDealGetString(trans.deal, DEAL_SYMBOL);
+   double closePrice = HistoryDealGetDouble(trans.deal, DEAL_PRICE);
+   double volume = HistoryDealGetDouble(trans.deal, DEAL_VOLUME);
+   double profit = HistoryDealGetDouble(trans.deal, DEAL_PROFIT)
+                 + HistoryDealGetDouble(trans.deal, DEAL_SWAP)
+                 + HistoryDealGetDouble(trans.deal, DEAL_COMMISSION);
+   datetime closeTime = (datetime)HistoryDealGetInteger(trans.deal, DEAL_TIME);
+   long closingDealType = HistoryDealGetInteger(trans.deal, DEAL_TYPE);
+   // The closing deal's own type is the opposite of the position's
+   // original direction -- a BUY position is closed by a SELL deal.
+   string direction = (closingDealType == DEAL_TYPE_SELL) ? "buy" : "sell";
+
+   // Find this position's opening deal (same position id) for its entry
+   // price/time.
+   double openPrice = 0;
+   datetime openTime = closeTime;
+   if(HistorySelectByPosition(positionId)) {
+      int total = HistoryDealsTotal();
+      for(int i = 0; i < total; i++) {
+         ulong dealTicket = HistoryDealGetTicket(i);
+         if(HistoryDealGetInteger(dealTicket, DEAL_ENTRY) == DEAL_ENTRY_IN) {
+            openPrice = HistoryDealGetDouble(dealTicket, DEAL_PRICE);
+            openTime = (datetime)HistoryDealGetInteger(dealTicket, DEAL_TIME);
+            break;
+         }
+      }
+   }
+
+   ReportClosedTrade(trans.deal, symbol, direction, openPrice, closePrice,
+                      volume, profit, openTime, closeTime);
+}
+
+void ReportClosedTrade(ulong ticket, string symbol, string direction,
+                        double entryPrice, double exitPrice, double volume,
+                        double profit, datetime openTime, datetime closeTime) {
+   string url = ReportTradeURL;
+   string headers = "Content-Type: application/json\\r\\n";
+   string body = "{"
+      + "\\"userId\\":\\"" + AccountUserId + "\\","
+      + "\\"ticket\\":" + IntegerToString(ticket) + ","
+      + "\\"symbol\\":\\"" + symbol + "\\","
+      + "\\"direction\\":\\"" + direction + "\\","
+      + "\\"entryPrice\\":" + DoubleToString(entryPrice, 5) + ","
+      + "\\"exitPrice\\":" + DoubleToString(exitPrice, 5) + ","
+      + "\\"lotSize\\":" + DoubleToString(volume, 2) + ","
+      + "\\"profitLoss\\":" + DoubleToString(profit, 2) + ","
+      + "\\"openedAt\\":" + IntegerToString((long)openTime) + ","
+      + "\\"closedAt\\":" + IntegerToString((long)closeTime)
+      + "}";
+
+   char post[], result[];
+   string resultHeaders;
+   StringToCharArray(body, post, 0, StringLen(body));
+
+   int res = WebRequest("POST", url, headers, 5000, post, result, resultHeaders);
+   if(res == 200)
+      Print("TradeMind AI: Reported closed trade #", ticket, " (", symbol, " ", direction, ", P/L ", profit, ")");
+   else
+      Print("TradeMind AI: Failed to report closed trade #", ticket, " — Code: ", res);
 }
 
 void OnTimer() {
@@ -378,6 +461,12 @@ void OnDeinit(const int reason) {
               <Info size={14} className="text-blue-400 flex-shrink-0 mt-0.5" />
               <p className="text-xs text-slate-500 dark:text-slate-400">
                 In MT5: <span className="text-slate-900 dark:text-white">File → Open Data Folder → MQL5 → Experts</span>, save the downloaded file there, then restart MT5 (or right-click <span className="text-slate-900 dark:text-white">Expert Advisors</span> in the Navigator panel → Refresh).
+              </p>
+            </div>
+            <div className="flex items-start gap-2 bg-green-500/10 border border-green-500/20 rounded-xl p-3 mb-3">
+              <Info size={14} className="text-green-500 flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                <span className="text-slate-900 dark:text-white">v2.00:</span> the EA now also reports every closed position in this account back to your trade journal — not just trades TradeMind sent. That means a position from an MQL5 Signal Provider you copy-trade, or one you place manually in the terminal, counts toward your journal and weekly self-learning too. Already installed an older version? Re-download and replace it — no new WebRequest URL needed, the one below already covers it.
               </p>
             </div>
             <button
