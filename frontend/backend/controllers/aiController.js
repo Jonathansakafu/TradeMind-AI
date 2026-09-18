@@ -3,6 +3,7 @@ const Analysis = require("../models/Analysis");
 const BookConcept = require("../models/BookConcept");
 const claudeAI = require("../services/claudeAI");
 const ragService = require("../services/ragService");
+const learningService = require("../services/learningService");
 const geminiVision = require("../services/geminiVision");
 const { prepareImage } = require("../utils/prepareImage");
 const fs = require("fs");
@@ -87,12 +88,13 @@ exports.getTradeSuggestion = async (req, res) => {
     const history = await Trade.find({ user: req.user._id }).limit(30);
     const query = [proposedTrade?.pair, proposedTrade?.direction, proposedTrade?.setup, proposedTrade?.session]
       .filter(Boolean).join(" ");
-    const [retrievedChunks, bookSummary] = await Promise.all([
+    const [retrievedChunks, bookSummary, learnedSummary] = await Promise.all([
       ragService.retrieve(req.user._id, query, { topK: 6 }),
       ragService.getBookConceptSummary(req.user._id),
+      learningService.getLearnedSummary(req.user._id),
     ]);
     const result = await claudeAI.getTradeSuggestion(
-      proposedTrade, history, retrievedChunks, { bookSummary }
+      proposedTrade, history, retrievedChunks, { bookSummary, learnedSummary }
     );
     res.json(result);
   } catch (err) {

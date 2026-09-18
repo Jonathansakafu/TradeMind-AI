@@ -292,12 +292,14 @@ exports.getBookConceptSummary = async (userId) => {
 };
 
 // Composes every fused context source (RAG chunks, extracted book
-// concepts, price-action momentum, this pair's own recent trade history)
-// into one prompt-ready block, so every AI call site builds its context
-// the same way instead of each hand-rolling its own concatenation.
-exports.buildPromptContext = ({ retrievedChunks, bookSummary, momentum, pairTrades } = {}) => {
+// concepts, price-action momentum, this pair's own recent trade history,
+// weekly self-learned patterns) into one prompt-ready block, so every AI
+// call site builds its context the same way instead of each hand-rolling
+// its own concatenation.
+exports.buildPromptContext = ({ retrievedChunks, bookSummary, momentum, pairTrades, learnedSummary } = {}) => {
   const parts = [];
   if (bookSummary) parts.push(bookSummary);
+  if (learnedSummary) parts.push(learnedSummary);
   const ragCtx = exports.formatContext(retrievedChunks);
   if (ragCtx) parts.push(ragCtx);
   if (momentum?.summary) parts.push(`\nMarket pressure: ${momentum.summary}`);

@@ -99,7 +99,7 @@ const askGroq = async (prompt) => {
     });
     return completion.choices[0]?.message?.content || "";
   } catch (err) {
-    if (isRateLimitError(err)) throw new Error(rateLimitMessage(err));
+    if (isRateLimitError(err)) throw new Error(rateLimitMessage(err), { cause: err });
     throw err;
   }
 };
@@ -200,7 +200,7 @@ async function askGroqWithTools(messages) {
 
     return msg?.content || "";
   } catch (err) {
-    if (isRateLimitError(err)) throw new Error(rateLimitMessage(err));
+    if (isRateLimitError(err)) throw new Error(rateLimitMessage(err), { cause: err });
     throw err;
   }
 }
@@ -224,7 +224,7 @@ async function* streamGroqWithTools(messages) {
       stream: true,
     });
   } catch (err) {
-    if (isRateLimitError(err)) throw new Error(rateLimitMessage(err));
+    if (isRateLimitError(err)) throw new Error(rateLimitMessage(err), { cause: err });
     throw err;
   }
 
@@ -265,7 +265,7 @@ async function* streamGroqWithTools(messages) {
         stream: true,
       });
     } catch (err) {
-      if (isRateLimitError(err)) throw new Error(rateLimitMessage(err));
+      if (isRateLimitError(err)) throw new Error(rateLimitMessage(err), { cause: err });
       throw err;
     }
     for await (const chunk of followup) {
@@ -360,13 +360,13 @@ ${ragCtx ? "Cross-reference patterns with the retrieved context above. Add book-
 
 // Trade suggestion
 exports.getTradeSuggestion = async (proposedTrade, history = [], retrievedChunks = [], extra = {}) => {
-  const { bookSummary = "" } = extra;
+  const { bookSummary = "", learnedSummary = "" } = extra;
   const recent = history.slice(0, 20).map((t) => ({
     pair: t.pair, outcome: t.outcome, pnl: t.profitLoss,
     session: t.session, setup: t.setup,
   }));
 
-  const ragCtx = ragService.buildPromptContext({ retrievedChunks, bookSummary });
+  const ragCtx = ragService.buildPromptContext({ retrievedChunks, bookSummary, learnedSummary });
 
   const prompt = `You are TradeMind AI. Should this trader take this trade? Respond ONLY in JSON with no markdown:
 {
@@ -482,7 +482,7 @@ Set verified=false only if the reasoning contradicts the given context, cites so
 // ragService.buildPromptContext, and reflects which of those sources
 // actually contributed in sourceLabel so that's visible, not just internal.
 exports.analyzeMarketSmart = async (pair, currentPrice, historicalPrices, pastTrades, retrievedChunks = [], newsArticles = [], extra = {}) => {
-  const { bookSummary = "", momentum = null, pairTrades = [] } = extra;
+  const { bookSummary = "", momentum = null, pairTrades = [], learnedSummary = "" } = extra;
   const cacheKey = `market_${pair}_${Math.floor(Date.now() / (30 * 60 * 1000))}`;
   const cached = getCached(cacheKey);
   if (cached) return cached;
@@ -493,12 +493,14 @@ exports.analyzeMarketSmart = async (pair, currentPrice, historicalPrices, pastTr
   const hasBooks = hasBookChunks || !!bookSummary;
   const hasNews = newsArticles && newsArticles.length > 0;
   const hasMomentum = !!momentum?.summary;
+  const hasLearned = !!learnedSummary;
 
   const usedSources = [];
   if (hasBooks) usedSources.push("Books");
   if (hasScreenshotChunks) usedSources.push("Screenshots");
   if (hasTrades) usedSources.push("Trade History");
   if (hasMomentum) usedSources.push("Momentum");
+  if (hasLearned) usedSources.push("Self-Learning");
   const source = hasBooks ? "books" : hasTrades ? "past_trades" : "ai_auto";
   const sourceLabel = usedSources.length > 0
     ? `AI Auto — ${usedSources.join(" + ")}`
@@ -511,7 +513,7 @@ exports.analyzeMarketSmart = async (pair, currentPrice, historicalPrices, pastTr
       }))
     : [];
 
-  const fusedContext = ragService.buildPromptContext({ retrievedChunks, bookSummary, momentum, pairTrades });
+  const fusedContext = ragService.buildPromptContext({ retrievedChunks, bookSummary, momentum, pairTrades, learnedSummary });
 
   const newsContext = hasNews
     ? `\nRecent news: ${newsArticles.slice(0, 3).map((a) => `- ${a.title}`).join("\n")}`
@@ -582,7 +584,7 @@ Respond ONLY in JSON with no markdown:
 // every cycle for a lower payoff than it gives the (much less frequent)
 // forex/MT5 signal path, where the same fusion does include RAG.
 exports.analyzeQuickSignal = async (pair, currentPrice, historicalPrices, newsArticles = [], extra = {}) => {
-  const { bookSummary = "", momentum = null } = extra;
+  const { bookSummary = "", momentum = null, learnedSummary = "" } = extra;
   const cacheKey = `quick_${pair}_${Math.floor(Date.now() / (5 * 60 * 1000))}`;
   const cached = getCached(cacheKey);
   if (cached) return cached;
@@ -603,6 +605,7 @@ exports.analyzeQuickSignal = async (pair, currentPrice, historicalPrices, newsAr
 Current ${pair} price: ${currentPrice}
 Recent candles (1H): ${JSON.stringify(recentCandles)}${newsContext}${momentumContext}
 ${bookSummary}
+${learnedSummary}
 
 Respond ONLY in JSON with no markdown:
 {

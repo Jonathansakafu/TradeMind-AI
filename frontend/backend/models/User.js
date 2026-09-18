@@ -38,6 +38,15 @@ const userSchema = new mongoose.Schema(
     lastAutoGenAt: {
       type: Date,
     },
+
+    // Throttles the weekly self-learning pass (services/learningService.js)
+    // the same way lastAutoGenAt throttles signal generation -- checked
+    // opportunistically on every runAutoGenerateForAllUsers cycle rather
+    // than relying on a dedicated cron, since that pattern already proved
+    // more reliable than GitHub Actions scheduling on this app's free tier.
+    lastLearningAt: {
+      type: Date,
+    },
   },
   {
     timestamps: true,

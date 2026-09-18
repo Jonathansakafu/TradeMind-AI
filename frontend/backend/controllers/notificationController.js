@@ -7,6 +7,7 @@ const marketService = require("../services/marketService");
 const newsService = require("../services/newsService");
 const claudeAI = require("../services/claudeAI");
 const ragService = require("../services/ragService");
+const learningService = require("../services/learningService");
 const { computeMomentum } = require("../services/marketAnalysis");
 
 // Crypto pairs zinapatikana 24/7 — zitumike kwanza kwa notifications
@@ -48,7 +49,10 @@ async function generateQuickTradeSignals(userId, session) {
   // Fetched once for the whole cycle, not per pair -- it's the same
   // regardless of which pair is being analyzed, and it's a Mongo query
   // (cheap), but no reason to repeat it up to ~10x per cycle.
-  const bookSummary = await ragService.getBookConceptSummary(userId);
+  const [bookSummary, learnedSummary] = await Promise.all([
+    ragService.getBookConceptSummary(userId),
+    learningService.getLearnedSummary(userId),
+  ]);
 
   // No per-cycle cap — availablePairs is already naturally bounded (session
   // pairs or the ~10 default pairs), and with indexed dedup lookups and
@@ -96,7 +100,7 @@ async function generateQuickTradeSignals(userId, session) {
 
       const momentum = computeMomentum(historical);
       const analysis = await claudeAI.analyzeQuickSignal(
-        formattedPair, currentPrice, historical, [], { bookSummary, momentum }
+        formattedPair, currentPrice, historical, [], { bookSummary, momentum, learnedSummary }
       );
 
       // Every non-"wait" signal was auto-executed regardless of how
@@ -249,7 +253,10 @@ exports.autoGenerate = async (userId) => {
 
     // Fetched once per cycle, not per pair -- same reasoning as the Quick
     // Trade path above.
-    const bookSummary = await ragService.getBookConceptSummary(userId);
+    const [bookSummary, learnedSummary] = await Promise.all([
+      ragService.getBookConceptSummary(userId),
+      learningService.getLearnedSummary(userId),
+    ]);
 
     for (const pair of pairsToAnalyze) {
       try {
@@ -284,7 +291,7 @@ exports.autoGenerate = async (userId) => {
           pastTrades,
           retrievedChunks,
           relevantNews,
-          { bookSummary, momentum }
+          { bookSummary, momentum, learnedSummary }
         );
 
         if (analysis.signal && analysis.signal !== "wait") {

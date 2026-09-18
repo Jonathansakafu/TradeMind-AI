@@ -37,10 +37,11 @@ exports.analyzePair = async (req, res) => {
     const historical = await marketService.getHistoricalData(formattedPair, "1h", 20);
 
     // Same fused context (books, RAG chunks including uploaded chart
-    // screenshots, price-action momentum, this pair's own recent trades)
-    // as auto-generated signals use — an on-demand "analyze this pair"
-    // click shouldn't be any less grounded than the background cycle.
-    const { bookSummary, retrievedChunks, momentum, pairTrades } = await signalContext.buildContext(
+    // screenshots, price-action momentum, this pair's own recent trades,
+    // weekly self-learned patterns) as auto-generated signals use — an
+    // on-demand "analyze this pair" click shouldn't be any less grounded
+    // than the background cycle.
+    const { bookSummary, retrievedChunks, momentum, pairTrades, learnedSummary } = await signalContext.buildContext(
       req.user._id,
       {
         pair,
@@ -52,7 +53,7 @@ exports.analyzePair = async (req, res) => {
     const analysis = await claudeAI.analyzeMarketSmart(
       formattedPair, priceData.price, historical,
       pastTrades, retrievedChunks, relevantNews,
-      { bookSummary, momentum, pairTrades }
+      { bookSummary, momentum, pairTrades, learnedSummary }
     );
 
     res.json({
