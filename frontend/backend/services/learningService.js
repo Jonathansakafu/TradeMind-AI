@@ -2,9 +2,19 @@ const Trade = require("../models/Trade");
 const LearnedInsights = require("../models/LearnedInsights");
 const claudeAI = require("./claudeAI");
 
-// Below this, "patterns" would just be noise dressed up as insight --
-// skip rather than let the AI confidently summarize 3 trades as a trend.
-const MIN_TRADES_FOR_LEARNING = 10;
+// Absolute floor -- below this there's nothing to compare at all (a
+// "best session" from 1-2 trades isn't a pattern, it's just that trade).
+// Kept usable at small counts rather than requiring a large sample: the
+// summary itself calls out low-confidence results below
+// CONFIDENT_SAMPLE_SIZE so early, thin data still gets used, just
+// flagged as tentative instead of stated as fact.
+const MIN_TRADES_FOR_LEARNING = 3;
+
+// Below this trade count, the summary is worded as tentative early
+// signal rather than an established pattern -- small samples are still
+// useful context for the AI, just shouldn't be treated with the same
+// confidence as a pattern backed by dozens of trades.
+const CONFIDENT_SAMPLE_SIZE = 15;
 
 // Refreshed weekly (see cronJobs.js's throttle on User.lastLearningAt),
 // but looks back further than just the last 7 days -- most users don't
@@ -20,7 +30,10 @@ const LOOKBACK_MS = 60 * 24 * 60 * 60 * 1000;
 const STALE_MS = 14 * 24 * 60 * 60 * 1000;
 
 function buildSummaryText({ patterns, winRate, tradeCount }) {
-  const parts = [`Over this trader's last ${tradeCount} closed trades (${winRate}% win rate):`];
+  const confidenceNote = tradeCount < CONFIDENT_SAMPLE_SIZE
+    ? ` (small sample -- treat as an early, tentative signal, not a confirmed pattern)`
+    : "";
+  const parts = [`Over this trader's last ${tradeCount} closed trades (${winRate}% win rate)${confidenceNote}:`];
 
   if (patterns.bestSession) parts.push(`Best session: ${patterns.bestSession}.`);
   if (patterns.worstSession) parts.push(`Weakest session: ${patterns.worstSession}.`);
