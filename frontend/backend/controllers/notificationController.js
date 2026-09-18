@@ -38,6 +38,71 @@ const QUICK_TRADE_DEFAULT_PAIRS = [
   "USD/CHF OTC", "NZD/USD OTC", "EUR/JPY OTC", "GBP/JPY OTC", "Gold OTC",
 ];
 
+// A handful of major, recognizable symbols to check news impact against —
+// analyzeNewsImpact wants standard symbols (e.g. "EURUSD"), not Quick
+// Trade's OTC display strings ("EUR/USD OTC"), so both generation paths
+// below share this same small candidate set regardless of which pairs
+// they're otherwise trading.
+const NEWS_IMPACT_CANDIDATE_PAIRS = [...CRYPTO_PAIRS, ...FOREX_PAIRS].slice(0, 3);
+
+// Previously only checked the single most-recent article and only ever
+// ran from the forex/MT5 path -- both were why these alerts were rare and
+// Quick Trade never got any. Shared by both generateQuickTradeSignals and
+// autoGenerate below so the two modes have real parity instead of one
+// having news context and the other having none at all.
+const NEWS_IMPACT_CANDIDATES = 3;
+const NEWS_IMPACT_DEDUP_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+async function createNewsImpactNotifications(userId, newsArticles, prices, type) {
+  if (!newsArticles.length) return 0;
+
+  let created = 0;
+  const topNews = newsArticles.slice(0, NEWS_IMPACT_CANDIDATES);
+  for (const article of topNews) {
+    try {
+      const impact = await claudeAI.analyzeNewsImpact(article, NEWS_IMPACT_CANDIDATE_PAIRS, prices);
+      if (impact.impactLevel !== "high" || !impact.affectedPairs?.length) continue;
+
+      const affectedPair = impact.affectedPairs[0];
+      const signalType = affectedPair.impact === "bullish" ? "buy"
+        : affectedPair.impact === "bearish" ? "sell" : null;
+      if (!signalType) continue;
+
+      const pair = affectedPair.pair || NEWS_IMPACT_CANDIDATE_PAIRS[0];
+      // Same dedup shape as the regular per-pair signal check elsewhere in
+      // this file -- a fast-moving news cycle shouldn't re-alert the same
+      // pair/direction call on every generation cycle while it's still current.
+      const existing = await Notification.findOne({
+        user: userId,
+        source: "news_impact",
+        pair,
+        signal: signalType,
+        createdAt: { $gte: new Date(Date.now() - NEWS_IMPACT_DEDUP_WINDOW_MS) },
+      });
+      if (existing) continue;
+
+      await Notification.create({
+        user: userId,
+        pair,
+        signal: signalType,
+        entry: affectedPair.entry || 0,
+        stopLoss: affectedPair.stopLoss || 0,
+        takeProfit: affectedPair.takeProfit || 0,
+        reasoning: `📰 ${article.title}\n\n${impact.tradingAdvice}`,
+        confidence: 65,
+        source: "news_impact",
+        sourceLabel: "News Impact Alert",
+        type,
+        read: false,
+      });
+      created++;
+    } catch (err) {
+      console.error(`News impact analysis failed for "${article.title}":`, err.message);
+    }
+  }
+  return created;
+}
+
 // Quick Trade signals — direction + confidence only, no entry/SL/TP, since
 // the trader executes on Pocket Option/Expert Option themselves. Mirrors
 // the forex loop below but calls analyzeQuickSignal instead.
@@ -53,6 +118,17 @@ async function generateQuickTradeSignals(userId, session) {
     ragService.getBookConceptSummary(userId),
     learningService.getLearnedSummary(userId),
   ]);
+
+  // Previously hardcoded to [] below -- Quick Trade signals had no news
+  // context at all while the forex/MT5 path did. Shares getForexNews's
+  // own 20min cache with that path, so calling it here too costs nothing
+  // extra when both run in the same cycle.
+  let newsArticles = [];
+  try {
+    newsArticles = await newsService.getForexNews();
+  } catch (err) {
+    console.error("News fetch failed:", err.message);
+  }
 
   // No per-cycle cap — availablePairs is already naturally bounded (session
   // pairs or the ~10 default pairs), and with indexed dedup lookups and
@@ -98,9 +174,10 @@ async function generateQuickTradeSignals(userId, session) {
         console.error(`Historical data failed for ${pair}:`, err.message);
       }
 
+      const relevantNews = newsService.getNewsSentiment(newsArticles, marketSymbol);
       const momentum = computeMomentum(historical);
       const analysis = await claudeAI.analyzeQuickSignal(
-        formattedPair, currentPrice, historical, [], { bookSummary, momentum, learnedSummary }
+        formattedPair, currentPrice, historical, relevantNews, { bookSummary, momentum, learnedSummary }
       );
 
       // Every non-"wait" signal was auto-executed regardless of how
@@ -135,6 +212,13 @@ async function generateQuickTradeSignals(userId, session) {
       lastError = err.message;
     }
   }
+
+  try {
+    await createNewsImpactNotifications(userId, newsArticles, prices, "quick_trade");
+  } catch (err) {
+    console.error("Quick Trade news impact notification error:", err.message);
+  }
+
   return { created, lastError };
 }
 // Exported so quickTradeBotController.getPending can trigger generation
@@ -344,39 +428,10 @@ exports.autoGenerate = async (userId) => {
       }
     }
 
-    // News notifications
-    if (newsArticles.length > 0) {
-      try {
-        const topNews = newsArticles.slice(0, 1);
-        for (const article of topNews) {
-          const impact = await claudeAI.analyzeNewsImpact(
-            article, [...CRYPTO_PAIRS, ...FOREX_PAIRS].slice(0, 3), prices
-          );
-          if (impact.impactLevel === "high" && impact.affectedPairs?.length > 0) {
-            const affectedPair = impact.affectedPairs[0];
-            const signalType = affectedPair.impact === "bullish" ? "buy"
-              : affectedPair.impact === "bearish" ? "sell" : null;
-
-            if (signalType) {
-              await Notification.create({
-                user: userId,
-                pair: affectedPair.pair || "BTCUSD",
-                signal: signalType,
-                entry: affectedPair.entry || 0,
-                stopLoss: affectedPair.stopLoss || 0,
-                takeProfit: affectedPair.takeProfit || 0,
-                reasoning: `📰 ${article.title}\n\n${impact.tradingAdvice}`,
-                confidence: 65,
-                source: "ai_auto",
-                sourceLabel: "News Impact Alert",
-                read: false,
-              });
-            }
-          }
-        }
-      } catch (err) {
-        console.error("News notification error:", err.message);
-      }
+    try {
+      await createNewsImpactNotifications(userId, newsArticles, prices, "forex");
+    } catch (err) {
+      console.error("News impact notification error:", err.message);
     }
 
     console.log(`✅ Generated ${notifications.length} notifications for user ${userId}`);

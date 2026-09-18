@@ -78,6 +78,13 @@ exports.getPending = async (req, res) => {
     const candidates = await Notification.find({
       tradingSessionId: session._id,
       type: "quick_trade",
+      // News Impact Alerts (source: "news_impact") never set
+      // tradingSessionId, so they're already excluded by the filter above
+      // in practice -- this is a second, explicit guard rather than
+      // relying on that as the only thing keeping an unverified external
+      // signal from being auto-executed the same way a real Quick Trade
+      // AI signal is.
+      source: { $ne: "news_impact" },
       $or: [{ botStatus: { $exists: false } }, { botStatus: "pending" }],
     }).sort({ createdAt: 1 });
 

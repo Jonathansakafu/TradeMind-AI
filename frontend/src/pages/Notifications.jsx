@@ -6,7 +6,7 @@ import {
   Bell, RefreshCw, BookOpen, Brain,
   History, X, CheckCheck, PlusCircle, Zap,
   TrendingUp, TrendingDown, Clock,
-  ShieldCheck, ShieldAlert,
+  ShieldCheck, ShieldAlert, Newspaper, Webhook,
 } from "lucide-react";
 import { API_URL } from "../config/api";
 import SessionBanner from "../components/SessionBanner";
@@ -18,12 +18,16 @@ const SOURCE_ICONS = {
   past_trades: <History size={14} className="text-blue-400" />,
   books: <BookOpen size={14} className="text-purple-400" />,
   ai_auto: <Brain size={14} className="text-green-400" />,
+  news_impact: <Newspaper size={14} className="text-orange-400" />,
+  tradingview: <Webhook size={14} className="text-cyan-400" />,
 };
 
 const SOURCE_COLORS = {
   past_trades: "text-blue-400 bg-blue-500/10 border-blue-500/20",
   books: "text-purple-400 bg-purple-500/10 border-purple-500/20",
   ai_auto: "text-green-400 bg-green-500/10 border-green-500/20",
+  news_impact: "text-orange-400 bg-orange-500/10 border-orange-500/20",
+  tradingview: "text-cyan-400 bg-cyan-500/10 border-cyan-500/20",
 };
 
 function Notifications() {

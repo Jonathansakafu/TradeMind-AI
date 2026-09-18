@@ -15,7 +15,7 @@ const notificationSchema = new mongoose.Schema({
   confidence: { type: Number },
   source: {
     type: String,
-    enum: ["past_trades", "books", "ai_auto", "tradingview"],
+    enum: ["past_trades", "books", "ai_auto", "tradingview", "news_impact"],
     default: "ai_auto",
   },
   sourceLabel: { type: String },
