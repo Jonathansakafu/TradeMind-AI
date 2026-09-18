@@ -1,6 +1,7 @@
 const User = require("../models/User");
 const { autoGenerate } = require("../controllers/notificationController");
 const { runWeeklyLearningForUser } = require("./learningService");
+const { extractSkillKnowledgeFromNews } = require("./newsKnowledgeService");
 
 // Checked on every cycle (see below) but only actually fires about once a
 // week per user -- same self-throttling pattern as autoGenerate's own
@@ -24,6 +25,14 @@ async function runAutoGenerateForAllUsers() {
     return { userCount: 0 };
   }
   console.log(`🔔 Auto-generating for ${users.length} user(s)...`);
+
+  // Global, not per-user -- runs once a cycle regardless of user count.
+  // No separate throttle needed here: getTradingSkillNews's own 1h cache
+  // bounds the real external cost, so calling this every cycle is safe.
+  extractSkillKnowledgeFromNews().catch((err) =>
+    console.error("News skill-knowledge extraction failed:", err.message)
+  );
+
   for (const user of users) {
     await autoGenerate(user._id);
 

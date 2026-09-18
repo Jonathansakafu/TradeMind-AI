@@ -50,6 +50,44 @@ exports.getForexNews = async () => {
   }
 };
 
+// Separate query and cache from getForexNews above -- that one targets
+// breaking macro/event content (rate decisions, headline data releases)
+// for sentiment analysis. This one targets durable technique/strategy
+// content (how a trader actually approaches the market), which changes
+// far more slowly -- a 1h cache is appropriate here where 20min would be
+// too eager for content this slow-moving, and keeps this from competing
+// with getForexNews for NewsAPI's shared 100 req/day free-tier quota.
+const skillNewsCache = { data: [], timestamp: 0 };
+const SKILL_NEWS_CACHE_TTL = 60 * 60 * 1000;
+
+exports.getTradingSkillNews = async () => {
+  if (Date.now() - skillNewsCache.timestamp < SKILL_NEWS_CACHE_TTL && skillNewsCache.data.length > 0) {
+    return skillNewsCache.data;
+  }
+
+  try {
+    const query = '"trading strategy" OR "price action" OR "smart money concepts" OR "trading psychology" OR "risk management" trader';
+    const res = await axios.get("https://newsapi.org/v2/everything", {
+      params: {
+        q: query,
+        language: "en",
+        sortBy: "publishedAt",
+        pageSize: 15,
+        apiKey: NEWS_API_KEY,
+      },
+    });
+    const articles = res.data.articles || [];
+    if (articles.length > 0) {
+      skillNewsCache.data = articles;
+      skillNewsCache.timestamp = Date.now();
+    }
+    return articles;
+  } catch (err) {
+    console.error("Skill news fetch error:", err.message);
+    return skillNewsCache.data;
+  }
+};
+
 // Pata impact ya news kwenye pair
 exports.getPairImpact = (article, pair) => {
   const keywords = PAIR_KEYWORDS[pair] || [];

@@ -261,7 +261,7 @@ exports.formatContext = (chunks) => {
     .join("\n\n")}`;
 };
 
-// The curated concepts/strategies/rules Claude/Groq already extracted at
+// The curated concepts/strategies/rules the AI already extracted at
 // upload time (see aiController.analyzeDocument) were previously only
 // ever read back by the "My Books" list UI -- disconnected from every
 // actual signal/analysis/answer path. This makes that extraction
@@ -269,26 +269,49 @@ exports.formatContext = (chunks) => {
 // threshold above, so an uploaded book counts even when no individual
 // chunk scores high enough to be retrieved on its own.
 const MAX_BOOKS = 3;
+// Global entries auto-extracted from trading-strategy news (see
+// services/newsKnowledgeService.js) -- same BookConcept shape, but
+// user-unscoped, so every trader's context includes them alongside their
+// own uploaded books. Capped lower than MAX_BOOKS since this is
+// supplementary market wisdom, not something the trader deliberately
+// chose to upload.
+const MAX_GLOBAL_CONCEPTS = 2;
 const MAX_ITEMS_PER_LIST = 8;
 
+const formatConceptEntries = (entries) => entries.map((b) => {
+  const parts = [`"${b.bookName}"`];
+  if (b.concepts?.length) parts.push(`concepts: ${b.concepts.slice(0, MAX_ITEMS_PER_LIST).join("; ")}`);
+  if (b.strategies?.length) parts.push(`strategies: ${b.strategies.slice(0, MAX_ITEMS_PER_LIST).join("; ")}`);
+  if (b.rules?.length) parts.push(`rules: ${b.rules.slice(0, MAX_ITEMS_PER_LIST).join("; ")}`);
+  return parts.join(" — ");
+});
+
 exports.getBookConceptSummary = async (userId) => {
-  if (!userId) return "";
-  const books = await BookConcept.find({ user: userId })
-    .sort({ createdAt: -1 })
-    .limit(MAX_BOOKS)
-    .select("bookName concepts strategies rules")
-    .lean();
-  if (books.length === 0) return "";
+  const [books, globalConcepts] = await Promise.all([
+    userId
+      ? BookConcept.find({ user: userId })
+          .sort({ createdAt: -1 })
+          .limit(MAX_BOOKS)
+          .select("bookName concepts strategies rules")
+          .lean()
+      : Promise.resolve([]),
+    BookConcept.find({ user: { $exists: false } })
+      .sort({ createdAt: -1 })
+      .limit(MAX_GLOBAL_CONCEPTS)
+      .select("bookName concepts strategies rules")
+      .lean(),
+  ]);
+  if (books.length === 0 && globalConcepts.length === 0) return "";
 
-  const sections = books.map((b) => {
-    const parts = [`"${b.bookName}"`];
-    if (b.concepts?.length) parts.push(`concepts: ${b.concepts.slice(0, MAX_ITEMS_PER_LIST).join("; ")}`);
-    if (b.strategies?.length) parts.push(`strategies: ${b.strategies.slice(0, MAX_ITEMS_PER_LIST).join("; ")}`);
-    if (b.rules?.length) parts.push(`rules: ${b.rules.slice(0, MAX_ITEMS_PER_LIST).join("; ")}`);
-    return parts.join(" — ");
-  });
+  const sections = [];
+  if (books.length) {
+    sections.push(`From the trader's uploaded books:\n${formatConceptEntries(books).join("\n")}`);
+  }
+  if (globalConcepts.length) {
+    sections.push(`From recent trading-strategy news:\n${formatConceptEntries(globalConcepts).join("\n")}`);
+  }
 
-  return `\nConcepts extracted from the trader's uploaded books (apply these where relevant, cite the book name):\n${sections.join("\n")}`;
+  return `\nConcepts extracted from books/trading knowledge (apply these where relevant, cite the source name):\n${sections.join("\n\n")}`;
 };
 
 // Composes every fused context source (RAG chunks, extracted book
