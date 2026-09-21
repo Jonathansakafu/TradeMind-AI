@@ -659,8 +659,13 @@ exports.analyzeNewsImpact = async (article, pairs, prices = {}) => {
   // entry/stopLoss/takeProfit for the full 2h CACHE_DURATION -- those
   // levels are grounded in whatever `prices` was at generation time, and a
   // fast-moving pair (BTC especially) can easily be 1-2% away from that by
-  // the time a 2h-old cache entry is still being handed out.
-  const cacheKey = `news_${article.title?.slice(0, 30)}_${Math.floor(Date.now() / (10 * 60 * 1000))}`;
+  // the time a 2h-old cache entry is still being handed out. 30min (not a
+  // more aggressive 10min) so the automated per-cycle news-impact check
+  // (notificationController's createNewsImpactNotifications, running on
+  // every generation cycle for every user) doesn't multiply Groq calls for
+  // the same still-current headline far beyond what the shared per-model
+  // daily token budget (see GROQ_MODEL_FAST above) can absorb.
+  const cacheKey = `news_${article.title?.slice(0, 30)}_${Math.floor(Date.now() / (30 * 60 * 1000))}`;
   const cached = getCached(cacheKey);
   if (cached) return cached;
 
@@ -685,16 +690,28 @@ News: ${article.title}
 Content: ${article.description || ""}
 Pairs to analyze: ${pairs.join(", ")}${priceContext}`;
 
-  const text = await askGroq(prompt);
+  // askGroq itself (not just JSON.parse) is inside this try now -- it
+  // previously sat outside, so a Groq failure (rate limit, quota, a
+  // deprecated model 404) threw straight past this function's own
+  // fallback. The automated notification path happens to catch that one
+  // level up, but News.jsx's one-off "analyze this article" click has no
+  // such safety net: the request 500'd and the panel just rendered its
+  // header forever with nothing below and no error shown -- indistinguishable
+  // from stuck loading. `text` stays "" when askGroq itself is what failed,
+  // so the message below falls through to err.message (already a friendly
+  // string for rate limits, see askGroq/rateLimitMessage) instead of an
+  // empty tradingAdvice.
+  let text = "";
   try {
+    text = await askGroq(prompt);
     const result = JSON.parse(text.replace(/```json|```/g, "").trim());
     setCache(cacheKey, result);
     return result;
-  } catch {
+  } catch (err) {
     return {
       headline: article.title, summary: article.description || "",
       sentiment: "neutral", impactLevel: "low",
-      affectedPairs: [], tradingAdvice: text,
+      affectedPairs: [], tradingAdvice: text || err.message || "AI analysis failed — please try again.",
     };
   }
 };
