@@ -36,6 +36,20 @@ const setCache = (key, data) => {
   cache.set(key, { data, timestamp: Date.now() });
 };
 
+// None of the prompts below pin down whether "confidence" is a 0-100
+// percentage or a 0-1 fraction, so Groq answers each on its own -- most of
+// the time 0-100, but sometimes 0.78 instead of 78. Left unnormalized this
+// silently broke two things: the UI showed "0.78%" instead of "78%", and
+// Quick Trade's MIN_QUICK_TRADE_CONFIDENCE=65 gate rejected every
+// fraction-scaled signal outright (0.78 < 65), discarding genuinely strong
+// signals before they ever became a notification. Applied once, right
+// after parsing, wherever the model returns a confidence value.
+function normalizeConfidence(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return value;
+  return num > 0 && num <= 1 ? Math.round(num * 100) : num;
+}
+
 // Groq periodically deprecates model IDs outright (llama-3.3-70b-versatile
 // was retired 2026-06-17, breaking every AI feature in this app with a
 // silent 404 until this was traced down) — unlike geminiVision.js's
@@ -284,7 +298,7 @@ exports.analyzeTrade = async (trade, history = [], retrievedChunks = [], extra =
 
   const ragCtx = ragService.buildPromptContext({ retrievedChunks, bookSummary });
 
-  const prompt = `You are TradeMind AI, a professional forex trading coach. Analyze this trade and respond ONLY in JSON with no markdown:
+  const prompt = `You are TradeMind AI, a professional forex trading coach. Analyze this trade and respond ONLY in JSON with no markdown (every confidence field is a 0-100 integer percentage, e.g. 78 for 78% -- never a 0-1 decimal):
 {
   "patterns": [{"name":"","description":"","confidence":0}],
   "riskFlags": [{"type":"","severity":"low|medium|high","message":""}],
@@ -310,6 +324,7 @@ ${ragCtx ? "Ground patterns/riskFlags/suggestions in the retrieved context above
   const text = await askGroq(prompt);
   try {
     const result = JSON.parse(text.replace(/```json|```/g, "").trim());
+    result.patterns?.forEach((p) => { p.confidence = normalizeConfidence(p.confidence); });
     setCache(cacheKey, result);
     return result;
   } catch {
@@ -331,7 +346,7 @@ exports.detectPatterns = async (trades, retrievedChunks = [], extra = {}) => {
 
   const ragCtx = ragService.buildPromptContext({ retrievedChunks, bookSummary });
 
-  const prompt = `You are a professional forex analyst. Analyze this trading history and respond ONLY in JSON with no markdown:
+  const prompt = `You are a professional forex analyst. Analyze this trading history and respond ONLY in JSON with no markdown (every confidence field is a 0-100 integer percentage, e.g. 78 for 78% -- never a 0-1 decimal):
 {
   "patterns": [{"name":"","description":"","confidence":0,"occurrences":0}],
   "bestSession": "",
@@ -351,6 +366,7 @@ ${ragCtx ? "Cross-reference patterns with the retrieved context above. Add book-
   const text = await askGroq(prompt);
   try {
     const result = JSON.parse(text.replace(/```json|```/g, "").trim());
+    result.patterns?.forEach((p) => { p.confidence = normalizeConfidence(p.confidence); });
     setCache(cacheKey, result);
     return result;
   } catch {
@@ -368,7 +384,7 @@ exports.getTradeSuggestion = async (proposedTrade, history = [], retrievedChunks
 
   const ragCtx = ragService.buildPromptContext({ retrievedChunks, bookSummary, learnedSummary });
 
-  const prompt = `You are TradeMind AI. Should this trader take this trade? Respond ONLY in JSON with no markdown:
+  const prompt = `You are TradeMind AI. Should this trader take this trade? Respond ONLY in JSON with no markdown (confidence is a 0-100 integer percentage, e.g. 78 for 78% -- never a 0-1 decimal):
 {
   "recommendation": "take|skip|wait",
   "confidence": 0,
@@ -386,7 +402,9 @@ ${ragCtx ? "Check if this trade aligns with the retrieved context above (books a
 
   const text = await askGroq(prompt);
   try {
-    return JSON.parse(text.replace(/```json|```/g, "").trim());
+    const result = JSON.parse(text.replace(/```json|```/g, "").trim());
+    result.confidence = normalizeConfidence(result.confidence);
+    return result;
   } catch {
     return { recommendation: "wait", confidence: 50, reasoning: text, risks: [], improvements: [] };
   }
@@ -533,7 +551,7 @@ ${hasTrades ? `Trader's recent past trades: ${JSON.stringify(tradeSummary)}` : "
 ${fusedContext}
 ${newsContext}
 
-Respond ONLY in JSON with no markdown:
+Respond ONLY in JSON with no markdown ("confidence" is a 0-100 integer percentage, e.g. 78 for 78% -- never a 0-1 decimal):
 {
   "signal": "buy|sell|wait",
   "confidence": 0,
@@ -554,6 +572,7 @@ Respond ONLY in JSON with no markdown:
   const text = await askGroq(prompt);
   try {
     const result = JSON.parse(text.replace(/```json|```/g, "").trim());
+    result.confidence = normalizeConfidence(result.confidence);
     result.source = source;
     result.sourceLabel = sourceLabel;
 
@@ -607,7 +626,7 @@ Recent candles (1H): ${JSON.stringify(recentCandles)}${newsContext}${momentumCon
 ${bookSummary}
 ${learnedSummary}
 
-Respond ONLY in JSON with no markdown:
+Respond ONLY in JSON with no markdown ("confidence" is a 0-100 integer percentage, e.g. 78 for 78% -- never a 0-1 decimal):
 {
   "direction": "buy|sell|wait",
   "confidence": 0,
@@ -618,6 +637,7 @@ Respond ONLY in JSON with no markdown:
   const text = await askGroq(prompt);
   try {
     const result = JSON.parse(text.replace(/```json|```/g, "").trim());
+    result.confidence = normalizeConfidence(result.confidence);
     setCache(cacheKey, result);
     return result;
   } catch {
