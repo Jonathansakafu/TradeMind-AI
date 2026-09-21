@@ -654,7 +654,13 @@ Respond ONLY in JSON with no markdown ("confidence" is a 0-100 integer percentag
 // not just imprecise, since nothing in the prompt or response hinted the
 // levels weren't grounded in anything current.
 exports.analyzeNewsImpact = async (article, pairs, prices = {}) => {
-  const cacheKey = `news_${article.title?.slice(0, 30)}`;
+  // Bucketed by time (like analyzeMarketSmart/analyzeQuickSignal above) so
+  // a still-current headline can't keep serving the same baked-in
+  // entry/stopLoss/takeProfit for the full 2h CACHE_DURATION -- those
+  // levels are grounded in whatever `prices` was at generation time, and a
+  // fast-moving pair (BTC especially) can easily be 1-2% away from that by
+  // the time a 2h-old cache entry is still being handed out.
+  const cacheKey = `news_${article.title?.slice(0, 30)}_${Math.floor(Date.now() / (10 * 60 * 1000))}`;
   const cached = getCached(cacheKey);
   if (cached) return cached;
 
