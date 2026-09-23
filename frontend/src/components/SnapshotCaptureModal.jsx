@@ -1,7 +1,8 @@
 import { useRef, useState } from "react";
-import html2canvas from "html2canvas";
+import { domToBlob } from "modern-screenshot";
 import { X, Camera } from "lucide-react";
 import TradeSnapshot from "./TradeSnapshot";
+import { useTheme } from "../hooks/useTheme";
 
 function SnapshotCaptureModal({
   open, onClose, onCaptured,
@@ -12,6 +13,7 @@ function SnapshotCaptureModal({
 }) {
   const nodeRef = useRef(null);
   const [capturing, setCapturing] = useState(false);
+  const { theme } = useTheme();
 
   if (!open) return null;
 
@@ -19,17 +21,26 @@ function SnapshotCaptureModal({
     if (!nodeRef.current) return;
     setCapturing(true);
     try {
-      const canvas = await html2canvas(nodeRef.current, {
-        backgroundColor: "#020617",
+      // modern-screenshot, not html2canvas -- this app is on Tailwind v4,
+      // which compiles its whole color palette to oklch(), and
+      // html2canvas's own color parser has no support for oklch()/
+      // color-mix() at all, so it threw on the first colored element it
+      // walked (every capture failed with a generic "Couldn't generate
+      // the snapshot" error). modern-screenshot renders via an SVG
+      // foreignObject the browser paints itself, so any CSS-valid color
+      // just works -- no reimplemented color parsing to break.
+      const blob = await domToBlob(nodeRef.current, {
+        backgroundColor: theme === "dark" ? "#020617" : "#ffffff",
         scale: 2,
+        type: "image/png",
       });
-      const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
       if (!blob) { setCapturing(false); return; }
       const file = new File([blob], `trade-snapshot-${Date.now()}.png`, { type: "image/png" });
       await onCaptured(file);
       setCapturing(false);
       onClose();
-    } catch {
+    } catch (err) {
+      console.error("Snapshot capture failed:", err);
       alert("Couldn't generate the snapshot — please try again.");
       setCapturing(false);
     }

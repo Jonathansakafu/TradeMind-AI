@@ -1,5 +1,6 @@
 import { forwardRef } from "react";
 import { TrendingUp, TrendingDown } from "lucide-react";
+import { useTheme } from "../hooks/useTheme";
 
 // A self-rendered visual record of a trade's levels -- captured via
 // html2canvas into an image and used as the trade's screenshot. Exists
@@ -14,11 +15,25 @@ import { TrendingUp, TrendingDown } from "lucide-react";
 // breaks) can't read anything meaningful from it. For that specific
 // feature, a real chart screenshot (upload or screen-capture) is still
 // what actually works.
+//
+// Every color below is a plain hex/rgba value passed through inline
+// `style`, not a Tailwind color class -- this app is on Tailwind v4,
+// which compiles its whole palette to oklch(), and html2canvas (the
+// library that rasterizes this exact component, see
+// SnapshotCaptureModal) has no support for oklch()/color-mix() at all.
+// It throws immediately on the first element it walks that uses one,
+// which given Tailwind color classes were on nearly every element here,
+// meant every capture failed with a generic "Couldn't generate the
+// snapshot" error. Layout classes (padding, flex, grid, rounded, font
+// size/weight) are untouched -- only color ever hit the oklch problem.
 const TradeSnapshot = forwardRef(({
   pair, direction, entry, stopLoss, takeProfit,
   markerPrice, markerLabel = "Current", isClosing = false,
   pnl, pips, outcome,
 }, ref) => {
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+
   const sl = stopLoss ? parseFloat(stopLoss) : null;
   const tp = takeProfit ? parseFloat(takeProfit) : null;
   const entryNum = parseFloat(entry);
@@ -32,20 +47,53 @@ const TradeSnapshot = forwardRef(({
     return Math.max(2, Math.min(98, ((price - rangeLow) / (rangeHigh - rangeLow)) * 100));
   };
 
+  const c = {
+    cardBg: isDark ? "#020617" : "#ffffff",
+    cardBorder: isDark ? "#1e293b" : "#e2e8f0",
+    textPrimary: isDark ? "#ffffff" : "#0f172a",
+    textMuted1: isDark ? "#64748b" : "#94a3b8",
+    textMuted2: isDark ? "#94a3b8" : "#64748b",
+    boxBg: isDark ? "#0f172a" : "#ffffff",
+    boxBorder: isDark ? "#1e293b" : "#e2e8f0",
+    trackBg: isDark ? "#1e293b" : "#f1f5f9",
+    greenText: isDark ? "#4ade80" : "#16a34a",
+    redText: isDark ? "#f87171" : "#ef4444",
+    blueText: isDark ? "#60a5fa" : "#3b82f6",
+    green: "#22c55e",
+    red: "#ef4444",
+    blue: "#60a5fa",
+    markerBorder: isDark ? "#020617" : "#ffffff",
+    neutralMarker: isDark ? "#ffffff" : "#0f172a",
+    breakevenBg: isDark ? "#1e293b" : "#f1f5f9",
+    breakevenBorder: isDark ? "#334155" : "#e2e8f0",
+    breakevenText: isDark ? "#cbd5e1" : "#475569",
+    footerText: isDark ? "#475569" : "#94a3b8",
+  };
+
+  const markerColor = outcome === "win" ? c.green : outcome === "loss" ? c.red : c.neutralMarker;
+
   return (
-    <div ref={ref} className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 w-full">
+    <div
+      ref={ref}
+      className="rounded-2xl p-6 w-full"
+      style={{ backgroundColor: c.cardBg, border: `1px solid ${c.cardBorder}` }}
+    >
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-2">
-          <span className="text-xl font-bold text-slate-900 dark:text-white">{pair || "—"}</span>
-          <span className={`flex items-center gap-1 text-sm font-bold px-2.5 py-1 rounded-lg ${
-            direction === "buy" ? "bg-green-500/10 text-green-600 dark:text-green-400" : "bg-red-500/10 text-red-500 dark:text-red-400"
-          }`}>
+          <span className="text-xl font-bold" style={{ color: c.textPrimary }}>{pair || "—"}</span>
+          <span
+            className="flex items-center gap-1 text-sm font-bold px-2.5 py-1 rounded-lg"
+            style={{
+              backgroundColor: direction === "buy" ? "rgba(34,197,94,0.1)" : "rgba(239,68,68,0.1)",
+              color: direction === "buy" ? c.greenText : c.redText,
+            }}
+          >
             {direction === "buy" ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
             {direction?.toUpperCase() || "—"}
           </span>
         </div>
-        <span className="text-xs text-slate-400 dark:text-slate-500">
+        <span className="text-xs" style={{ color: c.textMuted1 }}>
           {new Date().toLocaleString()}
         </span>
       </div>
@@ -53,25 +101,36 @@ const TradeSnapshot = forwardRef(({
       {/* Price ladder */}
       {hasRange && (
         <div className="mb-6">
-          <div className="relative h-3 bg-slate-100 dark:bg-slate-800 rounded-full overflow-visible mt-8 mb-8">
-            <div className="absolute inset-0 rounded-full bg-gradient-to-r from-red-500/30 via-slate-400/30 dark:via-slate-700/30 to-green-500/30" />
-            <div className="absolute top-0 bottom-0 w-0.5 bg-red-500" style={{ left: `${posOf(sl)}%` }}>
-              <span className="absolute -top-6 -translate-x-1/2 text-[11px] font-semibold text-red-500 dark:text-red-400 whitespace-nowrap">SL {sl}</span>
+          <div
+            className="relative h-3 rounded-full overflow-visible mt-8 mb-8"
+            style={{ backgroundColor: c.trackBg }}
+          >
+            <div
+              className="absolute inset-0 rounded-full"
+              style={{
+                background: `linear-gradient(to right, rgba(239,68,68,0.3), ${isDark ? "rgba(51,65,85,0.3)" : "rgba(148,163,184,0.3)"}, rgba(34,197,94,0.3))`,
+              }}
+            />
+            <div className="absolute top-0 bottom-0 w-0.5" style={{ left: `${posOf(sl)}%`, backgroundColor: c.red }}>
+              <span className="absolute -top-6 -translate-x-1/2 text-[11px] font-semibold whitespace-nowrap" style={{ color: c.redText }}>SL {sl}</span>
             </div>
-            <div className="absolute top-0 bottom-0 w-0.5 bg-blue-400" style={{ left: `${posOf(entryNum)}%` }}>
-              <span className="absolute -top-6 -translate-x-1/2 text-[11px] font-semibold text-blue-500 dark:text-blue-400 whitespace-nowrap">Entry {entryNum}</span>
+            <div className="absolute top-0 bottom-0 w-0.5" style={{ left: `${posOf(entryNum)}%`, backgroundColor: c.blue }}>
+              <span className="absolute -top-6 -translate-x-1/2 text-[11px] font-semibold whitespace-nowrap" style={{ color: c.blueText }}>Entry {entryNum}</span>
             </div>
-            <div className="absolute top-0 bottom-0 w-0.5 bg-green-500" style={{ left: `${posOf(tp)}%` }}>
-              <span className="absolute -top-6 -translate-x-1/2 text-[11px] font-semibold text-green-600 dark:text-green-400 whitespace-nowrap">TP {tp}</span>
+            <div className="absolute top-0 bottom-0 w-0.5" style={{ left: `${posOf(tp)}%`, backgroundColor: c.green }}>
+              <span className="absolute -top-6 -translate-x-1/2 text-[11px] font-semibold whitespace-nowrap" style={{ color: c.greenText }}>TP {tp}</span>
             </div>
             {marker != null && (
               <div
-                className={`absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-2 border-white dark:border-slate-950 ${
-                  outcome === "win" ? "bg-green-400" : outcome === "loss" ? "bg-red-400" : "bg-slate-900 dark:bg-white"
-                }`}
-                style={{ left: `${posOf(marker)}%`, transform: "translate(-50%, -50%)" }}
+                className="absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full"
+                style={{
+                  left: `${posOf(marker)}%`,
+                  transform: "translate(-50%, -50%)",
+                  backgroundColor: markerColor,
+                  border: `2px solid ${c.markerBorder}`,
+                }}
               >
-                <span className="absolute -bottom-6 -translate-x-1/2 left-1/2 text-[11px] font-bold text-slate-900 dark:text-white whitespace-nowrap">
+                <span className="absolute -bottom-6 -translate-x-1/2 left-1/2 text-[11px] font-bold whitespace-nowrap" style={{ color: c.textPrimary }}>
                   {markerLabel} {marker}
                 </span>
               </div>
@@ -82,56 +141,60 @@ const TradeSnapshot = forwardRef(({
 
       {/* Numeric grid */}
       <div className="grid grid-cols-3 gap-3 mb-4">
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-center">
-          <p className="text-xs text-slate-400 dark:text-slate-500 mb-1">Entry</p>
-          <p className="font-mono font-bold text-blue-500 dark:text-blue-400 text-sm">{entry || "—"}</p>
+        <div className="rounded-xl p-3 text-center" style={{ backgroundColor: c.boxBg, border: `1px solid ${c.boxBorder}` }}>
+          <p className="text-xs mb-1" style={{ color: c.textMuted1 }}>Entry</p>
+          <p className="font-mono font-bold text-sm" style={{ color: c.blueText }}>{entry || "—"}</p>
         </div>
-        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-center">
-          <p className="text-xs text-slate-400 dark:text-slate-500 mb-1">Stop Loss</p>
-          <p className="font-mono font-bold text-red-500 dark:text-red-400 text-sm">{stopLoss || "—"}</p>
+        <div className="rounded-xl p-3 text-center" style={{ backgroundColor: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)" }}>
+          <p className="text-xs mb-1" style={{ color: c.textMuted1 }}>Stop Loss</p>
+          <p className="font-mono font-bold text-sm" style={{ color: c.redText }}>{stopLoss || "—"}</p>
         </div>
-        <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-3 text-center">
-          <p className="text-xs text-slate-400 dark:text-slate-500 mb-1">Take Profit</p>
-          <p className="font-mono font-bold text-green-600 dark:text-green-400 text-sm">{takeProfit || "—"}</p>
+        <div className="rounded-xl p-3 text-center" style={{ backgroundColor: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.2)" }}>
+          <p className="text-xs mb-1" style={{ color: c.textMuted1 }}>Take Profit</p>
+          <p className="font-mono font-bold text-sm" style={{ color: c.greenText }}>{takeProfit || "—"}</p>
         </div>
       </div>
 
       {/* Result (close flow only) */}
       {isClosing && (
-        <div className={`rounded-xl p-4 border ${
-          outcome === "win" ? "bg-green-500/10 border-green-500/30"
-          : outcome === "loss" ? "bg-red-500/10 border-red-500/30"
-          : "bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
-        }`}>
+        <div
+          className="rounded-xl p-4"
+          style={{
+            backgroundColor: outcome === "win" ? "rgba(34,197,94,0.1)" : outcome === "loss" ? "rgba(239,68,68,0.1)" : c.breakevenBg,
+            border: `1px solid ${outcome === "win" ? "rgba(34,197,94,0.3)" : outcome === "loss" ? "rgba(239,68,68,0.3)" : c.breakevenBorder}`,
+          }}
+        >
           <div className="grid grid-cols-3 gap-3 text-center">
             <div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Exit Price</p>
-              <p className="font-mono font-bold text-slate-900 dark:text-white text-sm">{markerPrice || "—"}</p>
+              <p className="text-xs mb-1" style={{ color: c.textMuted2 }}>Exit Price</p>
+              <p className="font-mono font-bold text-sm" style={{ color: c.textPrimary }}>{markerPrice || "—"}</p>
             </div>
             <div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">P&amp;L</p>
-              <p className={`font-mono font-bold text-sm ${Number(pnl) >= 0 ? "text-green-600 dark:text-green-400" : "text-red-500 dark:text-red-400"}`}>
+              <p className="text-xs mb-1" style={{ color: c.textMuted2 }}>P&amp;L</p>
+              <p className="font-mono font-bold text-sm" style={{ color: Number(pnl) >= 0 ? c.greenText : c.redText }}>
                 {Number(pnl) >= 0 ? "+" : ""}{pnl != null ? `$${pnl}` : "—"}
               </p>
             </div>
             <div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Pips</p>
-              <p className={`font-mono font-bold text-sm ${Number(pips) >= 0 ? "text-green-600 dark:text-green-400" : "text-red-500 dark:text-red-400"}`}>
+              <p className="text-xs mb-1" style={{ color: c.textMuted2 }}>Pips</p>
+              <p className="font-mono font-bold text-sm" style={{ color: Number(pips) >= 0 ? c.greenText : c.redText }}>
                 {Number(pips) >= 0 ? "+" : ""}{pips ?? "—"}
               </p>
             </div>
           </div>
-          <div className={`text-center mt-3 py-1.5 rounded-lg font-bold text-sm ${
-            outcome === "win" ? "bg-green-500/20 text-green-600 dark:text-green-400"
-            : outcome === "loss" ? "bg-red-500/20 text-red-500 dark:text-red-400"
-            : "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
-          }`}>
+          <div
+            className="text-center mt-3 py-1.5 rounded-lg font-bold text-sm"
+            style={{
+              backgroundColor: outcome === "win" ? "rgba(34,197,94,0.2)" : outcome === "loss" ? "rgba(239,68,68,0.2)" : c.breakevenBorder,
+              color: outcome === "win" ? c.greenText : outcome === "loss" ? c.redText : c.breakevenText,
+            }}
+          >
             {outcome === "win" ? "✅ WIN" : outcome === "loss" ? "❌ LOSS" : "➖ BREAKEVEN"}
           </div>
         </div>
       )}
 
-      <p className="text-center text-[10px] text-slate-400 dark:text-slate-600 mt-4">
+      <p className="text-center text-[10px] mt-4" style={{ color: c.footerText }}>
         TradeMind AI — auto-generated trade record
       </p>
     </div>
