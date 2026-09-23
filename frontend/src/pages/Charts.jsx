@@ -54,6 +54,18 @@ const INTERVALS = [
   { label: "1W", value: "W" },
 ];
 
+// Chart background presets — was hardcoded to a single fixed color
+// (previously dark navy, then white), each time forcing everyone onto
+// whatever one choice was made. swatch is just for the picker UI; theme/
+// backgroundColor/gridColor are the actual TradingView widget params.
+const CHART_THEMES = [
+  { id: "light", label: "Light", swatch: "#ffffff", theme: "light", backgroundColor: "#ffffff", gridColor: "#e2e8f0" },
+  { id: "dark", label: "Dark", swatch: "#0f172a", theme: "dark", backgroundColor: "#0f172a", gridColor: "#1e293b" },
+  { id: "charcoal", label: "Charcoal", swatch: "#131722", theme: "dark", backgroundColor: "#131722", gridColor: "#2a2e39" },
+  { id: "sepia", label: "Sepia", swatch: "#f4ecd8", theme: "light", backgroundColor: "#f4ecd8", gridColor: "#e0d5b8" },
+];
+const CHART_THEME_STORAGE_KEY = "tm_chart_theme";
+
 const PIP_DECIMALS = {
   USDJPY: 100, GBPJPY: 100, EURJPY: 100,
   AUDJPY: 100, CADJPY: 100, XAUUSD: 100,
@@ -95,6 +107,27 @@ function Charts() {
   // doesn't have), so a CSS-only "cover the whole screen" toggle works
   // identically on web and the Android app with no platform-specific code.
   const [isExpanded, setIsExpanded] = useState(false);
+
+  // Remembered per-device via localStorage (wrapped in try/catch -- a
+  // private window or blocked storage shouldn't break the page, just fall
+  // back to the default every time) so picking a background once sticks
+  // across visits instead of resetting to whatever's hardcoded.
+  const [chartThemeId, setChartThemeId] = useState(() => {
+    try {
+      return localStorage.getItem(CHART_THEME_STORAGE_KEY) || "light";
+    } catch {
+      return "light";
+    }
+  });
+  const chartTheme = CHART_THEMES.find((t) => t.id === chartThemeId) || CHART_THEMES[0];
+  const selectChartTheme = (id) => {
+    setChartThemeId(id);
+    try {
+      localStorage.setItem(CHART_THEME_STORAGE_KEY, id);
+    } catch {
+      // ignore -- picker still works for this session via state alone
+    }
+  };
 
   useEffect(() => {
     if (!isExpanded) return;
@@ -170,11 +203,11 @@ function Charts() {
       symbol: selectedPair.symbol,
       interval: selectedInterval,
       timezone: "Africa/Nairobi",
-      theme: "light",
+      theme: chartTheme.theme,
       style: "1",
       locale: "en",
-      backgroundColor: "#ffffff",
-      gridColor: "#e2e8f0",
+      backgroundColor: chartTheme.backgroundColor,
+      gridColor: chartTheme.gridColor,
       hide_top_toolbar: false,
       hide_legend: false,
       // Explicit rather than left to the widget's own default -- this is
@@ -186,10 +219,14 @@ function Charts() {
       hide_side_toolbar: false,
       allow_symbol_change: false,
       save_image: true,
-      studies: ["RSI@tv-basicstudies", "MACD@tv-basicstudies"],
+      // No default indicators -- previously always added RSI+MACD whether
+      // wanted or not. The chart's own toolbar already lets you add any
+      // indicator yourself (Indicators button), which also persists your
+      // choice in TradingView's own per-symbol chart layout storage.
+      studies: [],
     });
     containerRef.current.appendChild(script);
-  }, [selectedPair, selectedInterval]);
+  }, [selectedPair, selectedInterval, chartTheme]);
 
   // Calculate live P&L
   const calculateLivePL = (trade) => {
@@ -311,6 +348,30 @@ function Charts() {
             }`}
           >
             {i.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Chart background — remembered via localStorage, see chartThemeId above */}
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        <span className="text-xs text-slate-500 dark:text-slate-400">Background:</span>
+        {CHART_THEMES.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => selectChartTheme(t.id)}
+            title={t.label}
+            aria-label={`${t.label} chart background`}
+            className={`flex items-center gap-1.5 pl-1.5 pr-3 py-1.5 rounded-lg text-xs font-semibold border transition ${
+              chartThemeId === t.id
+                ? "border-green-500 text-slate-900 dark:text-white bg-green-500/10"
+                : "border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+            }`}
+          >
+            <span
+              className="w-4 h-4 rounded-full border border-slate-300 dark:border-slate-600 flex-shrink-0"
+              style={{ backgroundColor: t.swatch }}
+            />
+            {t.label}
           </button>
         ))}
       </div>
