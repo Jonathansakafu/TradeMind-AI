@@ -2,7 +2,7 @@ import MainLayout from "../layouts/MainLayout";
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import axios from "axios";
-import { Search, X } from "lucide-react";
+import { Search, X, Maximize2, Minimize2 } from "lucide-react";
 import { API_URL } from "../config/api";
 import { useAuth } from "../hooks/useAuth";
 import { useResource } from "../hooks/useResource";
@@ -89,6 +89,21 @@ function Charts() {
   const [search, setSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const searchRef = useRef(null);
+  // Plain CSS fixed-overlay expand instead of the Fullscreen API --
+  // Element.requestFullscreen() support inside Capacitor's Android WebView
+  // is inconsistent (needs extra native WebChromeClient wiring this app
+  // doesn't have), so a CSS-only "cover the whole screen" toggle works
+  // identically on web and the Android app with no platform-specific code.
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  useEffect(() => {
+    if (!isExpanded) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [isExpanded]);
 
   const searchResults = search.trim()
     ? PAIRS.filter((p) =>
@@ -155,13 +170,20 @@ function Charts() {
       symbol: selectedPair.symbol,
       interval: selectedInterval,
       timezone: "Africa/Nairobi",
-      theme: "dark",
+      theme: "light",
       style: "1",
       locale: "en",
-      backgroundColor: "#0f172a",
-      gridColor: "#1e293b",
+      backgroundColor: "#ffffff",
+      gridColor: "#e2e8f0",
       hide_top_toolbar: false,
       hide_legend: false,
+      // Explicit rather than left to the widget's own default -- this is
+      // the toolbar the Long/Short Position drawing tools (and every other
+      // drawing tool) live in. Add/remove itself needs no code on our
+      // side: TradingView's own toolbar already supports drawing a
+      // position box and deleting it (select it, press Delete, or its own
+      // right-click menu) once the toolbar is actually visible.
+      hide_side_toolbar: false,
       allow_symbol_change: false,
       save_image: true,
       studies: ["RSI@tv-basicstudies", "MACD@tv-basicstudies"],
@@ -480,11 +502,24 @@ function Charts() {
         </div>
       )}
 
-      {/* TradingView Chart */}
+      {/* TradingView Chart -- expand button toggles a fixed full-screen
+          overlay (see isExpanded above) rather than the browser Fullscreen
+          API, for reliable behavior on both web and the Android app. */}
       <div
-        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden"
-        style={{ height: openTrades.length > 0 ? "500px" : "620px" }}
+        className={
+          isExpanded
+            ? "fixed inset-0 z-50 bg-white dark:bg-slate-900 rounded-none"
+            : "relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden"
+        }
+        style={{ height: isExpanded ? "100vh" : (openTrades.length > 0 ? "500px" : "620px") }}
       >
+        <button
+          onClick={() => setIsExpanded((v) => !v)}
+          aria-label={isExpanded ? "Exit expanded view" : "Expand chart"}
+          className="absolute top-3 right-3 z-10 p-2 rounded-lg bg-white/90 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white shadow-sm transition"
+        >
+          {isExpanded ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+        </button>
         <div
           className="tradingview-widget-container"
           ref={containerRef}
