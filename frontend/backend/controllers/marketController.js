@@ -4,7 +4,15 @@ const claudeAI = require("../services/claudeAI");
 const signalContext = require("../services/signalContext");
 const Trade = require("../models/Trade");
 
-const PAIRS = ["EURUSD", "GBPUSD", "USDJPY", "XAUUSD", "AUDUSD", "GBPJPY"];
+// Widened 2026-09-23 (was forex-only) so a manually-clicked "analyze this
+// article" on the News page can actually attribute impact to crypto or
+// stock news too, not just forex -- previously a Bitcoin or Apple headline
+// would only ever get checked against these 6 forex pairs.
+const PAIRS = [
+  "EURUSD", "GBPUSD", "USDJPY", "XAUUSD", "AUDUSD", "GBPJPY",
+  "BTCUSD", "ETHUSD", "XRPUSD",
+  ...marketService.STOCK_SYMBOLS,
+];
 
 exports.getLivePrices = async (req, res) => {
   try {

@@ -38,15 +38,17 @@ const QUICK_TRADE_DEFAULT_PAIRS = [
   "USD/CHF OTC", "NZD/USD OTC", "EUR/JPY OTC", "GBP/JPY OTC", "Gold OTC",
 ];
 
-// A handful of major, recognizable symbols to check news impact against —
-// analyzeNewsImpact wants standard symbols (e.g. "EURUSD"), not Quick
-// Trade's OTC display strings ("EUR/USD OTC"), so both generation paths
-// below share this same small candidate set regardless of which pairs
-// they're otherwise trading. slice(0,6) so this actually reaches into
-// FOREX_PAIRS -- CRYPTO_PAIRS alone is exactly 3 items, so the previous
-// slice(0,3) silently never checked a single forex pair despite the
-// comment above claiming both.
-const NEWS_IMPACT_CANDIDATE_PAIRS = [...CRYPTO_PAIRS, ...FOREX_PAIRS].slice(0, 6);
+// Symbols to check news impact against — analyzeNewsImpact wants standard
+// symbols (e.g. "EURUSD", "AAPL"), not Quick Trade's OTC display strings
+// ("EUR/USD OTC"), so both generation paths below share this same
+// candidate set regardless of which pairs they're otherwise trading. Was
+// slice(0,3) on just [...CRYPTO_PAIRS, ...FOREX_PAIRS] -- CRYPTO_PAIRS
+// alone is exactly 3 items, so that silently never checked a single forex
+// pair despite the comment above claiming both, and never covered stocks
+// at all. Now includes every crypto/forex/stock pair this app tracks
+// (2026-09-23, at the user's request -- News Impact was only ever
+// evaluating BTC/ETH/XRP in practice).
+const NEWS_IMPACT_CANDIDATE_PAIRS = [...CRYPTO_PAIRS, ...FOREX_PAIRS, ...STOCK_PAIRS];
 
 // Previously only checked the single most-recent article and only ever
 // ran from the forex/MT5 path -- both were why these alerts were rare and

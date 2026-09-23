@@ -685,7 +685,16 @@ exports.analyzeNewsImpact = async (article, pairs, prices = {}) => {
     ? `\nCurrent live prices for these pairs (source every entry/stopLoss/takeProfit level off these actual prices -- never state a price level from memory/training data, it will be stale): ${JSON.stringify(knownPrices)}`
     : "\nNo live price data is available for these pairs right now -- leave entry/stopLoss/takeProfit as 0 rather than guessing a level from memory, and say so in reasoning.";
 
-  const prompt = `You are a forex news analyst. Analyze this news and its impact on forex pairs. Respond ONLY in JSON with no markdown:
+  // Nothing below previously told the model what timeframe/size these
+  // levels should be for -- unlike analyzeMarketSmart (explicitly
+  // "INTRADAY... close within 3-4 hours... proportional to volatility"),
+  // this prompt just showed "stopLoss":0 as a placeholder with no scale
+  // hint at all. The model would sometimes free-style swing/position-trade
+  // distances (double-digit % from entry -- confirmed live: a BTCUSD alert
+  // with an 8% stop-loss and 16% take-profit, more realistic as a
+  // multi-week position than a news reaction). Applies to every asset
+  // class this function sees (crypto/forex/stocks), not just one pair.
+  const prompt = `You are a market news analyst covering forex, crypto, and stocks. Analyze this news and its impact on the pairs/tickers below. Respond ONLY in JSON with no markdown:
 {
   "headline": "",
   "summary": "",
@@ -694,6 +703,8 @@ exports.analyzeNewsImpact = async (article, pairs, prices = {}) => {
   "affectedPairs": [{"pair":"","impact":"bullish|bearish|neutral","reasoning":"","entry":0,"stopLoss":0,"takeProfit":0}],
   "tradingAdvice": ""
 }
+
+Size stopLoss/takeProfit for a short-term reaction to THIS news catalyst -- a trade meant to play out over hours to a few days, not a long-term position. As a rough sanity check regardless of asset class: stopLoss/takeProfit distance from entry should typically be a low single-digit percentage of entry (proportional to that pair/ticker's normal short-term volatility), not 5-10%+ -- a level that wide reads as a multi-week swing call, not a reaction to one headline, and is what you must avoid. If the news isn't strong enough to justify a realistic near-term level, set impactLevel to "low" or "medium" rather than inventing an unrealistically wide one to justify "high".
 
 News: ${article.title}
 Content: ${article.description || ""}
