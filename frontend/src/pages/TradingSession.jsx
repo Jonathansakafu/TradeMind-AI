@@ -39,9 +39,18 @@ const STATUS_LABELS = {
 
 function TradingSession() {
   const { headers } = useAuth();
+  // Declared before the useResource call below since that call's cache key
+  // depends on it.
+  const [mode, setMode] = useState("mt5");
+  // MT5 and Quick Trade sessions can now both be active at once (see
+  // sessionController's startSession), so this page shows whichever
+  // mode's tab is currently selected below rather than "the" one active
+  // session -- scoping the fetch (and its cache key) by `mode` means
+  // switching tabs shows that mode's own status/form independently of
+  // whatever the other mode is doing.
   const { data, isLoading: initialLoading, refetch: refetchActiveSession } = useResource(
-    "sessions-active",
-    () => fetchActiveSessionResource(headers),
+    `sessions-active-${mode}`,
+    () => fetchActiveSessionResource(headers, mode),
     30000
   );
   // Locally hides a finished session (so the create-session form shows
@@ -82,7 +91,6 @@ function TradingSession() {
   const [error, setError] = useState(null);
   const [errorCode, setErrorCode] = useState(null);
 
-  const [mode, setMode] = useState("mt5");
   const [profitTarget, setProfitTarget] = useState("50");
   const [riskLimit, setRiskLimit] = useState("30");
   const [maxTrades, setMaxTrades] = useState("20");
@@ -218,39 +226,44 @@ function TradingSession() {
         </p>
       </div>
 
+      {/* Mode picker — always visible (not just pre-session) since MT5 and
+          Quick Trade sessions are now independent and can both be active at
+          once; switching tabs shows that mode's own status or start-form
+          without affecting the other mode's session. */}
+      <div className="max-w-2xl mb-6">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6">
+          <h3 className="font-bold text-slate-900 dark:text-white mb-4">Mode</h3>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={() => setMode("mt5")}
+              className={`p-4 rounded-xl border text-left transition ${
+                mode === "mt5"
+                  ? "bg-green-500/10 border-green-500 text-green-600 dark:text-green-400"
+                  : "bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400"
+              }`}
+            >
+              <Bot size={20} className="mb-2" />
+              <p className="font-bold text-sm">MT5 Auto-Trade</p>
+              <p className="text-xs mt-1 opacity-80">Signals execute automatically via your MT5 EA</p>
+            </button>
+            <button
+              onClick={() => setMode("quick_trade")}
+              className={`p-4 rounded-xl border text-left transition ${
+                mode === "quick_trade"
+                  ? "bg-green-500/10 border-green-500 text-green-600 dark:text-green-400"
+                  : "bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400"
+              }`}
+            >
+              <Zap size={20} className="mb-2" />
+              <p className="font-bold text-sm">Quick Trade</p>
+              <p className="text-xs mt-1 opacity-80">AI signals for Pocket Option/Expert Option — you tap Won/Lost</p>
+            </button>
+          </div>
+        </div>
+      </div>
+
       {!session && (
         <div className="max-w-2xl space-y-6">
-          {/* Mode picker */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6">
-            <h3 className="font-bold text-slate-900 dark:text-white mb-4">Choose Mode</h3>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                onClick={() => setMode("mt5")}
-                className={`p-4 rounded-xl border text-left transition ${
-                  mode === "mt5"
-                    ? "bg-green-500/10 border-green-500 text-green-600 dark:text-green-400"
-                    : "bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400"
-                }`}
-              >
-                <Bot size={20} className="mb-2" />
-                <p className="font-bold text-sm">MT5 Auto-Trade</p>
-                <p className="text-xs mt-1 opacity-80">Signals execute automatically via your MT5 EA</p>
-              </button>
-              <button
-                onClick={() => setMode("quick_trade")}
-                className={`p-4 rounded-xl border text-left transition ${
-                  mode === "quick_trade"
-                    ? "bg-green-500/10 border-green-500 text-green-600 dark:text-green-400"
-                    : "bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400"
-                }`}
-              >
-                <Zap size={20} className="mb-2" />
-                <p className="font-bold text-sm">Quick Trade</p>
-                <p className="text-xs mt-1 opacity-80">AI signals for Pocket Option/Expert Option — you tap Won/Lost</p>
-              </button>
-            </div>
-          </div>
-
           {/* Account */}
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6">
             <h3 className="font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">

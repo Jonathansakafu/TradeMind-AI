@@ -4,13 +4,17 @@ import { useAuth } from "../hooks/useAuth";
 import { useResource } from "../hooks/useResource";
 import { fetchActiveSession } from "../api/resources";
 
-// Persistent at-a-glance status for an active trading session, shown across
-// Notifications/MT5/Dashboard so the trader always knows where they stand
-// without navigating to the Trading Robot page. Renders nothing if there's
-// no active session — className lets callers control outer spacing.
-function SessionBanner({ className = "" }) {
+// One mode's banner -- MT5 and Quick Trade sessions can both be active at
+// the same time (see sessionController's startSession), so this renders
+// per-mode rather than for "the" active session, and SessionBanner below
+// stacks up to two of these instead of picking just one.
+function SingleSessionBanner({ mode, className }) {
   const { headers } = useAuth();
-  const { data } = useResource("sessions-active", () => fetchActiveSession(headers), 30000);
+  const { data } = useResource(
+    `sessions-active-${mode}`,
+    () => fetchActiveSession(headers, mode),
+    30000
+  );
   const session = data?.session ?? null;
   const progress = data?.progress ?? { currentPL: 0, tradeCount: 0 };
 
@@ -31,7 +35,7 @@ function SessionBanner({ className = "" }) {
       )}
       <div className="flex-1 min-w-0">
         <p className="text-xs font-semibold text-slate-900 dark:text-white truncate">
-          Session active — {progress.tradeCount}/{session.maxTrades} trades ·{" "}
+          {session.mode === "mt5" ? "MT5" : "Quick Trade"} session active — {progress.tradeCount}/{session.maxTrades} trades ·{" "}
           <span className={progress.currentPL >= 0 ? "text-green-500" : "text-red-500"}>
             {progress.currentPL >= 0 ? "+" : ""}${progress.currentPL.toFixed(2)}
           </span>
@@ -47,6 +51,20 @@ function SessionBanner({ className = "" }) {
       </div>
       <ChevronRight size={16} className="text-slate-400 dark:text-slate-600 flex-shrink-0" />
     </Link>
+  );
+}
+
+// Persistent at-a-glance status for active trading session(s), shown across
+// Notifications/MT5/Dashboard so the trader always knows where they stand
+// without navigating to the Trading Robot page. Renders nothing if neither
+// mode has an active session; renders one or two banners (stacked) if one
+// or both do.
+function SessionBanner({ className = "" }) {
+  return (
+    <div className={`space-y-3 ${className}`}>
+      <SingleSessionBanner mode="mt5" />
+      <SingleSessionBanner mode="quick_trade" />
+    </div>
   );
 }
 

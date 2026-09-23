@@ -49,13 +49,18 @@ function Notifications() {
   // isLoading flips true on every one of those background poll ticks too.
   const loading = notificationsData === undefined && notificationsLoading;
 
-  // Shared "sessions-active" key with SessionBanner (rendered just below) —
-  // previously this page's own copy was fetched once on mount and never
-  // refreshed, so the Won/Lost buttons could act on a stale session after
-  // it changed elsewhere.
+  // Shared "sessions-active-quick_trade" key with SessionBanner (rendered
+  // just below) — previously this page's own copy was fetched once on
+  // mount and never refreshed, so the Won/Lost buttons could act on a
+  // stale session after it changed elsewhere. Scoped to quick_trade
+  // specifically (not "whichever session is active") since that's the
+  // only mode this page's activeSession is ever used for (Won/Lost
+  // reporting below) -- now that an MT5 session can be active at the same
+  // time, an unscoped fetch could return that one instead and silently
+  // disable Quick Trade reporting.
   const { data: sessionResourceData, refetch: refetchActiveSession } = useResource(
-    "sessions-active",
-    () => fetchActiveSession(headers),
+    "sessions-active-quick_trade",
+    () => fetchActiveSession(headers, "quick_trade"),
     30000
   );
   const activeSession = sessionResourceData?.session ?? null;

@@ -46,10 +46,15 @@ const startSession = async (req, res) => {
       }
     }
 
-    const existing = await TradingSession.findOne({ user: req.user._id, status: "active" });
+    // Scoped by mode, not global -- Quick Trade and MT5 are independent
+    // trading contexts (separate pair universes, separate risk budgets,
+    // notificationController's autoGenerate already treats them as such),
+    // so a trader should be able to run one of each at the same time. Only
+    // guards against two sessions of the *same* mode running at once.
+    const existing = await TradingSession.findOne({ user: req.user._id, mode, status: "active" });
     if (existing) {
       return res.status(400).json({
-        message: "You already have an active session — stop it before starting a new one",
+        message: "You already have an active session in this mode — stop it before starting a new one",
       });
     }
 
@@ -87,9 +92,17 @@ const startSession = async (req, res) => {
 
 
 // GET ACTIVE SESSION (+ live progress)
+// Optional ?mode=mt5|quick_trade -- now that both can be active at once
+// (see startSession), callers that care about one specific mode (the
+// Quick Trade Won/Lost flow, the Trading Robot page's per-mode tab) pass
+// it explicitly; omitted, this falls back to "whichever is active" for
+// callers that only ever expect at most one (e.g. a user who's never
+// touched the other mode).
 const getActiveSession = async (req, res) => {
   try {
-    const session = await TradingSession.findOne({ user: req.user._id, status: "active" });
+    const query = { user: req.user._id, status: "active" };
+    if (req.query.mode) query.mode = req.query.mode;
+    const session = await TradingSession.findOne(query);
     if (!session) {
       return res.status(200).json({ session: null });
     }

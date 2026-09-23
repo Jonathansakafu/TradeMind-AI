@@ -17,8 +17,14 @@ export async function fetchNotifications(headers) {
   };
 }
 
-export async function fetchActiveSession(headers) {
-  const res = await axios.get(`${API_URL}/api/sessions/active`, { headers });
+// mode ("mt5" | "quick_trade") scopes to that mode's active session --
+// needed now that both can be active at once (see sessionController's
+// startSession). Omitted, the backend falls back to "whichever is active."
+export async function fetchActiveSession(headers, mode) {
+  const res = await axios.get(`${API_URL}/api/sessions/active`, {
+    headers,
+    params: mode ? { mode } : undefined,
+  });
   return {
     session: res.data.session || null,
     progress: res.data.progress || { currentPL: 0, tradeCount: 0 },
