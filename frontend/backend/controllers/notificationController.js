@@ -42,16 +42,23 @@ const QUICK_TRADE_DEFAULT_PAIRS = [
 // analyzeNewsImpact wants standard symbols (e.g. "EURUSD"), not Quick
 // Trade's OTC display strings ("EUR/USD OTC"), so both generation paths
 // below share this same small candidate set regardless of which pairs
-// they're otherwise trading.
-const NEWS_IMPACT_CANDIDATE_PAIRS = [...CRYPTO_PAIRS, ...FOREX_PAIRS].slice(0, 3);
+// they're otherwise trading. slice(0,6) so this actually reaches into
+// FOREX_PAIRS -- CRYPTO_PAIRS alone is exactly 3 items, so the previous
+// slice(0,3) silently never checked a single forex pair despite the
+// comment above claiming both.
+const NEWS_IMPACT_CANDIDATE_PAIRS = [...CRYPTO_PAIRS, ...FOREX_PAIRS].slice(0, 6);
 
 // Previously only checked the single most-recent article and only ever
 // ran from the forex/MT5 path -- both were why these alerts were rare and
 // Quick Trade never got any. Shared by both generateQuickTradeSignals and
 // autoGenerate below so the two modes have real parity instead of one
-// having news context and the other having none at all.
-const NEWS_IMPACT_CANDIDATES = 3;
-const NEWS_IMPACT_DEDUP_WINDOW_MS = 24 * 60 * 60 * 1000;
+// having news context and the other having none at all. Raised from 3/24h
+// to 10/3h 2026-09-23 at the user's explicit request for much higher
+// notification volume -- more candidate articles per cycle and a much
+// shorter re-alert window, accepting the higher Groq call volume and
+// noisier/more-repetitive alerts that come with it.
+const NEWS_IMPACT_CANDIDATES = 10;
+const NEWS_IMPACT_DEDUP_WINDOW_MS = 3 * 60 * 60 * 1000;
 
 async function createNewsImpactNotifications(userId, newsArticles, prices, type) {
   if (!newsArticles.length) return 0;
@@ -184,8 +191,14 @@ async function generateQuickTradeSignals(userId, session) {
       // confident the AI actually was in it. Live results (mostly losses
       // out of the trades the system itself placed) are the real
       // evidence this needed tightening -- a plain confidence floor is
-      // the simplest, cheapest lever to try first.
-      const MIN_QUICK_TRADE_CONFIDENCE = 65;
+      // the simplest, cheapest lever to try first. Lowered from 65 to 50
+      // 2026-09-23 at the user's explicit request for much higher
+      // notification volume -- this directly trades away some of that
+      // loss-rate protection for more signals, since Quick Trade has no
+      // second-pass verification (unlike the forex/MT5 path's
+      // verifySignal) gating what gets auto-executed by the browser
+      // extension. Worth revisiting if losses climb again.
+      const MIN_QUICK_TRADE_CONFIDENCE = 50;
       if (
         analysis.direction && analysis.direction !== "wait" &&
         (analysis.confidence || 0) >= MIN_QUICK_TRADE_CONFIDENCE
@@ -380,11 +393,19 @@ exports.autoGenerate = async (userId) => {
 
         if (analysis.signal && analysis.signal !== "wait") {
           // Angalia kama notification kama hii haijatumwa leo
+          // Shortened from 6h to 15min 2026-09-23 at the user's explicit
+          // request for much higher notification volume. Matched to
+          // analyzeMarketSmart's own result-cache bucket (also cut from
+          // 30min to 15min in claudeAI.js in the same change) -- a
+          // shorter dedup window alone would have been silently
+          // meaningless, since that cache would keep returning the exact
+          // same cached signal for pairs already deduped anyway.
+          const FOREX_DEDUP_WINDOW_MS = 15 * 60 * 1000;
           const existingToday = await Notification.findOne({
             user: userId,
             pair,
             signal: analysis.signal,
-            createdAt: { $gte: new Date(Date.now() - 6 * 60 * 60 * 1000) },
+            createdAt: { $gte: new Date(Date.now() - FOREX_DEDUP_WINDOW_MS) },
           });
 
           if (!existingToday) {
@@ -490,7 +511,11 @@ exports.generateNotifications = async (req, res) => {
 // blocks on a multi-pair AI generation cycle just to return whatever
 // notifications already exist. The external cron stays in place as a
 // backup for whenever nobody has the app open at all.
-const NOTIF_POLL_GENERATION_THROTTLE_MS = 15 * 60 * 1000;
+// Lowered from 15min to 5min (matching the client's own poll interval
+// above) 2026-09-23 at the user's explicit request for much higher
+// notification volume -- this is now the tightest it can usefully be
+// without also shortening the frontend's poll interval itself.
+const NOTIF_POLL_GENERATION_THROTTLE_MS = 5 * 60 * 1000;
 
 exports.getNotifications = async (req, res) => {
   try {

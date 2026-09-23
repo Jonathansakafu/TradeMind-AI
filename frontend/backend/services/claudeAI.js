@@ -501,7 +501,11 @@ Set verified=false only if the reasoning contradicts the given context, cites so
 // actually contributed in sourceLabel so that's visible, not just internal.
 exports.analyzeMarketSmart = async (pair, currentPrice, historicalPrices, pastTrades, retrievedChunks = [], newsArticles = [], extra = {}) => {
   const { bookSummary = "", momentum = null, pairTrades = [], learnedSummary = "" } = extra;
-  const cacheKey = `market_${pair}_${Math.floor(Date.now() / (30 * 60 * 1000))}`;
+  // Shortened from 30min to 15min 2026-09-23 alongside notificationController's
+  // forex dedup window (also cut to 15min) -- a shorter dedup window alone
+  // would have been meaningless, since this cache would still hand back the
+  // exact same cached signal for the full original 30min regardless.
+  const cacheKey = `market_${pair}_${Math.floor(Date.now() / (15 * 60 * 1000))}`;
   const cached = getCached(cacheKey);
   if (cached) return cached;
 
@@ -604,7 +608,12 @@ Respond ONLY in JSON with no markdown ("confidence" is a 0-100 integer percentag
 // forex/MT5 signal path, where the same fusion does include RAG.
 exports.analyzeQuickSignal = async (pair, currentPrice, historicalPrices, newsArticles = [], extra = {}) => {
   const { bookSummary = "", momentum = null, learnedSummary = "" } = extra;
-  const cacheKey = `quick_${pair}_${Math.floor(Date.now() / (5 * 60 * 1000))}`;
+  // Shortened from 5min to 2min 2026-09-23 to match generateQuickTradeSignals'
+  // own 2min per-pair dedup window -- that dedup window was already this
+  // short, but this 5min cache was silently the real bottleneck the whole
+  // time, handing back the same cached signal regardless of how short the
+  // dedup window was.
+  const cacheKey = `quick_${pair}_${Math.floor(Date.now() / (2 * 60 * 1000))}`;
   const cached = getCached(cacheKey);
   if (cached) return cached;
 
