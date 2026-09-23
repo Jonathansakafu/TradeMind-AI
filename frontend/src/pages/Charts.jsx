@@ -589,7 +589,7 @@ function Charts() {
       </div>
 
       <p className="text-slate-400 dark:text-slate-600 text-xs mt-3 text-center">
-        Charts powered by TradingView · Prices update every 30 seconds
+        Chart streams live from TradingView · The Live Price/P&amp;L box above refreshes every 30 seconds
       </p>
 
     </MainLayout>
