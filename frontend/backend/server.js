@@ -10,7 +10,6 @@ dns.setDefaultResultOrder("ipv4first");
 
 const express = require("express");
 const cors = require("cors");
-const path = require("path");
 const connectDB = require("./config/db");
 
 const app = express();
@@ -42,7 +41,12 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+// Trade screenshots now live on Cloudinary (see tradeRoutes.js) with their
+// own real, persistent URLs -- this used to serve the local "uploads/"
+// folder, but that only ever held aiRoutes.js's own transient book/
+// screenshot-analysis uploads, which are read and deleted within the same
+// request and never linked to from anywhere, so nothing actually needs
+// this route.
 
 app.use("/api/auth", require("./routes/authRoutes"));
 app.use("/api/trades", require("./routes/tradeRoutes"));
