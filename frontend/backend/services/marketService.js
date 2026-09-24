@@ -63,19 +63,22 @@ const isCacheValid = (entry) =>
   Date.now() - entry.timestamp < CACHE_TTL &&
   Object.keys(entry.data).length > 0;
 
-// Fallback prices — approximate values kwa wakati ambapo APIs zinashindwa.
-// Last-resort only now (see the last-known-cached-price preference above
-// and in getLivePrice) -- these are frozen at whatever was roughly true
-// when last updated and WILL drift from reality over time regardless
-// (gold alone moved from ~$2330 to ~$4400+ over this file's life), so
-// treat any use of this constant as a signal something upstream has been
-// failing for a while, not a substitute for fixing that.
-const FALLBACK_PRICES = {
-  EURUSD: 1.0850, GBPUSD: 1.2700, USDJPY: 149.50,
-  AUDUSD: 0.6500, USDCAD: 1.3600, NZDUSD: 0.6000,
-  USDCHF: 0.9100, GBPJPY: 189.00, EURJPY: 162.00,
-  XAUUSD: 4400.00,
-};
+// A hardcoded FALLBACK_PRICES constant used to live here as a last resort
+// when Twelve Data failed. Removed entirely (2026-09-24) after it produced
+// a real, wrong EURUSD signal: entry 1.085 while the live price was
+// ~1.136 -- a ~4.5% gap, not a rounding/staleness quibble, because
+// Twelve Data had apparently been failing for a while and this constant
+// was standing in as if it were a live price with nothing marking it as
+// fake. The comment that used to sit here even said as much ("gold alone
+// moved from ~$2330 to ~$4400+ over this file's life... treat any use of
+// this constant as a signal something upstream has been failing"), but
+// nothing actually acted on that -- it was still fed straight into AI
+// signal generation as a trustworthy "current price," producing entries
+// nowhere near reality. Every remaining fallback path below now only
+// reuses a genuinely-fetched cached price; if none exists, the price is
+// simply unavailable and downstream code already treats that pair as
+// "skip it, no data" -- correctly, since no signal at all is safer than
+// one anchored to a fictional price.
 
 // Pata Gold price kutoka alternative API
 const getGoldPrice = async () => {
@@ -130,31 +133,16 @@ exports.getForexPrices = async () => {
     console.error("Twelve Data error:", err.message);
   }
 
-  // Pata Gold price separately
+  // Pata Gold price separately -- if it fails, prices["XAUUSD"] just stays
+  // whatever was already spread in from the cache above (a genuinely
+  // fetched price, possibly past its freshness TTL) or absent entirely.
+  // No hardcoded constant standing in as if it were real anymore.
   try {
     const goldPrice = await getGoldPrice();
-    if (goldPrice) {
-      prices["XAUUSD"] = goldPrice;
-    } else if (!prices["XAUUSD"]) {
-      prices["XAUUSD"] = FALLBACK_PRICES["XAUUSD"];
-    }
+    if (goldPrice) prices["XAUUSD"] = goldPrice;
   } catch {
-    if (!prices["XAUUSD"]) prices["XAUUSD"] = FALLBACK_PRICES["XAUUSD"];
+    // prices["XAUUSD"] already holds whatever was cached, if anything.
   }
-
-  // Weka fallback kwa pairs ambazo hazikupatikana -- prefer the last real
-  // price this process actually saw (even if past the freshness TTL) over
-  // the hardcoded constant below, which is whatever was true when this
-  // code was written and drifts further from reality the longer the
-  // process runs without a successful fetch (e.g. gold moving from
-  // ~$2330 to ~$4400 over the life of this file).
-  Object.entries(FALLBACK_PRICES).forEach(([pair, fallback]) => {
-    if (!prices[pair]) {
-      const lastKnown = priceCache.forex.data[pair];
-      prices[pair] = lastKnown || fallback;
-      console.log(`Using ${lastKnown ? "last-known cached" : "hardcoded fallback"} price for ${pair}: ${prices[pair]}`);
-    }
-  });
 
   if (Object.keys(prices).length > 0) {
     priceCache.forex.data = prices;
@@ -242,7 +230,8 @@ exports.getLivePrice = async (pair) => {
           return { pair: symbol, price: goldPrice, timestamp: new Date() };
         }
         const lastKnownGold = priceCache.forex.data["XAUUSD"];
-        return { pair: symbol, price: lastKnownGold || FALLBACK_PRICES["XAUUSD"], timestamp: new Date() };
+        if (lastKnownGold) return { pair: symbol, price: lastKnownGold, timestamp: new Date() };
+        return null;
       }
 
       // Jaribu Twelve Data
@@ -257,8 +246,10 @@ exports.getLivePrice = async (pair) => {
         return { pair: symbol, price, timestamp: new Date() };
       }
 
-      // Fallback — prefer the last real price seen over the hardcoded constant.
-      const fallback = priceCache.forex.data[symbol] || FALLBACK_PRICES[symbol];
+      // No hardcoded constant fallback here anymore -- only a genuinely
+      // fetched cached price, or no price at all (see the removal note
+      // above FALLBACK_PRICES used to be defined).
+      const fallback = priceCache.forex.data[symbol];
       if (fallback) return { pair: symbol, price: fallback, timestamp: new Date() };
       return null;
     }
@@ -267,8 +258,7 @@ exports.getLivePrice = async (pair) => {
     const symbol = pair.replace("/", "");
     const cached = priceCache.forex.data[symbol] ||
                    priceCache.crypto.data[symbol] ||
-                   priceCache.stocks.data[symbol.toUpperCase()] ||
-                   FALLBACK_PRICES[symbol];
+                   priceCache.stocks.data[symbol.toUpperCase()];
     if (cached) return { pair: symbol, price: cached, timestamp: new Date() };
     return null;
   }
