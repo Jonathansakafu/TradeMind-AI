@@ -4,12 +4,13 @@ import axios from "axios";
 import MainLayout from "../layouts/MainLayout";
 import {
   TrendingUp, TrendingDown, Search, Download,
-  X, CheckCircle, RefreshCw, LineChart, Pencil
+  X, CheckCircle, RefreshCw, LineChart, Pencil, FileText
 } from "lucide-react";
 import { API_URL } from "../config/api";
 import { downloadFile } from "../utils/nativeDownload";
 import PriceTicker from "../components/PriceTicker";
 import SnapshotCaptureModal from "../components/SnapshotCaptureModal";
+import ReportModal from "../components/ReportModal";
 import { useAuth } from "../hooks/useAuth";
 import { useResource } from "../hooks/useResource";
 import { useMediaQuery } from "../hooks/useMediaQuery";
@@ -46,6 +47,7 @@ function TradeHistory() {
   const [closeLoading, setCloseLoading] = useState(false);
   const [showCloseSnapshot, setShowCloseSnapshot] = useState(false);
   const [fetchingCurrentPrice, setFetchingCurrentPrice] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
   // Separate from the price-based Close Trade flow above (that one
   // computes P&L from entry/exit price and pip values, which quick-trade
   // binary outcomes don't have at all) -- this is a direct correction for
@@ -275,10 +277,18 @@ function TradeHistory() {
             onClick={exportCSV}
             className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:text-green-400 transition"
           >
-            <Download size={13} /> Export
+            <Download size={13} /> Export CSV
+          </button>
+          <button
+            onClick={() => setShowReportModal(true)}
+            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:text-green-400 transition"
+          >
+            <FileText size={13} /> PDF Report
           </button>
         </div>
       </div>
+
+      <ReportModal open={showReportModal} onClose={() => setShowReportModal(false)} />
 
       {/* Live Prices Ticker */}
       <PriceTicker compact className="mb-5" />

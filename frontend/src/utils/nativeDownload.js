@@ -26,3 +26,33 @@ export async function downloadFile(filename, content, mimeType = "text/plain") {
 
   await Share.share({ url: uri });
 }
+
+// Binary counterpart for non-text files (PDFs) -- downloadFile above always
+// writes UTF8 text, which corrupts binary data. base64Data is the file's
+// content with no "data:...;base64," prefix (strip it first if it came
+// from a data URI, e.g. jsPDF's doc.output("datauristring")).
+export async function downloadBinaryFile(filename, base64Data, mimeType = "application/octet-stream") {
+  if (!Capacitor.isNativePlatform()) {
+    const byteChars = atob(base64Data);
+    const bytes = new Uint8Array(byteChars.length);
+    for (let i = 0; i < byteChars.length; i++) bytes[i] = byteChars.charCodeAt(i);
+    const blob = new Blob([bytes], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+    return;
+  }
+
+  // No `encoding` option -- Capacitor Filesystem's default is base64, which
+  // is exactly what we already have, unlike the UTF8 text path above.
+  const { uri } = await Filesystem.writeFile({
+    path: filename,
+    data: base64Data,
+    directory: Directory.Cache,
+  });
+
+  await Share.share({ url: uri });
+}

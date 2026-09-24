@@ -3,14 +3,23 @@ const ragService = require("../services/ragService");
 const { checkAndUpdateSession } = require("../utils/sessionLimits");
 
 // GET all trades
+// from/to (ISO date strings, inclusive) filter on openedAt -- added for the
+// PDF report feature (Day/Week/Month/Year), which needs every trade in a
+// chosen period regardless of how far back it is, not just however many
+// fit under the trade list's own default page size.
 exports.getTrades = async (req, res) => {
   try {
-    const { status, outcome, pair, tradingSessionId, limit = 20, page = 1 } = req.query;
+    const { status, outcome, pair, tradingSessionId, from, to, limit = 20, page = 1 } = req.query;
     const filter = { user: req.user._id };
     if (status) filter.status = status;
     if (outcome) filter.outcome = outcome;
     if (pair) filter.pair = pair.toUpperCase();
     if (tradingSessionId) filter.tradingSessionId = tradingSessionId;
+    if (from || to) {
+      filter.openedAt = {};
+      if (from) filter.openedAt.$gte = new Date(from);
+      if (to) filter.openedAt.$lte = new Date(to);
+    }
 
     const trades = await Trade.find(filter)
       .sort({ openedAt: -1 })
