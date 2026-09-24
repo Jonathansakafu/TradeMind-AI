@@ -64,6 +64,20 @@ app.get("/api/health", (req, res) =>
   res.json({ status: "ok", app: "TradeMind AI" })
 );
 
+// Without this, an error thrown in middleware BEFORE a route's own
+// try/catch runs (e.g. multer/CloudinaryStorage failing to upload a file --
+// credentials wrong/missing, network issue) fell through to Express's
+// default error handler, which returns a generic HTML page, not JSON.
+// Every frontend catch block reads err.response?.data?.message and falls
+// back to a generic "failed" string when that's missing/not JSON -- which
+// is exactly what silently swallowed the real reason a trade with a
+// screenshot failed to save (a Cloudinary upload error) behind "Failed to
+// save trade" with no way to tell what actually went wrong.
+app.use((err, req, res, next) => {
+  console.error("Unhandled error:", err);
+  res.status(err.status || 500).json({ message: err.message || "Something went wrong" });
+});
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, async () => {
   console.log(`🚀 Server running on port ${PORT}`);
