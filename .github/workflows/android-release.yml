@@ -44,8 +44,14 @@ jobs:
         # frontend/.env.production is gitignored (not present in a fresh
         # checkout), so the production API URL is set here instead -- Vite
         # picks up any VITE_-prefixed var from the environment automatically.
+        # VITE_APP_BUILD_SHA is baked in so the running app can compare
+        # itself against main's latest commit and prompt for an update --
+        # see src/utils/checkForUpdate.js. Only ever set here (never for
+        # the web/Vercel build), since only the sideloaded Android app has
+        # no auto-update mechanism of its own.
         env:
           VITE_API_URL: "https://trademind-ai-backend-2tnj.onrender.com"
+          VITE_APP_BUILD_SHA: ${{ github.sha }}
         run: npm run build
 
       - name: Sync Capacitor Android project

@@ -1,11 +1,7 @@
 import { Link } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
 import { Brain, TrendingUp, Shield, BarChart2, Download } from "lucide-react";
-
-// Stable across builds -- the Android CI workflow (codemagic.yaml) always
-// publishes to this same GitHub Release tag/asset name, replacing the
-// previous APK, so this link never needs updating when a new build ships.
-const ANDROID_APK_URL = "https://github.com/jonathansakafu/TradeMind-AI/releases/download/android-latest/trademind-ai.apk";
+import { ANDROID_APK_URL } from "../utils/checkForUpdate";
 
 function Home() {
   // Pointless (and confusing) to offer "download the app" from inside the

@@ -25,6 +25,7 @@ import TradingView from "./pages/TradingView";
 import AskAI from "./pages/AskAI";
 import Guide from "./pages/Guide";
 import TradingSession from "./pages/TradingSession";
+import UpdateBanner from "./components/UpdateBanner";
 
 const ProtectedRoute = ({ children }) => {
   const { token } = useAuth();
@@ -49,6 +50,7 @@ function App() {
     <AuthProvider>
     <ThemeProvider>
       <StatusBarSync />
+      <UpdateBanner />
       <Router>
         <Routes>
           <Route path="/" element={<Home />} />
