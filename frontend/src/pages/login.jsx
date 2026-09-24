@@ -29,7 +29,16 @@ function Login() {
       login(res.data.token, res.data.user);
       navigate("/dashboard");
     } catch (error) {
-      setMessage({ type: "error", text: error.response?.data?.message || t("login.failed", { ns: "auth" }) });
+      // Distinguished from a plain "invalid credentials" failure so a slow/
+      // unreachable network doesn't look identical to a wrong password --
+      // matters now that a request can actually fail this way instead of
+      // hanging forever (see the new axios.defaults.timeout in main.jsx).
+      const text = error.code === "ECONNABORTED"
+        ? "Request timed out — check your connection and try again."
+        : !error.response
+        ? "Couldn't reach the server — check your connection and try again."
+        : error.response?.data?.message || t("login.failed", { ns: "auth" });
+      setMessage({ type: "error", text });
     } finally {
       setLoading(false);
     }
