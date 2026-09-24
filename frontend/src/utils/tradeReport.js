@@ -42,15 +42,25 @@ function loadImageAsPngDataURL(url) {
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.onload = () => {
-      const canvas = document.createElement("canvas");
-      canvas.width = img.naturalWidth;
-      canvas.height = img.naturalHeight;
-      canvas.getContext("2d").drawImage(img, 0, 0);
-      resolve({
-        dataURL: canvas.toDataURL("image/png"),
-        width: img.naturalWidth,
-        height: img.naturalHeight,
-      });
+      // A throw in here (e.g. canvas.toDataURL() hitting a SecurityError
+      // because the response was missing a permissive CORS header) is
+      // inside an async DOM callback, not the Promise executor's own
+      // synchronous body -- it would NOT reject this promise on its own
+      // and this would hang forever instead of failing visibly. Caught
+      // explicitly so it always settles one way or the other.
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        canvas.getContext("2d").drawImage(img, 0, 0);
+        resolve({
+          dataURL: canvas.toDataURL("image/png"),
+          width: img.naturalWidth,
+          height: img.naturalHeight,
+        });
+      } catch (err) {
+        reject(err);
+      }
     };
     img.onerror = () => reject(new Error("image load failed"));
     img.src = url;
@@ -243,7 +253,7 @@ export async function generateTradeReportPDF(headers, { from, to, label }) {
       doc.text(p.pair, margin, y);
       doc.text(String(p.trades), margin + 120, y);
       doc.text(`${((p.wins / p.trades) * 100).toFixed(0)}%`, margin + 190, y);
-      doc.setTextColor(p.pl >= 0 ? [22, 163, 74] : [220, 38, 38]);
+      doc.setTextColor(...(p.pl >= 0 ? [22, 163, 74] : [220, 38, 38]));
       doc.text(money(p.pl), margin + 270, y);
       doc.setTextColor(0);
       y += 14;
@@ -284,7 +294,7 @@ export async function generateTradeReportPDF(headers, { from, to, label }) {
     );
     y += 14;
     if (trade.outcome) {
-      doc.setTextColor(Number(trade.profitLoss) >= 0 ? [22, 163, 74] : [220, 38, 38]);
+      doc.setTextColor(...(Number(trade.profitLoss) >= 0 ? [22, 163, 74] : [220, 38, 38]));
       doc.text(`P&L: ${money(Number(trade.profitLoss) || 0)}`, margin, y);
       doc.setTextColor(0);
       y += 14;

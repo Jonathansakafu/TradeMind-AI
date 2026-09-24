@@ -23,7 +23,12 @@ function ReportModal({ open, onClose }) {
       onClose();
     } catch (err) {
       console.error("Report generation failed:", err);
-      setError("Couldn't generate the report — please try again.");
+      // Surfaced instead of a generic message -- this feature is new
+      // enough that a specific error (network, a bad response, a jsPDF
+      // internal error) is worth seeing directly rather than guessing at
+      // blind from "please try again" alone.
+      const detail = err.response?.data?.message || err.message;
+      setError(detail ? `Couldn't generate the report: ${detail}` : "Couldn't generate the report — please try again.");
     } finally {
       setGenerating(false);
     }
