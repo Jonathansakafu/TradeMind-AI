@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import {
   LayoutDashboard, PlusCircle, History,
   BarChart2, LineChart, Settings, LogOut,
-  Zap, Menu, X, Newspaper, Bell, Bot, Sparkles, BookOpen, Target, Webhook
+  Zap, Menu, X, Newspaper, Bell, Bot, Sparkles, BookOpen, Target, Webhook, PieChart
 } from "lucide-react";
 import NotificationBell from "../components/NotificationBell";
 import ChatWidget from "../components/ChatWidget";
@@ -15,6 +15,7 @@ const navItems = [
   { path: "/dashboard", labelKey: "nav.dashboard", icon: LayoutDashboard },
   { path: "/add-trade", labelKey: "nav.addTrade", icon: PlusCircle },
   { path: "/history", labelKey: "nav.tradeHistory", icon: History },
+  { path: "/performance", labelKey: "nav.performance", icon: PieChart },
   { path: "/analytics", labelKey: "nav.aiAnalytics", icon: BarChart2 },
   { path: "/ask-ai", labelKey: "nav.askAI", icon: Sparkles },
   { path: "/live", labelKey: "nav.liveAnalysis", icon: Zap },

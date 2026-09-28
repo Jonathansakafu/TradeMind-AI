@@ -14,6 +14,7 @@ import Dashboard from "./pages/dashboard";
 import AddTrade from "./pages/addtrade";
 import TradeHistory from "./pages/TradeHistory";
 import Analytics from "./pages/Analytics";
+import Performance from "./pages/Performance";
 import Charts from "./pages/Charts";
 import Settings from "./pages/Settings";
 import Home from "./pages/Home";
@@ -89,6 +90,7 @@ function App() {
           <Route path="/add-trade" element={<ProtectedRoute><AddTrade /></ProtectedRoute>} />
           <Route path="/history" element={<ProtectedRoute><TradeHistory /></ProtectedRoute>} />
           <Route path="/analytics" element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
+          <Route path="/performance" element={<ProtectedRoute><Performance /></ProtectedRoute>} />
           <Route path="/live" element={<ProtectedRoute><LiveAnalysis /></ProtectedRoute>} />
           <Route path="/news" element={<ProtectedRoute><News /></ProtectedRoute>} />
           <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
