@@ -4,7 +4,7 @@ import axios from "axios";
 import MainLayout from "../layouts/MainLayout";
 import {
   Bell, BookOpen, Brain,
-  History, X, CheckCheck, PlusCircle, Zap, ShoppingCart,
+  History, X, CheckCheck, PlusCircle, Zap,
   TrendingUp, TrendingDown, Clock,
   ShieldCheck, ShieldAlert, Newspaper, Webhook,
 } from "lucide-react";
@@ -218,17 +218,6 @@ function Notifications() {
           </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
-          <button
-            onClick={() => setFilter(filter === "taken" ? "all" : "taken")}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border transition ${
-              filter === "taken"
-                ? "bg-green-500 border-green-500 text-slate-950"
-                : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-green-600 dark:text-green-400 hover:border-green-500/50"
-            }`}
-          >
-            <ShoppingCart size={14} />
-            {filter === "taken" ? "Show all signals" : "Taken trades"}
-          </button>
           {unreadCount > 0 && (
             <button
               onClick={markAllAsRead}
