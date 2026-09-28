@@ -29,8 +29,7 @@
     "edit": "Edit",
     "close": "Close",
     "search": "Search",
-    "refresh": "Refresh",
-    "generate": "Generate"
+    "refresh": "Refresh"
   },
   "fields": {
     "email": "Email",

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import axios from "axios";
 import {
-  Bell, X, RefreshCw,
+  Bell, X,
   BookOpen, Brain, History
 } from "lucide-react";
 import { API_URL } from "../config/api";
@@ -32,7 +32,6 @@ function NotificationBell() {
   const unreadCount = data?.unreadCount || 0;
 
   const [open, setOpen] = useState(false);
-  const [generating, setGenerating] = useState(false);
   const dropdownRef = useRef(null);
 
   useEffect(() => {
@@ -44,18 +43,6 @@ function NotificationBell() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
-
-  const generateAlerts = async () => {
-    setGenerating(true);
-    try {
-      await axios.post(`${API_URL}/api/notifications/generate`, {}, { headers });
-      await refetch();
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setGenerating(false);
-    }
-  };
 
   const markAsRead = async (id) => {
     try {
@@ -135,14 +122,6 @@ function NotificationBell() {
                 </button>
               )}
               <button
-                onClick={generateAlerts}
-                disabled={generating}
-                className="flex items-center gap-1.5 bg-green-500 hover:bg-green-600 disabled:opacity-50 text-slate-950 text-xs font-bold px-3 py-1.5 rounded-lg transition"
-              >
-                <RefreshCw size={11} className={generating ? "animate-spin" : ""} />
-                {generating ? "..." : "Generate"}
-              </button>
-              <button
                 onClick={() => setOpen(false)}
                 aria-label="Close"
                 className="p-2 -m-2 text-slate-400 dark:text-slate-500 hover:text-slate-900 dark:hover:text-white transition ml-1"
@@ -159,7 +138,7 @@ function NotificationBell() {
                 <Bell size={32} className="text-slate-300 dark:text-slate-700 mx-auto mb-3" />
                 <p className="text-slate-500 text-sm">No alerts yet</p>
                 <p className="text-slate-400 dark:text-slate-600 text-xs mt-1">
-                  Click "Generate" to get AI alerts
+                  New AI signals appear here automatically
                 </p>
               </div>
             ) : (

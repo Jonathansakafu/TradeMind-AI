@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import MainLayout from "../layouts/MainLayout";
 import {
-  Bell, RefreshCw, BookOpen, Brain,
+  Bell, BookOpen, Brain,
   History, X, CheckCheck, PlusCircle, Zap,
   TrendingUp, TrendingDown, Clock,
   ShieldCheck, ShieldAlert, Newspaper, Webhook,
@@ -35,7 +35,7 @@ function Notifications() {
   const { headers } = useAuth();
 
   // Shared "notifications" key with NotificationBell — mutations below
-  // (read/delete/generate) refetch this resource, so the bell dropdown and
+  // (read/delete) refetch this resource, so the bell dropdown and
   // this page now always agree instead of holding two independent copies.
   const {
     data: notificationsData,
@@ -65,35 +65,9 @@ function Notifications() {
   );
   const activeSession = sessionResourceData?.session ?? null;
 
-  const [generating, setGenerating] = useState(false);
-  const [generateMessage, setGenerateMessage] = useState(null);
   const [filter, setFilter] = useState("all");
   const [sendingId, setSendingId] = useState(null);
   const [reportingId, setReportingId] = useState(null);
-
-  const generateAlerts = async () => {
-    setGenerating(true);
-    setGenerateMessage(null);
-    try {
-      const res = await axios.post(
-        `${API_URL}/api/notifications/generate`,
-        {},
-        { headers }
-      );
-      setGenerateMessage({
-        type: res.data.generated > 0 ? "success" : "info",
-        text: res.data.message,
-      });
-      await refetchNotifications();
-    } catch (err) {
-      setGenerateMessage({
-        type: "error",
-        text: err.response?.data?.message || "Failed to generate alerts",
-      });
-    } finally {
-      setGenerating(false);
-    }
-  };
 
   const markAsRead = async (id) => {
     try {
@@ -231,33 +205,10 @@ function Notifications() {
               Mark all read
             </button>
           )}
-          <button
-            onClick={generateAlerts}
-            disabled={generating}
-            className="flex items-center gap-2 bg-green-500 hover:bg-green-600 disabled:opacity-50 text-slate-950 font-semibold px-4 py-2.5 rounded-xl text-sm transition"
-          >
-            <RefreshCw size={14} className={generating ? "animate-spin" : ""} />
-            {generating ? "Generating..." : "Generate Alerts"}
-          </button>
         </div>
       </div>
 
       <SessionBanner className="mb-6" />
-
-      {generateMessage && (
-        <div className={`mb-6 rounded-xl p-3 text-sm border flex items-center justify-between gap-3 ${
-          generateMessage.type === "success"
-            ? "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20"
-            : generateMessage.type === "error"
-            ? "bg-red-500/10 text-red-500 dark:text-red-400 border-red-500/20"
-            : "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20"
-        }`}>
-          <span>{generateMessage.text}</span>
-          <button onClick={() => setGenerateMessage(null)} aria-label="Dismiss" className="flex-shrink-0 opacity-70 hover:opacity-100">
-            <X size={14} />
-          </button>
-        </div>
-      )}
 
       {/* Filters */}
       <div className="flex gap-2 mb-6 flex-wrap">
@@ -288,16 +239,8 @@ function Notifications() {
           <Bell size={48} className="text-slate-300 dark:text-slate-700 mx-auto mb-4" />
           <p className="text-slate-500 dark:text-slate-400 text-lg font-semibold">No alerts yet</p>
           <p className="text-slate-400 dark:text-slate-500 text-sm mt-2">
-            Click "Generate Alerts" to get AI-powered trading signals
+            New AI signals appear here automatically. Turn on alerts in Settings to get them even when the app is closed.
           </p>
-          <button
-            onClick={generateAlerts}
-            disabled={generating}
-            className="mt-6 flex items-center gap-2 bg-green-500 hover:bg-green-600 disabled:opacity-50 text-slate-950 font-bold px-6 py-3 rounded-xl transition mx-auto"
-          >
-            <RefreshCw size={16} className={generating ? "animate-spin" : ""} />
-            {generating ? "Generating..." : "Generate Now"}
-          </button>
         </div>
       ) : (
         <div className="grid md:grid-cols-2 gap-4">
