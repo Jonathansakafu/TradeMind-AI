@@ -68,7 +68,7 @@ jobs:
         # the web/Vercel build), since only the sideloaded Android app has
         # no auto-update mechanism of its own.
         env:
-          VITE_API_URL: "https://trademind-ai-backend-2tnj.onrender.com"
+          VITE_API_URL: "https://trade-mind-ai-seven.vercel.app"
           VITE_APP_BUILD_SHA: ${{ github.sha }}
           VITE_FCM_ENABLED: ${{ steps.firebase.outputs.enabled }}
         run: npm run build

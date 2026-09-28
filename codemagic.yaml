@@ -16,7 +16,7 @@ workflows:
         # frontend/.env.production is gitignored (not present in a fresh CI
         # checkout), so the production API URL is set here instead — Vite
         # picks up any VITE_-prefixed var from the environment automatically.
-        VITE_API_URL: "https://trademind-ai-backend-2tnj.onrender.com"
+        VITE_API_URL: "https://trade-mind-ai-seven.vercel.app"
       node: latest
       xcode: latest
       cocoapods: default
