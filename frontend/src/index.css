@@ -16,3 +16,25 @@ html:not(.dark) {
 html:not(.dark) body {
   background-color: #ebe8e1;
 }
+
+/* Stronger text in light mode. Most accent text in this app is written
+   as e.g. "text-green-400" -- a pale shade chosen to glow on the dark
+   theme, which reads as washed out on a light background. In light mode
+   those 400 shades (and the light greys used for secondary text) are
+   swapped for their darker 700 equivalents. Dark mode is unaffected. */
+html:not(.dark) {
+  --color-green-400: #15803d;
+  --color-emerald-400: #047857;
+  --color-red-400: #b91c1c;
+  --color-rose-400: #be123c;
+  --color-yellow-400: #a16207;
+  --color-amber-400: #b45309;
+  --color-orange-400: #c2410c;
+  --color-purple-400: #7e22ce;
+  --color-violet-400: #6d28d9;
+  --color-blue-400: #1d4ed8;
+  --color-sky-400: #0369a1;
+  --color-cyan-400: #0e7490;
+  --color-slate-400: #475569;
+  --color-slate-500: #334155;
+}

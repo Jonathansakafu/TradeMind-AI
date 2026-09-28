@@ -275,7 +275,7 @@ function Notifications() {
             <div
               key={n._id}
               className={`bg-white dark:bg-slate-900 border rounded-2xl p-5 transition ${
-                !n.read ? "border-slate-300 dark:border-slate-700 shadow-lg" : "border-slate-200 dark:border-slate-800 opacity-75"
+                !n.read ? "border-slate-300 dark:border-slate-700 shadow-lg" : "border-slate-200 dark:border-slate-800 dark:opacity-75"
               }`}
             >
               {/* Card Header */}
