@@ -1,4 +1,5 @@
 const Groq = require("groq-sdk");
+const pipelineStats = require("./pipelineStats");
 const ragService = require("./ragService");
 const marketService = require("./marketService");
 const { computeMomentum } = require("./marketAnalysis");
@@ -111,10 +112,45 @@ const askGroq = async (prompt) => {
       max_tokens: 1500,
       reasoning_effort: "low",
     });
-    return completion.choices[0]?.message?.content || "";
+    const content = completion.choices[0]?.message?.content || "";
+    pipelineStats.inc("groq.ok");
+    if (!content) pipelineStats.inc("groq.emptyContent");
+    return content;
   } catch (err) {
+    pipelineStats.inc(isRateLimitError(err) ? "groq.rateLimited" : "groq.error");
+    pipelineStats.recordError("groq", err.message);
     if (isRateLimitError(err)) throw new Error(rateLimitMessage(err), { cause: err });
     throw err;
+  }
+};
+
+// Tiny live call used only by GET /api/cron/health -- the only direct way
+// to tell whether the signal model is currently blocked by Groq's per-day
+// token quota (a 429 whose message states limit/used), which otherwise
+// just silently turns every generation cycle into zero signals.
+exports.probeGroq = async () => {
+  try {
+    const { data, response } = await getGroqClient().chat.completions.create({
+      messages: [{ role: "user", content: "Reply with OK" }],
+      model: GROQ_MODEL_FAST,
+      max_tokens: 20,
+      reasoning_effort: "low",
+    }).withResponse();
+    const h = (name) => response.headers.get(name);
+    return {
+      ok: true,
+      model: GROQ_MODEL_FAST,
+      reply: (data.choices[0]?.message?.content || "").slice(0, 40),
+      remainingRequestsToday: h("x-ratelimit-remaining-requests"),
+      remainingTokensThisMinute: h("x-ratelimit-remaining-tokens"),
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      model: GROQ_MODEL_FAST,
+      status: err?.status,
+      error: (err?.error?.error?.message || err.message || "").slice(0, 400),
+    };
   }
 };
 
@@ -589,6 +625,8 @@ Respond ONLY in JSON with no markdown ("confidence" is a 0-100 integer percentag
     setCache(cacheKey, result);
     return result;
   } catch {
+    pipelineStats.inc("ai.market.unparseable");
+    pipelineStats.recordError("analyzeMarketSmart parse", text.slice(0, 200) || "(empty response)");
     return {
       signal: "wait", confidence: 0, reasoning: text,
       entry: currentPrice, stopLoss: 0, takeProfit: 0,
@@ -650,6 +688,8 @@ Respond ONLY in JSON with no markdown ("confidence" is a 0-100 integer percentag
     setCache(cacheKey, result);
     return result;
   } catch {
+    pipelineStats.inc("ai.quick.unparseable");
+    pipelineStats.recordError("analyzeQuickSignal parse", text.slice(0, 200) || "(empty response)");
     return { direction: "wait", confidence: 0, reasoning: text, expiresInMinutes: 5 };
   }
 };

@@ -2,6 +2,7 @@ const webpush = require("web-push");
 const User = require("../models/User");
 const AppConfig = require("../models/AppConfig");
 const { sendSignalEmail } = require("../utils/sendEmail");
+const pipelineStats = require("./pipelineStats");
 
 // Fans a freshly created Notification out to channels that reach the
 // trader when the app isn't open: browser Web Push, Android push (FCM),
@@ -247,6 +248,13 @@ async function dispatchNotification(notification, options = {}) {
 
   for (const [channel, r] of Object.entries(results)) {
     if (r?.error) console.error(`Notify ${channel} failed for user ${user._id}:`, r.error);
+    if (options.test) continue;
+    const sent = r?.sent === true ? 1 : Number(r?.sent) || 0;
+    if (sent) pipelineStats.inc(`delivery.${channel}.sent`, sent);
+    if (r?.error) {
+      pipelineStats.inc(`delivery.${channel}.error`);
+      pipelineStats.recordError(`delivery.${channel}`, r.error);
+    }
   }
   return results;
 }

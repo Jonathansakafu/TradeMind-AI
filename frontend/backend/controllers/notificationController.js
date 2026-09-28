@@ -9,6 +9,7 @@ const claudeAI = require("../services/claudeAI");
 const ragService = require("../services/ragService");
 const learningService = require("../services/learningService");
 const { computeMomentum } = require("../services/marketAnalysis");
+const pipelineStats = require("../services/pipelineStats");
 
 // Crypto pairs zinapatikana 24/7 — zitumike kwanza kwa notifications
 const CRYPTO_PAIRS = ["BTCUSD", "ETHUSD", "XRPUSD"];
@@ -70,7 +71,11 @@ async function createNewsImpactNotifications(userId, newsArticles, prices, type)
   for (const article of topNews) {
     try {
       const impact = await claudeAI.analyzeNewsImpact(article, NEWS_IMPACT_CANDIDATE_PAIRS, prices);
-      if (impact.impactLevel !== "high" || !impact.affectedPairs?.length) continue;
+      pipelineStats.inc("news.analyzed");
+      if (impact.impactLevel !== "high" || !impact.affectedPairs?.length) {
+        pipelineStats.inc("news.notHighImpact");
+        continue;
+      }
 
       const affectedPair = impact.affectedPairs[0];
       const signalType = affectedPair.impact === "bullish" ? "buy"
@@ -88,7 +93,10 @@ async function createNewsImpactNotifications(userId, newsArticles, prices, type)
         signal: signalType,
         createdAt: { $gte: new Date(Date.now() - NEWS_IMPACT_DEDUP_WINDOW_MS) },
       });
-      if (existing) continue;
+      if (existing) {
+        pipelineStats.inc("news.dedupSkipped");
+        continue;
+      }
 
       await Notification.create({
         user: userId,
@@ -105,7 +113,9 @@ async function createNewsImpactNotifications(userId, newsArticles, prices, type)
         read: false,
       });
       created++;
+      pipelineStats.inc("news.created");
     } catch (err) {
+      pipelineStats.inc("news.error");
       console.error(`News impact analysis failed for "${article.title}":`, err.message);
     }
   }
@@ -168,7 +178,10 @@ async function generateQuickTradeSignals(userId, session) {
         type: "quick_trade",
         createdAt: { $gte: new Date(Date.now() - DEDUP_WINDOW_MS) },
       });
-      if (existingRecent) continue;
+      if (existingRecent) {
+        pipelineStats.inc("quick.dedupSkipped");
+        continue;
+      }
 
       const marketSymbol = toMarketSymbol(pair);
       const currentPrice = prices[marketSymbol];
@@ -188,6 +201,9 @@ async function generateQuickTradeSignals(userId, session) {
       const analysis = await claudeAI.analyzeQuickSignal(
         formattedPair, currentPrice, historical, relevantNews, { bookSummary, momentum, learnedSummary }
       );
+      pipelineStats.inc("quick.analyzed");
+      if (!analysis.direction || analysis.direction === "wait") pipelineStats.inc("quick.wait");
+      else if ((analysis.confidence || 0) < 50) pipelineStats.inc("quick.belowConfidenceFloor");
 
       // Every non-"wait" signal was auto-executed regardless of how
       // confident the AI actually was in it. Live results (mostly losses
@@ -219,11 +235,13 @@ async function generateQuickTradeSignals(userId, session) {
           read: false,
         });
         created++;
+        pipelineStats.inc("quick.created");
       }
 
       await new Promise((resolve) => setTimeout(resolve, 2000));
     } catch (err) {
       console.error(`Error analyzing quick trade ${pair}:`, err.message);
+      pipelineStats.inc("quick.error");
       lastError = err.message;
     }
   }
@@ -392,6 +410,8 @@ exports.autoGenerate = async (userId) => {
           relevantNews,
           { bookSummary, momentum, learnedSummary }
         );
+        pipelineStats.inc("forex.analyzed");
+        if (!analysis.signal || analysis.signal === "wait") pipelineStats.inc("forex.wait");
 
         if (analysis.signal && analysis.signal !== "wait") {
           // Angalia kama notification kama hii haijatumwa leo
@@ -428,6 +448,7 @@ exports.autoGenerate = async (userId) => {
             });
             notifications.push(notification);
             console.log(`✅ Notification created: ${analysis.signal} ${pair}`);
+            pipelineStats.inc("forex.created");
 
             // Hands-off automation, opt-in per session: only forward a
             // signal that passed the AI's own self-verification pass
@@ -439,6 +460,7 @@ exports.autoGenerate = async (userId) => {
             }
           } else {
             console.log(`⏭ Skipped duplicate: ${pair} ${analysis.signal}`);
+            pipelineStats.inc("forex.dedupSkipped");
           }
         }
 
@@ -448,6 +470,7 @@ exports.autoGenerate = async (userId) => {
       } catch (err) {
         console.error(`Error analyzing ${pair}:`, err.message);
         lastError = err.message;
+        pipelineStats.inc("forex.error");
       }
     }
 
@@ -491,6 +514,7 @@ exports.getNotifications = async (req, res) => {
     const now = new Date();
     if (!req.user.lastAutoGenAt || now - req.user.lastAutoGenAt > NOTIF_POLL_GENERATION_THROTTLE_MS) {
       req.user.lastAutoGenAt = now;
+      pipelineStats.inc("trigger.appPoll");
       req.user.save().catch((err) => console.error("Failed to save lastAutoGenAt:", err.message));
       exports.autoGenerate(req.user._id).catch((err) =>
         console.error("Poll-triggered auto-generate failed:", err.message)

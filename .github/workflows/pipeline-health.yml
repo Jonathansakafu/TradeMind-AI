@@ -1,0 +1,26 @@
+name: Pipeline health
+
+# Manual check of the signal/notification pipeline -- prints the
+# aggregate-only report from /api/cron/health (see routes/cronRoutes.js).
+# Output is public on this repo, which is why that endpoint never returns
+# emails, ids, or signal content.
+
+on:
+  workflow_dispatch:
+    inputs:
+      probe_groq:
+        description: "Also make one tiny Groq call to check the daily quota"
+        type: boolean
+        default: true
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch health report
+        run: |
+          PROBE=""
+          if [ "${{ inputs.probe_groq }}" = "true" ]; then PROBE="&probe=1"; fi
+          curl -sS -f --max-time 120 \
+            "https://trademind-ai-backend-2tnj.onrender.com/api/cron/health?secret=${{ secrets.CRON_SECRET }}${PROBE}" \
+            | python3 -m json.tool

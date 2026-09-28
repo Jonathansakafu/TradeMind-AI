@@ -2,6 +2,7 @@ const User = require("../models/User");
 const { autoGenerate } = require("../controllers/notificationController");
 const { runWeeklyLearningForUser } = require("./learningService");
 const { extractSkillKnowledgeFromNews } = require("./newsKnowledgeService");
+const pipelineStats = require("./pipelineStats");
 
 // Checked on every cycle (see below) but only actually fires about once a
 // week per user -- same self-throttling pattern as autoGenerate's own
@@ -56,8 +57,16 @@ async function runCycle() {
     console.error("News skill-knowledge extraction failed:", err.message)
   );
 
+  const startedAt = new Date();
+  const reasons = {};
+  let created = 0;
   for (const user of users) {
-    await autoGenerate(user._id);
+    const { count, reason } = await autoGenerate(user._id);
+    created += count || 0;
+    // Error text is truncated so the health report groups identical
+    // failures together instead of listing one line per user.
+    const key = count > 0 ? "created" : (reason || "unknown").slice(0, 120);
+    reasons[key] = (reasons[key] || 0) + 1;
 
     const dueForLearning = !user.lastLearningAt
       || Date.now() - user.lastLearningAt.getTime() > LEARNING_INTERVAL_MS;
@@ -74,6 +83,8 @@ async function runCycle() {
     // Pumzika sekunde 5 kati ya users
     await new Promise((resolve) => setTimeout(resolve, 5000));
   }
+  pipelineStats.inc("cycles.completed");
+  pipelineStats.setLastCycle({ startedAt, finishedAt: new Date(), userCount: users.length, created, reasons });
   console.log("✅ Auto-generate complete");
   return { userCount: users.length };
 }
