@@ -2,7 +2,7 @@ const Groq = require("groq-sdk");
 const pipelineStats = require("./pipelineStats");
 const ragService = require("./ragService");
 const marketService = require("./marketService");
-const { computeMomentum } = require("./marketAnalysis");
+const { computeMomentum, computeAtr, INTRADAY_LIMITS } = require("./marketAnalysis");
 
 // Constructed lazily (not at module load) so the server doesn't crash on
 // startup if GROQ_API_KEY isn't set — it only throws when a request that
@@ -114,8 +114,9 @@ function rateLimitMessage(err) {
 // leaving the rest of the daily allowance for things the trader triggers
 // directly (trade analysis, the News page's analyze click, uploads).
 const BACKGROUND_TOKENS_PER_HOUR = 7000; // ~168K/day of the 200K cap
-const ESTIMATED_CALL_TOKENS = 1300; // typical request, from Groq's own 429 messages
-const bgBudget = { hour: null, used: 0, pausedUntil: 0 };
+// Running average of real per-call usage (starts from the ~3.1K observed
+// live; the first guess of 1.3K let 2x too many calls through per hour).
+const bgBudget = { hour: null, used: 0, pausedUntil: 0, avgCallTokens: 3100 };
 
 function currentHourKey() {
   return Math.floor(Date.now() / (60 * 60 * 1000));
@@ -131,7 +132,7 @@ function claimBackgroundBudget() {
     const mins = Math.ceil((bgBudget.pausedUntil - Date.now()) / 60000);
     throw Object.assign(new Error(`AI daily quota reached — background signals paused for ~${mins} min`), { code: "AI_BUDGET" });
   }
-  if (bgBudget.used + ESTIMATED_CALL_TOKENS > BACKGROUND_TOKENS_PER_HOUR) {
+  if (bgBudget.used + bgBudget.avgCallTokens > BACKGROUND_TOKENS_PER_HOUR) {
     throw Object.assign(new Error("Hourly AI budget for automatic signals used up — continuing next hour"), { code: "AI_BUDGET" });
   }
 }
@@ -146,6 +147,7 @@ function retryAfterMs(err) {
 exports.getBackgroundBudget = () => ({
   tokensPerHour: BACKGROUND_TOKENS_PER_HOUR,
   usedThisHour: bgBudget.hour === currentHourKey() ? bgBudget.used : 0,
+  avgCallTokens: bgBudget.avgCallTokens,
   pausedUntil: bgBudget.pausedUntil > Date.now() ? new Date(bgBudget.pausedUntil) : null,
 });
 
@@ -170,8 +172,9 @@ const askGroq = async (prompt, options = {}) => {
     const content = completion.choices[0]?.message?.content || "";
     pipelineStats.inc("groq.ok");
     if (options.background) {
-      const tokens = completion.usage?.total_tokens || ESTIMATED_CALL_TOKENS;
+      const tokens = completion.usage?.total_tokens || bgBudget.avgCallTokens;
       bgBudget.used += tokens;
+      bgBudget.avgCallTokens = Math.round(bgBudget.avgCallTokens * 0.8 + tokens * 0.2);
       pipelineStats.inc("groq.backgroundTokens", tokens);
     }
     if (!content) pipelineStats.inc("groq.emptyContent");
@@ -513,6 +516,36 @@ ${ragCtx ? "Check if this trade aligns with the retrieved context above (books a
 };
 
 // Analyze document
+// A book's first 6000 characters (all this used to send) are its title
+// page, copyright notice, table of contents and preface -- almost never an
+// actual strategy, so extraction came back thin or empty. Instead the
+// whole text is split into ~1500-char passages, each scored by trading
+// technique vocabulary, and the best ~5 (in book order) are sent -- same
+// size budget as before, but drawn from where the techniques actually are.
+const STRATEGY_TERMS = /\b(entry|enter|stop[- ]?loss|take[- ]?profit|target|risk|reward|setup|signal|trend|breakout|break of structure|support|resistance|liquidity|order block|fair value gap|pullback|retracement|fibonacci|moving average|rsi|macd|divergence|candlestick|engulfing|pin bar|position size|lot|pips?|timeframe|rule|strategy|confirm\w*|invalidat\w*|swing|scalp\w*|session|london|new york)\b/gi;
+
+function selectStrategyPassages(content, maxChars = 7000, passageSize = 1500) {
+  const text = String(content).replace(/\s+/g, " ").trim();
+  if (text.length <= maxChars) return text;
+  const passages = [];
+  for (let i = 0; i < text.length; i += passageSize) {
+    const chunk = text.slice(i, i + passageSize);
+    passages.push({ i, chunk, score: (chunk.match(STRATEGY_TERMS) || []).length });
+  }
+  const relevant = passages.filter((p) => p.score > 0);
+  // No trading vocabulary anywhere: send the middle of the text rather
+  // than the front matter.
+  if (relevant.length === 0) {
+    const mid = Math.max(0, Math.floor(text.length / 2 - maxChars / 2));
+    return text.slice(mid, mid + maxChars);
+  }
+  const best = relevant.sort((a, b) => b.score - a.score)
+    .slice(0, Math.floor(maxChars / passageSize))
+    .sort((a, b) => a.i - b.i);
+  return best.map((p) => p.chunk).join("\n...\n");
+}
+exports.selectStrategyPassages = selectStrategyPassages;
+
 exports.analyzeDocument = async (content, userContext = "", options = {}) => {
   const prompt = `You are a professional forex trading coach. Extract and structure all key information from this forex document. Respond ONLY in JSON with no markdown:
 {
@@ -523,7 +556,8 @@ exports.analyzeDocument = async (content, userContext = "", options = {}) => {
   "rawSummary": ""
 }
 
-Document content: ${content.slice(0, 6000)}
+Document content (the most strategy-dense passages from across the whole document):
+${selectStrategyPassages(content)}
 Trader context: ${userContext}
 
 Extract practical trading concepts, strategies, and rules that can improve trading decisions.`;
@@ -645,19 +679,30 @@ exports.analyzeMarketSmart = async (pair, currentPrice, historicalPrices, pastTr
     ? `\nRecent news: ${newsArticles.slice(0, 3).map((a) => `- ${a.title}`).join("\n")}`
     : "";
 
+  // Sorted oldest -> newest and labelled as such: the sources disagree on
+  // order (Twelve Data is newest-first, Yahoo/CoinGecko oldest-first), so
+  // the model had to guess which end was "now".
   const recentCandles = historicalPrices
-    ? historicalPrices.slice(0, 10).map((p) => ({
-        time: p.datetime, open: p.open, high: p.high, low: p.low, close: p.close,
-      }))
+    ? [...historicalPrices]
+        .sort((a, b) => new Date(a.datetime) - new Date(b.datetime))
+        .slice(-10)
+        .map((p) => ({ time: p.datetime, open: p.open, high: p.high, low: p.low, close: p.close }))
     : [];
+
+  const atr = computeAtr(historicalPrices);
+  const lim = INTRADAY_LIMITS;
+  const fmt = (n) => Number(n.toPrecision(4));
+  const sizingContext = atr
+    ? `\nSizing (hard limits -- levels outside them will be rejected): the 1H average true range is ~${fmt(atr)}. Entry within ${fmt(lim.maxEntryGapAtr * atr)} of the current price. Stop-loss distance ${fmt(lim.minStopAtr * atr)}-${fmt(lim.maxStopAtr * atr)} from entry. Take-profit distance at most ${fmt(lim.maxTargetAtr * atr)} from entry and at most ${lim.maxRR}x the stop distance.`
+    : "";
 
   const prompt = `You are TradeMind AI, expert forex analyst. Analyze ${pair} and provide a trading signal for an INTRADAY trade the trader intends to close within roughly 3-4 hours — this is not a multi-day swing position, so size stopLoss/takeProfit for that horizon (proportional to the recent volatility below, not arbitrary round numbers).
 
 Current ${pair} price: ${currentPrice}
-Recent candles (1H): ${JSON.stringify(recentCandles)}
+Recent 1H candles, oldest first (the last one is the most recent): ${JSON.stringify(recentCandles)}
 ${hasTrades ? `Trader's recent past trades: ${JSON.stringify(tradeSummary)}` : ""}
 ${fusedContext}
-${newsContext}
+${newsContext}${sizingContext}
 
 Respond ONLY in JSON with no markdown ("confidence" is a 0-100 integer percentage, e.g. 78 for 78% -- never a 0-1 decimal):
 {
@@ -683,6 +728,9 @@ Respond ONLY in JSON with no markdown ("confidence" is a 0-100 integer percentag
     result.confidence = normalizeConfidence(result.confidence);
     result.source = source;
     result.sourceLabel = sourceLabel;
+    // Fresh (non-cached) analysis time -- lets the signal loop rotate
+    // which pair gets the next share of the hourly AI budget.
+    result.analyzedAt = Date.now();
 
     if (result.signal && result.signal !== "wait") {
       const verification = await verifySignal(pair, result, fusedContext);
@@ -723,10 +771,14 @@ exports.analyzeQuickSignal = async (pair, currentPrice, historicalPrices, newsAr
   const cached = getCached(cacheKey);
   if (cached) return cached;
 
+  // Sorted oldest -> newest and labelled as such: the sources disagree on
+  // order (Twelve Data is newest-first, Yahoo/CoinGecko oldest-first), so
+  // the model had to guess which end was "now".
   const recentCandles = historicalPrices
-    ? historicalPrices.slice(0, 10).map((p) => ({
-        time: p.datetime, open: p.open, high: p.high, low: p.low, close: p.close,
-      }))
+    ? [...historicalPrices]
+        .sort((a, b) => new Date(a.datetime) - new Date(b.datetime))
+        .slice(-10)
+        .map((p) => ({ time: p.datetime, open: p.open, high: p.high, low: p.low, close: p.close }))
     : [];
 
   const newsContext = newsArticles && newsArticles.length > 0
@@ -737,7 +789,7 @@ exports.analyzeQuickSignal = async (pair, currentPrice, historicalPrices, newsAr
   const prompt = `You are TradeMind AI, expert short-term market analyst. Predict the next short-term price direction for ${pair} for a quick up/down (binary-style) trade.
 
 Current ${pair} price: ${currentPrice}
-Recent candles (1H): ${JSON.stringify(recentCandles)}${newsContext}${momentumContext}
+Recent 1H candles, oldest first (the last one is the most recent): ${JSON.stringify(recentCandles)}${newsContext}${momentumContext}
 ${bookSummary}
 ${learnedSummary}
 

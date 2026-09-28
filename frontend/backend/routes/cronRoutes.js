@@ -80,6 +80,20 @@ router.get("/health", async (req, res) => {
       if (!p.last || r.last > p.last) p.last = r.last;
     }
 
+    // Email alerts: who has them on, at what confidence floor, and how
+    // today's signals' confidence compares -- a "test works but real
+    // alerts never arrive" report is usually signals sitting below the floor.
+    const [emailPrefs, confidence24h] = await Promise.all([
+      User.aggregate([
+        { $match: { "notificationPrefs.email": true } },
+        { $group: { _id: { $ifNull: ["$notificationPrefs.emailMinConfidence", 70] }, users: { $sum: 1 }, sentToday: { $sum: "$emailSentCount" } } },
+      ]),
+      Notification.aggregate([
+        { $match: since(24 * H) },
+        { $bucket: { groupBy: { $ifNull: ["$confidence", 0] }, boundaries: [0, 50, 60, 70, 80, 90, 101], default: "other", output: { n: { $sum: 1 } } } },
+      ]),
+    ]);
+
     let pricesAvailable = null;
     try {
       pricesAvailable = Object.keys(await marketService.getAllPrices()).sort();
@@ -99,6 +113,11 @@ router.get("/health", async (req, res) => {
       },
       users,
       usersWithPushDevices: pushUsers,
+      emailAlerts: {
+        byMinConfidence: Object.fromEntries(emailPrefs.map((r) => [`${r._id}%+`, { users: r.users, emailsCountedToday: r.sentToday }])),
+        signalConfidence24h: Object.fromEntries(confidence24h.map((r) => [r._id === "other" ? "other" : `${r._id}+`, r.n])),
+      },
+      aiBudget: require("../services/claudeAI").getBackgroundBudget(),
       activeSessions: Object.fromEntries(activeSessions.map((r) => [r._id, r.n])),
       pricesAvailable,
       config: {

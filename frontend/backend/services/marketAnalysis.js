@@ -101,3 +101,70 @@ exports.computeMomentum = (candles) => {
 
   return { direction, strength, volatility, volatilityPct, rsi, summary };
 };
+
+// Average true range in price units (not %), over chronologically sorted
+// candles -- the basis for sizing intraday stop/target distances.
+exports.computeAtr = (candles) => {
+  if (!Array.isArray(candles) || candles.length < 3) return null;
+  const pct = computeVolatilityPct(chronological(candles));
+  const last = Number(chronological(candles).at(-1)?.close);
+  return pct != null && last ? (pct / 100) * last : null;
+};
+
+// Intraday limits, in multiples of the 1h ATR, for a trade meant to close
+// within ~3-4 hours. The model was often ignoring the prompt's "intraday"
+// wording and returning swing-sized levels (e.g. GBPUSD targets that
+// would take weeks to reach, reported by the user 2026-09-28).
+const INTRADAY = { maxEntryGapAtr: 1, minStopAtr: 0.8, defaultStopAtr: 1.5, maxStopAtr: 2.5, maxTargetAtr: 4, maxRR: 2.5 };
+exports.INTRADAY_LIMITS = INTRADAY;
+
+// Pulls an AI signal's entry/stopLoss/takeProfit into those limits.
+// Returns the adjusted levels plus a note when anything was changed.
+exports.fitIntradayLevels = ({ signal, entry, stopLoss, takeProfit }, currentPrice, atr) => {
+  if (!atr || !currentPrice || (signal !== "buy" && signal !== "sell")) {
+    return { entry, stopLoss, takeProfit, adjusted: false };
+  }
+  const dir = signal === "buy" ? 1 : -1;
+  const changes = [];
+
+  let e = Number(entry);
+  if (!e || Math.abs(e - currentPrice) > INTRADAY.maxEntryGapAtr * atr) {
+    e = currentPrice;
+    changes.push("entry moved to the current price");
+  }
+
+  let slDist = (e - Number(stopLoss)) * dir; // positive when on the correct side
+  if (!stopLoss || !(slDist > 0)) {
+    slDist = INTRADAY.defaultStopAtr * atr;
+    changes.push("stop loss set from volatility");
+  } else if (slDist > INTRADAY.maxStopAtr * atr) {
+    slDist = INTRADAY.maxStopAtr * atr;
+    changes.push("stop loss tightened for intraday");
+  } else if (slDist < INTRADAY.minStopAtr * atr) {
+    slDist = INTRADAY.minStopAtr * atr;
+    changes.push("stop loss widened past normal noise");
+  }
+
+  const maxTp = Math.min(INTRADAY.maxTargetAtr * atr, INTRADAY.maxRR * slDist);
+  let tpDist = (Number(takeProfit) - e) * dir;
+  if (!takeProfit || !(tpDist > 0)) {
+    tpDist = Math.min(1.5 * slDist, maxTp);
+    changes.push("take profit set from volatility");
+  } else if (tpDist > maxTp) {
+    tpDist = maxTp;
+    changes.push("take profit brought within intraday reach");
+  } else if (tpDist < slDist) {
+    tpDist = Math.min(slDist, maxTp);
+    changes.push("take profit raised to at least 1:1");
+  }
+
+  const decimals = currentPrice >= 100 ? 2 : currentPrice >= 10 ? 3 : 5;
+  const round = (n) => Number(n.toFixed(decimals));
+  return {
+    entry: round(e),
+    stopLoss: round(e - dir * slDist),
+    takeProfit: round(e + dir * tpDist),
+    adjusted: changes.length > 0,
+    note: changes.join(", "),
+  };
+};

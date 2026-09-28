@@ -8,7 +8,8 @@ const newsService = require("../services/newsService");
 const claudeAI = require("../services/claudeAI");
 const ragService = require("../services/ragService");
 const learningService = require("../services/learningService");
-const { computeMomentum } = require("../services/marketAnalysis");
+const { computeMomentum, computeAtr, fitIntradayLevels } = require("../services/marketAnalysis");
+const AppConfig = require("../models/AppConfig");
 const pipelineStats = require("../services/pipelineStats");
 
 // Forex zitatumika kama zinapatikana tu
@@ -102,13 +103,26 @@ async function createNewsImpactNotifications(userId, newsArticles, prices, type)
         continue;
       }
 
+      // Same intraday limits as regular signals (see fitIntradayLevels) --
+      // news alerts were the original source of 8%-stop suggestions.
+      let levels = { entry: affectedPair.entry || 0, stopLoss: affectedPair.stopLoss || 0, takeProfit: affectedPair.takeProfit || 0 };
+      const livePrice = prices[pair];
+      if (livePrice) {
+        try {
+          const candles = await marketService.getHistoricalData(pair.slice(0, 3) + "/" + pair.slice(3), "1h", 10);
+          levels = fitIntradayLevels({ signal: signalType, ...levels }, livePrice, computeAtr(candles));
+        } catch (err) {
+          console.error(`News impact level sizing failed for ${pair}:`, err.message);
+        }
+      }
+
       await Notification.create({
         user: userId,
         pair,
         signal: signalType,
-        entry: affectedPair.entry || 0,
-        stopLoss: affectedPair.stopLoss || 0,
-        takeProfit: affectedPair.takeProfit || 0,
+        entry: levels.entry,
+        stopLoss: levels.stopLoss,
+        takeProfit: levels.takeProfit,
         reasoning: `📰 ${article.title}\n\n${impact.tradingAdvice}`,
         confidence: 65,
         source: "news_impact",
@@ -348,7 +362,13 @@ exports.autoGenerate = async (userId) => {
       return { count: 0, reason: "no_prices" };
     }
 
-    const pairsToAnalyze = availablePairs;
+    // Oldest-analyzed pair first. The hourly AI budget (claudeAI.js) only
+    // covers ~2 fresh analyses an hour, and a fixed order meant EURUSD and
+    // GBPUSD always used it up before XAUUSD got a turn -- gold got no new
+    // signals at all after the budget was introduced. Stored in Mongo so
+    // the rotation survives Render's frequent restarts.
+    const lastAnalyzed = (await AppConfig.findOne({ key: "pairLastAnalyzed" }))?.value || {};
+    const pairsToAnalyze = [...availablePairs].sort((a, b) => (lastAnalyzed[a] || 0) - (lastAnalyzed[b] || 0));
     const notifications = [];
     // Same reasoning as generateQuickTradeSignals' lastError: a per-pair AI
     // failure was previously indistinguishable from the AI legitimately
@@ -407,6 +427,14 @@ exports.autoGenerate = async (userId) => {
           { bookSummary, momentum, learnedSummary }
         );
         pipelineStats.inc("forex.analyzed");
+        if (analysis.analyzedAt && analysis.analyzedAt > (lastAnalyzed[pair] || 0)) {
+          lastAnalyzed[pair] = analysis.analyzedAt;
+          await AppConfig.updateOne(
+            { key: "pairLastAnalyzed" },
+            { $set: { [`value.${pair}`]: analysis.analyzedAt } },
+            { upsert: true }
+          );
+        }
         if (!analysis.signal || analysis.signal === "wait") pipelineStats.inc("forex.wait");
 
         if (analysis.signal && analysis.signal !== "wait") {
@@ -429,14 +457,17 @@ exports.autoGenerate = async (userId) => {
           });
 
           if (!existingToday) {
+            const levels = fitIntradayLevels(analysis, currentPrice, computeAtr(historical));
+            if (levels.adjusted) pipelineStats.inc("forex.levelsAdjusted");
             const notification = await Notification.create({
               user: userId,
               pair,
               signal: analysis.signal,
-              entry: analysis.entry || currentPrice || 0,
-              stopLoss: analysis.stopLoss || 0,
-              takeProfit: analysis.takeProfit || 0,
-              reasoning: analysis.reasoning || "AI generated signal",
+              entry: levels.entry || currentPrice || 0,
+              stopLoss: levels.stopLoss || 0,
+              takeProfit: levels.takeProfit || 0,
+              reasoning: (analysis.reasoning || "AI generated signal")
+                + (levels.adjusted ? `\n\n📏 Levels adjusted for an intraday trade: ${levels.note}.` : ""),
               confidence: analysis.confidence || 60,
               source: analysis.source || "ai_auto",
               sourceLabel: analysis.sourceLabel || "AI Auto",

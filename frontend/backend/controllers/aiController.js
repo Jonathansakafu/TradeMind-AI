@@ -109,22 +109,25 @@ exports.analyzeDocument = async (req, res) => {
     let fileName = "Unknown Book";
 
     if (req.file) {
+      // pdf-parse v2 is a class (PDFParse), not v1's callable function --
+      // calling it the v1 way threw, and the old catch then read the raw
+      // PDF *binary* as text and sent that to the AI, so every uploaded
+      // book produced garbage/empty strategies.
+      const filePath = req.file.path;
+      fileName = req.file.originalname.replace(/\.(pdf|txt)$/i, "");
       try {
-        const pdfParse = require("pdf-parse");
-        const dataBuffer = fs.readFileSync(req.file.path);
-        const pdfData = await pdfParse(dataBuffer);
-        content = pdfData.text;
-        fileName = req.file.originalname.replace(".pdf", "").replace(".txt", "");
-        fs.unlinkSync(req.file.path);
-      } catch {
-        if (req.file.path && fs.existsSync(req.file.path)) {
-          const rawText = fs.readFileSync(req.file.path, "utf8");
-          content = rawText;
-          fileName = req.file.originalname;
-          fs.unlinkSync(req.file.path);
-        } else {
-          return res.status(400).json({ message: "Could not read file" });
+        const { PDFParse } = require("pdf-parse");
+        const parser = new PDFParse({ data: fs.readFileSync(filePath) });
+        try {
+          content = (await parser.getText()).text || "";
+        } finally {
+          await parser.destroy().catch(() => {});
         }
+      } catch (err) {
+        console.error("PDF parse failed:", err.message);
+        return res.status(400).json({ message: "Couldn't read this PDF. If it's a scanned book (pages are images), it has no text to extract -- try a text-based PDF." });
+      } finally {
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
       }
     } else if (req.body.content) {
       content = req.body.content;
@@ -142,6 +145,13 @@ exports.analyzeDocument = async (req, res) => {
     const userContext = `Win rate: ${trades.length ? Math.round((wins / trades.length) * 100) : 0}%, Total trades: ${trades.length}`;
 
     const extracted = await claudeAI.analyzeDocument(content, userContext);
+    const found = (extracted.concepts?.length || 0) + (extracted.strategies?.length || 0) + (extracted.rules?.length || 0);
+    // Previously saved even when the AI returned nothing usable (e.g. an
+    // unparseable reply), leaving an empty "book" that silently
+    // contributed nothing to signals.
+    if (found === 0) {
+      return res.status(422).json({ message: "The AI couldn't find any trading strategies, concepts or rules in this document. Please try again, or try a different book." });
+    }
 
     // Save to database
     const bookConcept = await BookConcept.create({
