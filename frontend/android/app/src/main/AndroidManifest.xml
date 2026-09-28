@@ -34,4 +34,6 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Android 13+ requires this for push alerts (the push-notifications plugin doesn't declare it). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 </manifest>

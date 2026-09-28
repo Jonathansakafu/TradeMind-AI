@@ -40,6 +40,24 @@ jobs:
       - name: Install npm dependencies
         run: npm install
 
+      # Android push alerts (FCM) need the Firebase config file baked into
+      # the APK. It lives in the GOOGLE_SERVICES_JSON repo secret rather
+      # than git; with no secret set, the build still succeeds and the app
+      # simply shows push as unavailable (VITE_FCM_ENABLED stays false --
+      # calling the push plugin without Firebase configured would crash).
+      - name: Add Firebase config (push notifications)
+        id: firebase
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            echo "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "GOOGLE_SERVICES_JSON secret not set -- building without push support"
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build web app (production)
         # frontend/.env.production is gitignored (not present in a fresh
         # checkout), so the production API URL is set here instead -- Vite
@@ -52,6 +70,7 @@ jobs:
         env:
           VITE_API_URL: "https://trademind-ai-backend-2tnj.onrender.com"
           VITE_APP_BUILD_SHA: ${{ github.sha }}
+          VITE_FCM_ENABLED: ${{ steps.firebase.outputs.enabled }}
         run: npm run build
 
       - name: Sync Capacitor Android project

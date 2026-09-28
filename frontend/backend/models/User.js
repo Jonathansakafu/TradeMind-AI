@@ -59,6 +59,43 @@ const userSchema = new mongoose.Schema(
       type: String,
       select: false,
     },
+
+    // Out-of-app delivery for new notifications (see
+    // services/notifyDispatcher.js). Push is on by default but does
+    // nothing until a device actually registers below; email is opt-in
+    // since Resend's free tier caps at 100 emails/day across the whole
+    // app (password resets included), and signal volume can exceed that.
+    notificationPrefs: {
+      push: { type: Boolean, default: true },
+      email: { type: Boolean, default: false },
+      // Only signals at or above this confidence go out by email --
+      // push has no such floor since it has no daily quota.
+      emailMinConfidence: { type: Number, default: 70 },
+    },
+
+    // Per-user daily email counter backing EMAIL_DAILY_CAP in
+    // notifyDispatcher.js -- keeps one busy user from burning through
+    // Resend's app-wide daily quota.
+    emailSentDate: { type: String },
+    emailSentCount: { type: Number, default: 0 },
+
+    // Browser Web Push subscriptions (one per browser/device the user
+    // enabled alerts on). select:false -- these are delivery credentials,
+    // and protect() loads the full user on every request.
+    pushSubscriptions: {
+      type: [{
+        endpoint: { type: String, required: true },
+        keys: { p256dh: String, auth: String },
+        createdAt: { type: Date, default: Date.now },
+      }],
+      select: false,
+    },
+
+    // Firebase Cloud Messaging registration tokens from the Android app.
+    fcmTokens: {
+      type: [String],
+      select: false,
+    },
   },
   {
     timestamps: true,

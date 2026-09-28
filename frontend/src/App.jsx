@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
 import { StatusBar, Style } from "@capacitor/status-bar";
 import { ThemeProvider } from "./context/ThemeContext";
@@ -26,6 +26,7 @@ import AskAI from "./pages/AskAI";
 import Guide from "./pages/Guide";
 import TradingSession from "./pages/TradingSession";
 import UpdateBanner from "./components/UpdateBanner";
+import { refreshPushRegistration } from "./utils/pushNotifications";
 
 const ProtectedRoute = ({ children }) => {
   const { token } = useAuth();
@@ -45,6 +46,31 @@ function StatusBarSync() {
   return null;
 }
 
+// Keeps this device's push registration fresh while logged in, and opens
+// the Notifications page when a native (Android) push alert is tapped --
+// browser alerts handle their own taps in public/sw.js.
+function PushSync() {
+  const { token, headers } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (token) refreshPushRegistration(headers);
+  }, [token, headers]);
+
+  useEffect(() => {
+    if (Capacitor.getPlatform() !== "android" || import.meta.env.VITE_FCM_ENABLED !== "true") return;
+    let handle;
+    import("@capacitor/push-notifications").then(({ PushNotifications }) =>
+      PushNotifications.addListener("pushNotificationActionPerformed", (action) => {
+        navigate(action.notification?.data?.url || "/notifications");
+      })
+    ).then((h) => { handle = h; });
+    return () => handle?.remove();
+  }, [navigate]);
+
+  return null;
+}
+
 function App() {
   return (
     <AuthProvider>
@@ -52,6 +78,7 @@ function App() {
       <StatusBarSync />
       <UpdateBanner />
       <Router>
+        <PushSync />
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />

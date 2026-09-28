@@ -32,3 +32,5 @@ services:
         sync: false
       - key: CRON_SECRET
         sync: false
+      - key: FIREBASE_SERVICE_ACCOUNT
+        sync: false

@@ -25,5 +25,38 @@
   "account": {
     "title": "Compte",
     "logout": "Déconnexion"
+  },
+  "alerts": {
+    "title": "Alertes hors de l'application",
+    "subtitle": "Recevez les nouveaux signaux même quand TradeMind n'est pas ouvert.",
+    "pushTitle": "Notifications push sur cet appareil",
+    "turnOn": "Activer",
+    "turnOff": "Désactiver",
+    "pushEnabled": "Les notifications push sont activées sur cet appareil.",
+    "pushDisabled": "Les notifications push sont désactivées sur cet appareil.",
+    "otherDevices": "Aussi sur {{count}} autre(s) appareil(s)",
+    "emailTitle": "Alertes par e-mail",
+    "emailTo": "Envoyées à {{email}}",
+    "emailMinConfidence": "Envoyer uniquement les signaux avec une confiance de",
+    "sendTest": "Envoyer une alerte test",
+    "failed": "Échec",
+    "state": {
+      "on": "Activé — les alertes s'afficheront ici",
+      "off": "Désactivé",
+      "denied": "Bloqué — autorisez les notifications de TradeMind dans les réglages du navigateur/téléphone",
+      "unsupported": "Non pris en charge sur ce navigateur/appareil (sur iPhone, ajoutez d'abord le site à l'écran d'accueil)",
+      "needsUpdate": "Mettez à jour l'application pour activer les alertes push"
+    },
+    "result": {
+      "skipped": "Non envoyé",
+      "noDevices": "Aucun appareil enregistré",
+      "sent": "Envoyé",
+      "sentTo": "Envoyé à {{count}} appareil(s)"
+    },
+    "channel": {
+      "browser": "Navigateur",
+      "android": "Application Android",
+      "email": "E-mail"
+    }
   }
 }

@@ -25,5 +25,38 @@
   "account": {
     "title": "Account",
     "logout": "Logout"
+  },
+  "alerts": {
+    "title": "Alerts outside the app",
+    "subtitle": "Get new signals even when TradeMind isn't open.",
+    "pushTitle": "Push notifications on this device",
+    "turnOn": "Turn on",
+    "turnOff": "Turn off",
+    "pushEnabled": "Push notifications are on for this device.",
+    "pushDisabled": "Push notifications are off for this device.",
+    "otherDevices": "Also on {{count}} other device(s)",
+    "emailTitle": "Email alerts",
+    "emailTo": "Sent to {{email}}",
+    "emailMinConfidence": "Only email signals with confidence",
+    "sendTest": "Send test alert",
+    "failed": "Failed",
+    "state": {
+      "on": "On — alerts will pop up here",
+      "off": "Off",
+      "denied": "Blocked — allow notifications for TradeMind in your browser/phone settings",
+      "unsupported": "Not supported on this browser/device (on iPhone, add the site to your Home Screen first)",
+      "needsUpdate": "Update the app to enable push alerts"
+    },
+    "result": {
+      "skipped": "Not sent",
+      "noDevices": "No devices registered",
+      "sent": "Sent",
+      "sentTo": "Sent to {{count}} device(s)"
+    },
+    "channel": {
+      "browser": "Browser",
+      "android": "Android app",
+      "email": "Email"
+    }
   }
 }

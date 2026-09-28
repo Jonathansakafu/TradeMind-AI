@@ -25,5 +25,38 @@
   "account": {
     "title": "Akaunti",
     "logout": "Toka"
+  },
+  "alerts": {
+    "title": "Arifa nje ya programu",
+    "subtitle": "Pokea ishara mpya hata kama TradeMind haijafunguliwa.",
+    "pushTitle": "Arifa za push kwenye kifaa hiki",
+    "turnOn": "Washa",
+    "turnOff": "Zima",
+    "pushEnabled": "Arifa za push zimewashwa kwenye kifaa hiki.",
+    "pushDisabled": "Arifa za push zimezimwa kwenye kifaa hiki.",
+    "otherDevices": "Pia kwenye vifaa vingine {{count}}",
+    "emailTitle": "Arifa kwa barua pepe",
+    "emailTo": "Zinatumwa kwa {{email}}",
+    "emailMinConfidence": "Tuma barua pepe kwa ishara zenye uhakika wa",
+    "sendTest": "Tuma arifa ya majaribio",
+    "failed": "Imeshindwa",
+    "state": {
+      "on": "Imewashwa — arifa zitaonekana hapa",
+      "off": "Imezimwa",
+      "denied": "Imezuiwa — ruhusu arifa za TradeMind kwenye mipangilio ya kivinjari/simu",
+      "unsupported": "Haitumiki kwenye kivinjari/kifaa hiki (kwenye iPhone, ongeza tovuti kwenye Home Screen kwanza)",
+      "needsUpdate": "Sasisha programu ili kuwasha arifa za push"
+    },
+    "result": {
+      "skipped": "Haijatumwa",
+      "noDevices": "Hakuna kifaa kilichosajiliwa",
+      "sent": "Imetumwa",
+      "sentTo": "Imetumwa kwa vifaa {{count}}"
+    },
+    "channel": {
+      "browser": "Kivinjari",
+      "android": "Programu ya Android",
+      "email": "Barua pepe"
+    }
   }
 }

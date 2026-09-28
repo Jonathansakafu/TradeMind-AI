@@ -55,4 +55,20 @@ notificationSchema.index({ user: 1, createdAt: -1 });
 notificationSchema.index({ pair: 1, type: 1, createdAt: -1 });
 notificationSchema.index({ tradingSessionId: 1, botStatus: 1 });
 
+// Push/email the trader for every newly created notification (not on
+// later saves like marking read or a bot status update). Hooked here
+// rather than at each Notification.create call site so a new creation
+// path can't forget it. Fire-and-forget: delivery must never slow down
+// or fail signal generation.
+notificationSchema.pre("save", function () {
+  this.$locals.wasNew = this.isNew;
+});
+notificationSchema.post("save", function (doc) {
+  if (!doc.$locals.wasNew) return;
+  // Required lazily -- notifyDispatcher pulls in User/AppConfig/Resend,
+  // none of which this model should load just to be defined.
+  require("../services/notifyDispatcher").dispatchNotification(doc)
+    .catch((err) => console.error("Notification dispatch failed:", err.message));
+});
+
 module.exports = mongoose.model("Notification", notificationSchema);

@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { AuthContext } from "./auth-context";
+import { disablePush } from "../utils/pushNotifications";
 
 function readUser() {
   try {
@@ -25,6 +26,13 @@ export function AuthProvider({ children }) {
   }, []);
 
   const logout = useCallback(() => {
+    // Detach this device from the account first (while the token still
+    // works), so a logged-out phone/browser stops getting its signals.
+    const oldToken = localStorage.getItem("token");
+    if (oldToken) {
+      disablePush({ Authorization: `Bearer ${oldToken}` })
+        .catch((err) => console.warn("Push unregister on logout failed:", err.message));
+    }
     localStorage.removeItem("token");
     localStorage.removeItem("user");
     setToken(null);
