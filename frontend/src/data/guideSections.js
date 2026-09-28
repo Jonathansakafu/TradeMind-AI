@@ -46,7 +46,7 @@ export const GUIDE_SECTIONS = [
   {
     id: "notifications",
     title: "Notifications",
-    body: `TradeMind AI automatically generates trading signal notifications in the background (roughly every 2 hours) by analyzing crypto and forex pairs against your trade history, uploaded books, and news. Open the notification bell to see them, mark as read, or send a signal straight to MT5 or convert it into a logged trade.`,
+    body: `TradeMind AI automatically generates trading signal notifications in the background for EURUSD, GBPUSD and gold (XAUUSD), refreshing each pair about once an hour, by analyzing them against your trade history, uploaded books, and news. Turn on Settings → Alerts outside the app to get them as push notifications or email even when the app is closed. Open the notification bell to see them, mark as read, or send a signal straight to MT5 or convert it into a logged trade.`,
   },
   {
     id: "news",

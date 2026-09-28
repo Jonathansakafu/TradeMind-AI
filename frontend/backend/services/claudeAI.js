@@ -103,7 +103,62 @@ function rateLimitMessage(err) {
   return `The AI is temporarily at capacity — please try again in ${wait}.`;
 }
 
-const askGroq = async (prompt) => {
+// Background budget for the signal model. Groq's free tier caps
+// gpt-oss-20b at 200K tokens/day (rolling) per account; unpaced, the
+// automatic signal loop spent that within a few hours of the day and then
+// every call got a 429 until the window freed up -- bursts of signals
+// followed by hours of nothing (confirmed live 2026-09-28: 2 ok vs 167
+// refused in one cycle). Background calls (automatic signals, their
+// verification, Quick Trade, automatic news checks, news skill-extraction)
+// are capped per clock hour so the budget is spread over the whole day,
+// leaving the rest of the daily allowance for things the trader triggers
+// directly (trade analysis, the News page's analyze click, uploads).
+const BACKGROUND_TOKENS_PER_HOUR = 7000; // ~168K/day of the 200K cap
+const ESTIMATED_CALL_TOKENS = 1300; // typical request, from Groq's own 429 messages
+const bgBudget = { hour: null, used: 0, pausedUntil: 0 };
+
+function currentHourKey() {
+  return Math.floor(Date.now() / (60 * 60 * 1000));
+}
+
+function claimBackgroundBudget() {
+  const hour = currentHourKey();
+  if (bgBudget.hour !== hour) {
+    bgBudget.hour = hour;
+    bgBudget.used = 0;
+  }
+  if (Date.now() < bgBudget.pausedUntil) {
+    const mins = Math.ceil((bgBudget.pausedUntil - Date.now()) / 60000);
+    throw Object.assign(new Error(`AI daily quota reached — background signals paused for ~${mins} min`), { code: "AI_BUDGET" });
+  }
+  if (bgBudget.used + ESTIMATED_CALL_TOKENS > BACKGROUND_TOKENS_PER_HOUR) {
+    throw Object.assign(new Error("Hourly AI budget for automatic signals used up — continuing next hour"), { code: "AI_BUDGET" });
+  }
+}
+
+function retryAfterMs(err) {
+  const seconds = Number(err?.headers?.get?.("retry-after"));
+  if (Number.isFinite(seconds) && seconds > 0) return seconds * 1000;
+  const match = (err?.error?.error?.message || err?.message || "").match(/try again in (?:(\d+)m)?([\d.]+)s/i);
+  return match ? ((match[1] ? Number(match[1]) * 60 : 0) + Number(match[2])) * 1000 : 10 * 60 * 1000;
+}
+
+exports.getBackgroundBudget = () => ({
+  tokensPerHour: BACKGROUND_TOKENS_PER_HOUR,
+  usedThisHour: bgBudget.hour === currentHourKey() ? bgBudget.used : 0,
+  pausedUntil: bgBudget.pausedUntil > Date.now() ? new Date(bgBudget.pausedUntil) : null,
+});
+
+// options.background: subject to the hourly budget above.
+const askGroq = async (prompt, options = {}) => {
+  if (options.background) {
+    try {
+      claimBackgroundBudget();
+    } catch (err) {
+      pipelineStats.inc("groq.budgetSkipped");
+      throw err;
+    }
+  }
   try {
     const completion = await getGroqClient().chat.completions.create({
       messages: [{ role: "user", content: prompt }],
@@ -114,11 +169,22 @@ const askGroq = async (prompt) => {
     });
     const content = completion.choices[0]?.message?.content || "";
     pipelineStats.inc("groq.ok");
+    if (options.background) {
+      const tokens = completion.usage?.total_tokens || ESTIMATED_CALL_TOKENS;
+      bgBudget.used += tokens;
+      pipelineStats.inc("groq.backgroundTokens", tokens);
+    }
     if (!content) pipelineStats.inc("groq.emptyContent");
     return content;
   } catch (err) {
     pipelineStats.inc(isRateLimitError(err) ? "groq.rateLimited" : "groq.error");
     pipelineStats.recordError("groq", err.message);
+    // Once Groq says the daily quota is gone, stop sending background
+    // calls until it says to retry, instead of firing (and failing) every
+    // remaining pair/news call in the cycle.
+    if (isRateLimitError(err) && options.background) {
+      bgBudget.pausedUntil = Date.now() + retryAfterMs(err);
+    }
     if (isRateLimitError(err)) throw new Error(rateLimitMessage(err), { cause: err });
     throw err;
   }
@@ -447,7 +513,7 @@ ${ragCtx ? "Check if this trade aligns with the retrieved context above (books a
 };
 
 // Analyze document
-exports.analyzeDocument = async (content, userContext = "") => {
+exports.analyzeDocument = async (content, userContext = "", options = {}) => {
   const prompt = `You are a professional forex trading coach. Extract and structure all key information from this forex document. Respond ONLY in JSON with no markdown:
 {
   "bookName": "",
@@ -462,7 +528,7 @@ Trader context: ${userContext}
 
 Extract practical trading concepts, strategies, and rules that can improve trading decisions.`;
 
-  const text = await askGroq(prompt);
+  const text = await askGroq(prompt, options);
   try {
     return JSON.parse(text.replace(/```json|```/g, "").trim());
   } catch {
@@ -515,7 +581,7 @@ ${JSON.stringify({ signal: direction, confidence: signal.confidence, reasoning: 
 Set verified=false only if the reasoning contradicts the given context, cites something not actually present in it, or the confidence is clearly overstated relative to the evidence. A signal resting on price action alone (no book/trade context) can still be verified=true if its own reasoning is internally consistent. Keep note under 20 words.`;
 
   try {
-    const text = await askGroq(prompt);
+    const text = await askGroq(prompt, { background: true });
     const result = JSON.parse(text.replace(/```json|```/g, "").trim());
     return { verified: result.verified !== false, note: result.note || "" };
   } catch {
@@ -541,7 +607,9 @@ exports.analyzeMarketSmart = async (pair, currentPrice, historicalPrices, pastTr
   // forex dedup window (also cut to 15min) -- a shorter dedup window alone
   // would have been meaningless, since this cache would still hand back the
   // exact same cached signal for the full original 30min regardless.
-  const cacheKey = `market_${pair}_${Math.floor(Date.now() / (15 * 60 * 1000))}`;
+  // 60 min (was 15) -- signals now refresh hourly per pair to fit Groq's
+  // free daily token cap; see BACKGROUND_TOKENS_PER_HOUR above.
+  const cacheKey = `market_${pair}_${Math.floor(Date.now() / (60 * 60 * 1000))}`;
   const cached = getCached(cacheKey);
   if (cached) return cached;
 
@@ -609,7 +677,7 @@ Respond ONLY in JSON with no markdown ("confidence" is a 0-100 integer percentag
   "newsImpact": ""
 }`;
 
-  const text = await askGroq(prompt);
+  const text = await askGroq(prompt, { background: true });
   try {
     const result = JSON.parse(text.replace(/```json|```/g, "").trim());
     result.confidence = normalizeConfidence(result.confidence);
@@ -681,7 +749,7 @@ Respond ONLY in JSON with no markdown ("confidence" is a 0-100 integer percentag
   "expiresInMinutes": 5
 }`;
 
-  const text = await askGroq(prompt);
+  const text = await askGroq(prompt, { background: true });
   try {
     const result = JSON.parse(text.replace(/```json|```/g, "").trim());
     result.confidence = normalizeConfidence(result.confidence);
@@ -702,7 +770,7 @@ Respond ONLY in JSON with no markdown ("confidence" is a 0-100 integer percentag
 // $1900-2000 when the real live price was ~$4400) -- confidently wrong,
 // not just imprecise, since nothing in the prompt or response hinted the
 // levels weren't grounded in anything current.
-exports.analyzeNewsImpact = async (article, pairs, prices = {}) => {
+exports.analyzeNewsImpact = async (article, pairs, prices = {}, options = {}) => {
   // Bucketed by time (like analyzeMarketSmart/analyzeQuickSignal above) so
   // a still-current headline can't keep serving the same baked-in
   // entry/stopLoss/takeProfit for the full 2h CACHE_DURATION -- those
@@ -714,7 +782,7 @@ exports.analyzeNewsImpact = async (article, pairs, prices = {}) => {
   // every generation cycle for every user) doesn't multiply Groq calls for
   // the same still-current headline far beyond what the shared per-model
   // daily token budget (see GROQ_MODEL_FAST above) can absorb.
-  const cacheKey = `news_${article.title?.slice(0, 30)}_${Math.floor(Date.now() / (30 * 60 * 1000))}`;
+  const cacheKey = `news_${article.title?.slice(0, 30)}_${Math.floor(Date.now() / (60 * 60 * 1000))}`;
   const cached = getCached(cacheKey);
   if (cached) return cached;
 
@@ -763,7 +831,7 @@ Pairs to analyze: ${pairs.join(", ")}${priceContext}`;
   // empty tradingAdvice.
   let text = "";
   try {
-    text = await askGroq(prompt);
+    text = await askGroq(prompt, options);
     const result = JSON.parse(text.replace(/```json|```/g, "").trim());
     setCache(cacheKey, result);
     return result;

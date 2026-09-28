@@ -11,8 +11,6 @@ const learningService = require("../services/learningService");
 const { computeMomentum } = require("../services/marketAnalysis");
 const pipelineStats = require("../services/pipelineStats");
 
-// Crypto pairs zinapatikana 24/7 — zitumike kwanza kwa notifications
-const CRYPTO_PAIRS = ["BTCUSD", "ETHUSD", "XRPUSD"];
 // Forex zitatumika kama zinapatikana tu
 const FOREX_PAIRS = ["EURUSD", "GBPUSD", "XAUUSD"];
 // Stocks — same real-data pipeline as gold (marketService's Yahoo Finance
@@ -49,7 +47,10 @@ const QUICK_TRADE_DEFAULT_PAIRS = [
 // at all. Now includes every crypto/forex/stock pair this app tracks
 // (2026-09-23, at the user's request -- News Impact was only ever
 // evaluating BTC/ETH/XRP in practice).
-const NEWS_IMPACT_CANDIDATE_PAIRS = [...CRYPTO_PAIRS, ...FOREX_PAIRS, ...STOCK_PAIRS];
+// Narrowed to forex + gold only 2026-09-28 at the user's request, together
+// with the automatic signal loop below -- Groq's free 200K tokens/day was
+// being exhausted within hours, leaving most of each day with no signals.
+const NEWS_IMPACT_CANDIDATE_PAIRS = [...FOREX_PAIRS];
 
 // Previously only checked the single most-recent article and only ever
 // ran from the forex/MT5 path -- both were why these alerts were rare and
@@ -60,7 +61,10 @@ const NEWS_IMPACT_CANDIDATE_PAIRS = [...CRYPTO_PAIRS, ...FOREX_PAIRS, ...STOCK_P
 // notification volume -- more candidate articles per cycle and a much
 // shorter re-alert window, accepting the higher Groq call volume and
 // noisier/more-repetitive alerts that come with it.
-const NEWS_IMPACT_CANDIDATES = 10;
+// 10 -> 3 (2026-09-28): in practice nearly every checked article came back
+// "not high impact" (90 of 90 in one live cycle), so 10 per cycle mostly
+// burned the daily AI allowance without producing alerts.
+const NEWS_IMPACT_CANDIDATES = 3;
 const NEWS_IMPACT_DEDUP_WINDOW_MS = 3 * 60 * 60 * 1000;
 
 async function createNewsImpactNotifications(userId, newsArticles, prices, type) {
@@ -70,7 +74,7 @@ async function createNewsImpactNotifications(userId, newsArticles, prices, type)
   const topNews = newsArticles.slice(0, NEWS_IMPACT_CANDIDATES);
   for (const article of topNews) {
     try {
-      const impact = await claudeAI.analyzeNewsImpact(article, NEWS_IMPACT_CANDIDATE_PAIRS, prices);
+      const impact = await claudeAI.analyzeNewsImpact(article, NEWS_IMPACT_CANDIDATE_PAIRS, prices, { background: true });
       pipelineStats.inc("news.analyzed");
       if (impact.impactLevel !== "high" || !impact.affectedPairs?.length) {
         pipelineStats.inc("news.notHighImpact");
@@ -115,6 +119,9 @@ async function createNewsImpactNotifications(userId, newsArticles, prices, type)
       created++;
       pipelineStats.inc("news.created");
     } catch (err) {
+      // Hourly AI budget used up by the pair signals first -- expected, and
+      // the remaining articles would hit the same wall.
+      if (err.code === "AI_BUDGET") break;
       pipelineStats.inc("news.error");
       console.error(`News impact analysis failed for "${article.title}":`, err.message);
     }
@@ -329,29 +336,18 @@ exports.autoGenerate = async (userId) => {
       marketService.getAllPrices(),
     ]);
 
-    // Angalia ni pairs zipi zina prices — crypto kwanza
-    const availablePairs = [];
-
-    for (const pair of CRYPTO_PAIRS) {
-      if (prices[pair]) availablePairs.push(pair);
-    }
-    for (const pair of FOREX_PAIRS) {
-      if (prices[pair]) availablePairs.push(pair);
-    }
-    for (const pair of STOCK_PAIRS) {
-      if (prices[pair]) availablePairs.push(pair);
-    }
-
-    // Kama hakuna prices — tumia crypto tu bila price (AI auto mode)
+    // Forex + gold only (2026-09-28, at the user's request). Crypto and
+    // stocks were dropped from automatic signals to fit Groq's free daily
+    // token cap: 14 pairs refreshed every 15 min needed roughly 10x the
+    // allowance, so it ran out within hours and then nothing was generated
+    // for the rest of the day. Re-add them here (e.g. after upgrading the
+    // Groq plan) to bring them back.
+    const availablePairs = FOREX_PAIRS.filter((pair) => prices[pair]);
     if (availablePairs.length === 0) {
-      console.log("No live prices available — using AI auto mode for crypto");
-      availablePairs.push(...CRYPTO_PAIRS);
+      console.log("No live forex/gold prices available — skipping this cycle");
+      return { count: 0, reason: "no_prices" };
     }
 
-    // Analyze every available pair (naturally capped at ~14 by
-    // CRYPTO_PAIRS+FOREX_PAIRS+STOCK_PAIRS) — previously capped at 2 to
-    // dodge rate limits while solo-testing; no longer needed with cached
-    // news/prices.
     const pairsToAnalyze = availablePairs;
     const notifications = [];
     // Same reasoning as generateQuickTradeSignals' lastError: a per-pair AI
@@ -422,7 +418,9 @@ exports.autoGenerate = async (userId) => {
           // shorter dedup window alone would have been silently
           // meaningless, since that cache would keep returning the exact
           // same cached signal for pairs already deduped anyway.
-          const FOREX_DEDUP_WINDOW_MS = 15 * 60 * 1000;
+          // 15min -> 60min 2026-09-28, matching analyzeMarketSmart's cache
+          // (also now 60min) -- pairs refresh hourly to fit the AI budget.
+          const FOREX_DEDUP_WINDOW_MS = 60 * 60 * 1000;
           const existingToday = await Notification.findOne({
             user: userId,
             pair,
@@ -470,6 +468,10 @@ exports.autoGenerate = async (userId) => {
       } catch (err) {
         console.error(`Error analyzing ${pair}:`, err.message);
         lastError = err.message;
+        if (err.code === "AI_BUDGET") {
+          pipelineStats.inc("forex.budgetSkipped");
+          break;
+        }
         pipelineStats.inc("forex.error");
       }
     }

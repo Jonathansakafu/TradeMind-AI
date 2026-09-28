@@ -47,7 +47,8 @@ exports.extractSkillKnowledgeFromNews = async () => {
     try {
       result = await claudeAI.analyzeDocument(
         content,
-        "This is a news article, not a book -- only extract genuine trading technique/strategy/psychology content if it's actually present. Leave concepts/strategies/rules empty if this is really just market/event news with no real technique content."
+        "This is a news article, not a book -- only extract genuine trading technique/strategy/psychology content if it's actually present. Leave concepts/strategies/rules empty if this is really just market/event news with no real technique content.",
+        { background: true }
       );
     } catch (err) {
       console.error(`Skill extraction failed for "${article.title}":`, err.message);
