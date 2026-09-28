@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
-import { Sparkles, X, Send, Bot, User, BookOpen, History, HelpCircle, Image } from "lucide-react";
-import { streamAsk } from "../utils/streamAsk";
+import { Sparkles, X, Send, Bot, User, BookOpen, History, HelpCircle, Image, MessageSquarePlus } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
+import { useChatConversation } from "../hooks/useChatConversation";
 
 const SOURCE_ICONS = {
   book: <BookOpen size={11} className="text-purple-400" />,
@@ -12,11 +12,11 @@ const SOURCE_ICONS = {
 
 function ChatWidget() {
   const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
   const bottomRef = useRef(null);
   const { token } = useAuth();
+  // Its own saved conversation, separate from the Ask AI page's.
+  const { messages, loading, ask: askAI, newChat } = useChatConversation("chatWidget.conversationId");
 
   useEffect(() => {
     if (open) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -24,45 +24,12 @@ function ChatWidget() {
 
   if (!token) return null;
 
-  const updateLastMessage = (updater) => {
-    setMessages((prev) => {
-      const next = [...prev];
-      next[next.length - 1] = updater(next[next.length - 1]);
-      return next;
-    });
-  };
-
-  const ask = async (e) => {
+  const ask = (e) => {
     e.preventDefault();
     const question = input.trim();
     if (!question || loading) return;
-
-    setMessages((prev) => [
-      ...prev,
-      { role: "user", text: question },
-      { role: "ai", text: "", sources: [] },
-    ]);
     setInput("");
-    setLoading(true);
-
-    try {
-      for await (const { event, data } of streamAsk(question, token)) {
-        if (event === "sources") {
-          updateLastMessage((m) => ({ ...m, sources: data.sources }));
-        } else if (event === "chunk") {
-          updateLastMessage((m) => ({ ...m, text: m.text + data.text }));
-        } else if (event === "error") {
-          updateLastMessage((m) => ({ ...m, text: data.message || "Something went wrong." }));
-        }
-      }
-    } catch {
-      updateLastMessage((m) => ({
-        ...m,
-        text: m.text || "Something went wrong — please try again.",
-      }));
-    } finally {
-      setLoading(false);
-    }
+    askAI(question);
   };
 
   return (
@@ -90,6 +57,15 @@ function ChatWidget() {
           <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex-shrink-0">
             <Sparkles size={16} className="text-green-500 dark:text-green-400" />
             <p className="font-bold text-slate-900 dark:text-white text-sm">TradeMind AI Assistant</p>
+            <button
+              onClick={newChat}
+              disabled={loading}
+              aria-label="New chat"
+              title="New chat"
+              className="ml-auto p-1.5 rounded-lg text-slate-400 hover:text-green-500 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50 transition"
+            >
+              <MessageSquarePlus size={16} />
+            </button>
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 space-y-4">

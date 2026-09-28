@@ -902,7 +902,24 @@ exports.analyzeLiveMarket = async (pair, currentPrice, historicalPrices, pastTra
 
 // Persona/context lives in `system` (not folded into the user turn) so it
 // persists across a tool-call round-trip without being re-stated.
-const buildAnswerMessages = (question, ragCtx, { jsonMode } = {}) => {
+// Earlier turns of a saved conversation, newest last, trimmed so a long
+// chat can't blow up the prompt: at most 10 messages / ~8000 characters.
+const MAX_HISTORY_MESSAGES = 10;
+const MAX_HISTORY_CHARS = 8000;
+function trimHistory(history = []) {
+  const out = [];
+  let chars = 0;
+  for (const m of [...history].reverse().slice(0, MAX_HISTORY_MESSAGES)) {
+    const content = String(m.content || "").slice(0, 2000);
+    if (!content || !["user", "assistant"].includes(m.role)) continue;
+    if (chars + content.length > MAX_HISTORY_CHARS) break;
+    chars += content.length;
+    out.unshift({ role: m.role, content });
+  }
+  return out;
+}
+
+const buildAnswerMessages = (question, ragCtx, { jsonMode, history = [] } = {}) => {
   const persona = ragCtx
     ? `You are TradeMind AI, an assistant embedded in a forex/crypto trading journal app. Answer the trader's question. Prefer the retrieved context below when it's relevant (cite sources by label) — it may include their own trades, their uploaded books, or the app's own user guide. If the context isn't relevant to the question, ignore it and answer from your own general trading/market knowledge instead. Never claim something is in their data if it isn't.
 
@@ -917,6 +934,7 @@ ${ragCtx}`
 
   return [
     { role: "system", content: persona + toolInstruction + formatInstruction },
+    ...trimHistory(history),
     { role: "user", content: question },
   ];
 };
@@ -953,7 +971,7 @@ exports.answerQuestion = async (question, retrievedChunks = [], extra = {}) => {
 // streams plain prose directly.
 exports.streamAnswer = async function* (question, retrievedChunks = [], extra = {}) {
   const ragCtx = ragService.buildPromptContext({ retrievedChunks, bookSummary: extra.bookSummary });
-  const messages = buildAnswerMessages(question, ragCtx, { jsonMode: false });
+  const messages = buildAnswerMessages(question, ragCtx, { jsonMode: false, history: extra.history });
 
   yield* streamGroqWithTools(messages);
 };

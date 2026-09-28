@@ -1,6 +1,7 @@
 const Trade = require("../models/Trade");
 const Analysis = require("../models/Analysis");
 const BookConcept = require("../models/BookConcept");
+const ChatConversation = require("../models/ChatConversation");
 const claudeAI = require("../services/claudeAI");
 const ragService = require("../services/ragService");
 const learningService = require("../services/learningService");
@@ -305,10 +306,24 @@ exports.askQuestion = async (req, res) => {
 // Server-Sent Events so the UI can render it token-by-token instead of
 // waiting for the full response.
 exports.askQuestionStream = async (req, res) => {
-  const { question } = req.body;
+  const { question, conversationId } = req.body;
   if (!question || !question.trim()) {
     return res.status(400).json({ message: "Question is required" });
   }
+
+  // Load (or start) the saved conversation, and save the question right
+  // away -- so it's never lost even if the answer fails or the connection
+  // drops mid-stream.
+  let conversation = null;
+  if (conversationId) {
+    conversation = await ChatConversation.findOne({ _id: conversationId, user: req.user._id }).catch(() => null);
+  }
+  const history = conversation ? conversation.messages.map((m) => ({ role: m.role, content: m.content })) : [];
+  if (!conversation) {
+    conversation = new ChatConversation({ user: req.user._id, title: question.trim().slice(0, 60) });
+  }
+  conversation.messages.push({ role: "user", content: question.trim() });
+  await conversation.save();
 
   res.writeHead(200, {
     "Content-Type": "text/event-stream",
@@ -321,10 +336,28 @@ exports.askQuestionStream = async (req, res) => {
     res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
   };
 
+  // res, not req: on current Node, a request's "close" only means its
+  // body was read -- it never reported the client disconnecting, so a
+  // dropped connection kept generating (and burning AI quota) to the end.
   let closed = false;
-  req.on("close", () => { closed = true; });
+  res.on("close", () => { if (!res.writableEnded) closed = true; });
+
+  let answer = "";
+  let sources = [];
+  let finished = false;
+  // Saves whatever answer exists, including a partial one when the
+  // stream is cut off -- that's the "conversation breaks" case.
+  const saveAnswer = async () => {
+    if (!answer) return;
+    conversation.messages.push({
+      role: "assistant", content: answer, sources, incomplete: finished ? undefined : true,
+    });
+    await conversation.save().catch((err) => console.error("Saving chat answer failed:", err.message));
+  };
 
   try {
+    send("conversation", { id: conversation._id, title: conversation.title });
+
     const [retrievedChunks, bookSummary] = await Promise.all([
       ragService.retrieve(req.user._id, question, {
         topK: 8,
@@ -334,19 +367,59 @@ exports.askQuestionStream = async (req, res) => {
     ]);
     if (closed) return res.end();
 
-    send("sources", { sources: claudeAI.answerSourcesFor(retrievedChunks) });
+    sources = claudeAI.answerSourcesFor(retrievedChunks);
+    send("sources", { sources });
 
-    for await (const delta of claudeAI.streamAnswer(question, retrievedChunks, { bookSummary })) {
-      if (closed) return res.end();
+    for await (const delta of claudeAI.streamAnswer(question, retrievedChunks, { bookSummary, history })) {
+      answer += delta;
+      if (closed) {
+        await saveAnswer();
+        return res.end();
+      }
       send("chunk", { text: delta });
     }
 
+    finished = true;
+    await saveAnswer();
     send("done", {});
     res.end();
   } catch (err) {
+    await saveAnswer();
     if (!closed) {
       send("error", { message: err.message });
       res.end();
     }
+  }
+};
+
+// Saved Ask AI conversations
+exports.listConversations = async (req, res) => {
+  try {
+    const conversations = await ChatConversation.find({ user: req.user._id })
+      .sort({ updatedAt: -1 })
+      .limit(50)
+      .select("title updatedAt");
+    res.json(conversations);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+exports.getConversation = async (req, res) => {
+  try {
+    const conversation = await ChatConversation.findOne({ _id: req.params.id, user: req.user._id });
+    if (!conversation) return res.status(404).json({ message: "Conversation not found" });
+    res.json(conversation);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+exports.deleteConversation = async (req, res) => {
+  try {
+    await ChatConversation.deleteOne({ _id: req.params.id, user: req.user._id });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
 };

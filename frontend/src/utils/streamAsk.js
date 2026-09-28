@@ -3,14 +3,16 @@ import { API_URL } from "../config/api";
 // Consumes the /api/ai/ask/stream SSE endpoint. Uses fetch + a manual
 // reader rather than EventSource, since EventSource can't send the
 // Authorization header or a POST body.
-export async function* streamAsk(question, token) {
+// conversationId (optional) continues a saved conversation; the server
+// replies with a "conversation" event carrying the id either way.
+export async function* streamAsk(question, token, conversationId) {
   const res = await fetch(`${API_URL}/api/ai/ask/stream`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ question }),
+    body: JSON.stringify({ question, conversationId: conversationId || undefined }),
   });
 
   if (!res.ok || !res.body) {

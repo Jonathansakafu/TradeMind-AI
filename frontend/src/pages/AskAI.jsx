@@ -1,9 +1,9 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import MainLayout from "../layouts/MainLayout";
-import { Sparkles, Send, BookOpen, History, HelpCircle, Image, User, Bot } from "lucide-react";
-import { streamAsk } from "../utils/streamAsk";
+import { Sparkles, Send, BookOpen, History, HelpCircle, Image, User, Bot, MessageSquarePlus, MessagesSquare, Trash2 } from "lucide-react";
 import SpeakButton from "../components/SpeakButton";
 import { useAuth } from "../hooks/useAuth";
+import { useChatConversation, fetchConversations, deleteConversation } from "../hooks/useChatConversation";
 
 const SOURCE_ICONS = {
   book: <BookOpen size={12} className="text-purple-400" />,
@@ -13,55 +13,40 @@ const SOURCE_ICONS = {
 };
 
 function AskAI() {
-  const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [conversations, setConversations] = useState([]);
   const bottomRef = useRef(null);
-  const { token } = useAuth();
+  const { headers } = useAuth();
+  const { conversationId, messages, loading, restoring, ask, newChat, selectConversation } =
+    useChatConversation("askAI.conversationId");
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
 
-  const updateLastMessage = (updater) => {
-    setMessages((prev) => {
-      const next = [...prev];
-      next[next.length - 1] = updater(next[next.length - 1]);
-      return next;
-    });
-  };
+  const loadConversations = useCallback(() => {
+    fetchConversations(headers).then(setConversations).catch(() => {});
+  }, [headers]);
 
-  const askQuestion = async (e) => {
+  // Refresh the list when it's opened and after each answer (a new chat
+  // appears in it once its first question is sent).
+  useEffect(() => {
+    if (showHistory && !loading) loadConversations();
+  }, [showHistory, loading, loadConversations]);
+
+  const askQuestion = (e) => {
     e.preventDefault();
     const question = input.trim();
     if (!question || loading) return;
-
-    setMessages((prev) => [
-      ...prev,
-      { role: "user", text: question },
-      { role: "ai", text: "", sources: [] },
-    ]);
     setInput("");
-    setLoading(true);
+    ask(question);
+  };
 
-    try {
-      for await (const { event, data } of streamAsk(question, token)) {
-        if (event === "sources") {
-          updateLastMessage((m) => ({ ...m, sources: data.sources }));
-        } else if (event === "chunk") {
-          updateLastMessage((m) => ({ ...m, text: m.text + data.text }));
-        } else if (event === "error") {
-          updateLastMessage((m) => ({ ...m, text: data.message || "Something went wrong." }));
-        }
-      }
-    } catch {
-      updateLastMessage((m) => ({
-        ...m,
-        text: m.text || "Something went wrong answering that — please try again.",
-      }));
-    } finally {
-      setLoading(false);
-    }
+  const removeConversation = async (id) => {
+    await deleteConversation(headers, id).catch(() => {});
+    if (id === conversationId) newChat();
+    loadConversations();
   };
 
   return (
@@ -77,11 +62,66 @@ function AskAI() {
             Ask questions grounded in your uploaded books and trade history — powered by retrieval-augmented generation
           </p>
         </div>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowHistory((v) => !v)}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border transition ${
+              showHistory
+                ? "bg-green-500/10 border-green-500/30 text-green-600 dark:text-green-400"
+                : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
+            }`}
+          >
+            <MessagesSquare size={16} /> History
+          </button>
+          <button
+            onClick={() => { newChat(); setShowHistory(false); }}
+            disabled={loading}
+            className="flex items-center gap-2 bg-green-500 hover:bg-green-600 disabled:opacity-50 text-slate-950 font-semibold px-4 py-2.5 rounded-xl text-sm transition"
+          >
+            <MessageSquarePlus size={16} /> New chat
+          </button>
+        </div>
       </div>
+
+      {showHistory && (
+        <div className="mb-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-2 max-h-64 overflow-y-auto overscroll-contain">
+          {conversations.length === 0 ? (
+            <p className="text-sm text-slate-500 dark:text-slate-400 p-3">No saved chats yet — your conversations are saved automatically.</p>
+          ) : conversations.map((c) => (
+            <div
+              key={c._id}
+              className={`flex items-center gap-2 rounded-xl px-3 py-2 ${
+                c._id === conversationId ? "bg-green-500/10" : "hover:bg-slate-100 dark:hover:bg-slate-800"
+              }`}
+            >
+              <button
+                onClick={() => { selectConversation(c._id); setShowHistory(false); }}
+                disabled={loading}
+                className="flex-1 min-w-0 text-left"
+              >
+                <p className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">{c.title}</p>
+                <p className="text-xs text-slate-400">{new Date(c.updatedAt).toLocaleString()}</p>
+              </button>
+              <button
+                onClick={() => removeConversation(c._id)}
+                aria-label="Delete chat"
+                className="p-2 text-slate-400 hover:text-red-500 transition"
+              >
+                <Trash2 size={15} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl flex flex-col h-[65vh]">
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
-          {messages.length === 0 && (
+          {restoring && messages.length === 0 && (
+            <div className="flex justify-center py-16">
+              <div className="w-6 h-6 border-4 border-green-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          )}
+          {!restoring && messages.length === 0 && (
             <div className="text-center py-16">
               <Sparkles size={40} className="text-slate-300 dark:text-slate-700 mx-auto mb-4" />
               <p className="text-slate-500 dark:text-slate-400 text-lg font-semibold">Ask anything about your trading</p>
@@ -125,6 +165,9 @@ function AskAI() {
                       </>
                     )}
                   </div>
+                  {m.incomplete && (
+                    <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">Answer was cut off — ask again to continue.</p>
+                  )}
                   {m.sources && m.sources.length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {m.sources.map((s, si) => (
