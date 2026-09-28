@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
@@ -33,7 +33,7 @@ const navItems = [
 function SidebarContent({ pathname, onNavigate, onClose, user, onLogout }) {
   const { t } = useTranslation();
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col min-h-full">
       <div className="flex items-center justify-between mb-8 px-2">
         <h1 className="text-xl font-bold text-green-500 dark:text-green-400">{t("appName")}</h1>
         <button
@@ -112,6 +112,20 @@ function MainLayout({ children }) {
 
   const closeSidebar = () => setSidebarOpen(false);
 
+  // While the mobile menu is open, freeze the page behind it -- otherwise a
+  // swipe on the menu (or the dimmed backdrop) scrolled the whole page.
+  useEffect(() => {
+    if (!sidebarOpen) return;
+    const html = document.documentElement;
+    const prev = { html: html.style.overflow, body: document.body.style.overflow };
+    html.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
+    return () => {
+      html.style.overflow = prev.html;
+      document.body.style.overflow = prev.body;
+    };
+  }, [sidebarOpen]);
+
   return (
     <div className="min-h-screen bg-white text-slate-900 dark:bg-slate-950 dark:text-white flex overflow-x-hidden">
       {/* Safe-area-aware on mobile: the native status bar sits over the
@@ -129,12 +143,12 @@ function MainLayout({ children }) {
 
       {sidebarOpen && (
         <div
-          className="fixed inset-0 bg-black/60 z-40 md:hidden"
+          className="fixed inset-0 bg-black/60 z-40 md:hidden touch-none"
           onClick={closeSidebar}
         />
       )}
 
-      <aside className="hidden md:flex flex-col w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 fixed h-full z-30 p-6">
+      <aside className="hidden md:flex flex-col w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 fixed h-full z-30 p-6 overflow-y-auto overscroll-contain">
         <SidebarContent
           pathname={location.pathname}
           onNavigate={closeSidebar}
@@ -145,10 +159,13 @@ function MainLayout({ children }) {
       </aside>
 
       <aside
-        className={`md:hidden fixed top-0 left-0 h-full w-72 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 z-50 p-6 transform transition-transform duration-300 ${
+        className={`md:hidden fixed top-0 left-0 h-full w-72 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 z-50 p-6 overflow-y-auto overscroll-contain transform transition-transform duration-300 ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
-        style={{ paddingTop: "calc(1.5rem + env(safe-area-inset-top))" }}
+        style={{
+          paddingTop: "calc(1.5rem + env(safe-area-inset-top))",
+          paddingBottom: "calc(1.5rem + env(safe-area-inset-bottom))",
+        }}
       >
         <SidebarContent
           pathname={location.pathname}
