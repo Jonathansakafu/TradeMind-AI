@@ -74,6 +74,9 @@ app.get("/api/health", (req, res) =>
 // is exactly what silently swallowed the real reason a trade with a
 // screenshot failed to save (a Cloudinary upload error) behind "Failed to
 // save trade" with no way to tell what actually went wrong.
+// Express only treats a middleware as an error handler if it declares all
+// four arguments, so `next` must stay even though it's unused.
+// eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
   console.error("Unhandled error:", err);
   res.status(err.status || 500).json({ message: err.message || "Something went wrong" });

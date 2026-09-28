@@ -18,7 +18,30 @@ const LEARNING_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
 // suspends the whole process -- including in-process timers -- after
 // ~15 minutes with no incoming request, so that setInterval alone can't
 // be relied on to fire on schedule while nothing else is hitting the app.
+// A full cycle takes minutes (~3.5 min for 8 users, observed live), and it
+// can be started by the in-process interval, the external cron endpoint,
+// or both at once -- overlapping runs would just double the Groq calls
+// and dedup-race each other. Later callers skip while one is in flight.
+let running = false;
+
 async function runAutoGenerateForAllUsers() {
+  if (running) {
+    console.log("⏭ Auto-generate already running — skipping this trigger");
+    return { skipped: true, reason: "already_running" };
+  }
+  running = true;
+  try {
+    return await runCycle();
+  } finally {
+    running = false;
+  }
+}
+
+function isAutoGenerateRunning() {
+  return running;
+}
+
+async function runCycle() {
   const users = await User.find({}).select("_id lastLearningAt");
   if (users.length === 0) {
     console.log("No users found — skipping auto-generate");
@@ -55,4 +78,4 @@ async function runAutoGenerateForAllUsers() {
   return { userCount: users.length };
 }
 
-module.exports = { runAutoGenerateForAllUsers };
+module.exports = { runAutoGenerateForAllUsers, isAutoGenerateRunning };

@@ -1,5 +1,5 @@
 const router = require("express").Router();
-const { runAutoGenerateForAllUsers } = require("../services/cronJobs");
+const { runAutoGenerateForAllUsers, isAutoGenerateRunning } = require("../services/cronJobs");
 
 // Triggered by an external scheduler (.github/workflows/cron-generate.yml),
 // not a logged-in user -- there's no JWT to check here, so a shared secret
@@ -15,12 +15,18 @@ router.get("/generate", async (req, res) => {
     return res.status(401).json({ message: "Invalid cron secret" });
   }
 
-  try {
-    const result = await runAutoGenerateForAllUsers();
-    res.json({ success: true, ...result });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+  // Responds immediately and runs the cycle in the background: a full
+  // cycle takes minutes, and free external schedulers (e.g. cron-job.org)
+  // time out after ~30s. The process keeps running after the response, and
+  // this request itself is what woke Render's free instance up -- it then
+  // stays awake ~15 minutes, far longer than one cycle.
+  const alreadyRunning = isAutoGenerateRunning();
+  if (!alreadyRunning) {
+    runAutoGenerateForAllUsers().catch((err) =>
+      console.error("Cron-triggered auto-generate failed:", err.message)
+    );
   }
+  res.status(202).json({ success: true, started: !alreadyRunning, alreadyRunning });
 });
 
 module.exports = router;

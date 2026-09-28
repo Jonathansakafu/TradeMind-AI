@@ -16,4 +16,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Ping health endpoint
-        run: curl -fsS --max-time 20 https://trademind-ai-backend-2tnj.onrender.com/api/health
+        run: curl -fsS --max-time 90 https://trademind-ai-backend-2tnj.onrender.com/api/health
