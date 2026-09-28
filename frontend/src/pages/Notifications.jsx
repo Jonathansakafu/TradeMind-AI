@@ -271,52 +271,55 @@ function Notifications() {
           </p>
         </div>
       ) : (
-        <div className="grid md:grid-cols-2 gap-4">
+        // Columns by available width, not screen breakpoints: a second
+        // column only appears once each card gets >= 380px. With the
+        // sidebar open, the old md:grid-cols-2 squeezed cards to ~300px.
+        <div className="grid gap-4 grid-cols-[repeat(auto-fill,minmax(min(100%,380px),1fr))]">
           {filtered.map((n) => (
             <div
               key={n._id}
-              className={`bg-white dark:bg-slate-900 border rounded-2xl p-5 transition ${
+              // @container: the card's insides adapt to the card's own
+              // width (e.g. price tiles 2x2 when narrow, 4 across when wide).
+              className={`@container min-w-0 bg-white dark:bg-slate-900 border rounded-2xl p-4 @sm:p-5 transition ${
                 !n.read ? "border-slate-300 dark:border-slate-700 shadow-lg" : "border-slate-200 dark:border-slate-800 dark:opacity-75"
               }`}
             >
               {/* Card Header */}
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 mt-1 ${
-                    !n.read ? "bg-red-500 animate-pulse" : "bg-slate-600"
-                  }`} />
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className={`text-lg font-bold ${
-                        n.signal === "buy" ? "text-green-400"
-                        : n.signal === "sell" ? "text-red-400"
-                        : "text-yellow-400"
-                      }`}>
-                        {n.signal === "buy" ? "🟢 BUY"
-                          : n.signal === "sell" ? "🔴 SELL"
-                          : "⚠️ WAIT"}
-                      </span>
-                      <span className="text-slate-900 dark:text-white font-bold text-lg">{n.pair}</span>
-                    </div>
-                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
-                      {new Date(n.createdAt).toLocaleString()}
-                    </p>
-                    <TradeResultBadge notification={n} />
+              <div className="flex items-start gap-3 mb-4">
+                <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 mt-2.5 ${
+                  !n.read ? "bg-red-500 animate-pulse" : "bg-slate-600"
+                }`} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-x-2 gap-y-1 flex-wrap">
+                    <span className={`text-lg font-bold whitespace-nowrap ${
+                      n.signal === "buy" ? "text-green-400"
+                      : n.signal === "sell" ? "text-red-400"
+                      : "text-yellow-400"
+                    }`}>
+                      {n.signal === "buy" ? "🟢 BUY"
+                        : n.signal === "sell" ? "🔴 SELL"
+                        : "⚠️ WAIT"}
+                    </span>
+                    <span className="text-slate-900 dark:text-white font-bold text-lg whitespace-nowrap">{n.pair}</span>
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded-md whitespace-nowrap ${
+                      n.signal === "buy" ? "bg-green-500/10 text-green-400"
+                      : n.signal === "sell" ? "bg-red-500/10 text-red-400"
+                      : "bg-yellow-500/10 text-yellow-400"
+                    }`}>
+                      {n.confidence}%
+                    </span>
                   </div>
+                  <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                    {new Date(n.createdAt).toLocaleString()}
+                  </p>
+                  <TradeResultBadge notification={n} />
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className={`text-sm font-bold px-2.5 py-1 rounded-lg ${
-                    n.signal === "buy" ? "bg-green-500/10 text-green-400"
-                    : n.signal === "sell" ? "bg-red-500/10 text-red-400"
-                    : "bg-yellow-500/10 text-yellow-400"
-                  }`}>
-                    {n.confidence}%
-                  </span>
+                <div className="flex items-center gap-1 flex-shrink-0">
                   <TakenButton notification={n} headers={headers} onChange={refreshAfterTaken} />
                   <button
                     onClick={() => deleteNotification(n._id)}
                     aria-label="Delete notification"
-                    className="p-2 -m-2 text-slate-400 dark:text-slate-600 hover:text-red-400 transition"
+                    className="p-2 text-slate-400 dark:text-slate-600 hover:text-red-400 transition"
                   >
                     <X size={16} />
                   </button>
@@ -340,22 +343,22 @@ function Notifications() {
                   )}
                 </div>
               ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-                  <div className="bg-slate-100 dark:bg-slate-800 rounded-xl p-3 text-center">
-                    <p className="text-xs text-slate-400 dark:text-slate-500 mb-1">Entry</p>
-                    <p className="font-mono font-bold text-slate-900 dark:text-white text-sm">
+                <div className="grid grid-cols-2 @md:grid-cols-4 gap-2 @sm:gap-3 mb-4">
+                  <div className="bg-slate-100 dark:bg-slate-800 rounded-xl px-2 py-2.5 text-center min-w-0">
+                    <p className="text-xs text-slate-400 dark:text-slate-500 mb-1 whitespace-nowrap">Entry</p>
+                    <p className="font-mono font-bold whitespace-nowrap text-slate-900 dark:text-white text-sm">
                       {n.entry || "—"}
                     </p>
                   </div>
-                  <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-center">
-                    <p className="text-xs text-slate-400 dark:text-slate-500 mb-1">Stop Loss</p>
-                    <p className="font-mono font-bold text-red-400 text-sm">
+                  <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-2 py-2.5 text-center min-w-0">
+                    <p className="text-xs text-slate-400 dark:text-slate-500 mb-1 whitespace-nowrap">Stop Loss</p>
+                    <p className="font-mono font-bold whitespace-nowrap text-red-400 text-sm">
                       {n.stopLoss || "—"}
                     </p>
                   </div>
-                  <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-3 text-center">
-                    <p className="text-xs text-slate-400 dark:text-slate-500 mb-1">Take Profit</p>
-                    <p className="font-mono font-bold text-green-400 text-sm">
+                  <div className="bg-green-500/10 border border-green-500/20 rounded-xl px-2 py-2.5 text-center min-w-0">
+                    <p className="text-xs text-slate-400 dark:text-slate-500 mb-1 whitespace-nowrap">Take Profit</p>
+                    <p className="font-mono font-bold whitespace-nowrap text-green-400 text-sm">
                       {n.takeProfit || "—"}
                     </p>
                   </div>

@@ -20,10 +20,10 @@ export function RiskRewardTile({ entry, stopLoss, takeProfit, compact = false, c
   return (
     <div
       title={hint(rr)}
-      className={`bg-blue-500/10 border border-blue-500/20 text-center ${compact ? "rounded-lg px-2 py-1" : "rounded-xl p-3"} ${className}`}
+      className={`bg-blue-500/10 border border-blue-500/20 text-center min-w-0 ${compact ? "rounded-lg px-1 py-1" : "rounded-xl px-2 py-2.5"} ${className}`}
     >
-      <p className={`text-xs ${compact ? "text-slate-500" : "text-slate-400 dark:text-slate-500 mb-1"}`}>R:R</p>
-      <p className={`font-mono ${compact ? "text-xs" : "font-bold text-sm"} ${tone(rr)}`}>{formatRR(rr)}</p>
+      <p className={`text-xs whitespace-nowrap ${compact ? "text-slate-500" : "text-slate-400 dark:text-slate-500 mb-1"}`}>R:R</p>
+      <p className={`font-mono whitespace-nowrap ${compact ? "text-xs" : "font-bold text-sm"} ${tone(rr)}`}>{formatRR(rr)}</p>
     </div>
   );
 }

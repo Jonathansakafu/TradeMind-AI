@@ -31,7 +31,7 @@ export function TakenButton({ notification, headers, onChange, compact = false }
       aria-label={taken ? "Marked as taken — tap to undo" : "Mark as a trade I took"}
       title={taken ? "You took this trade (tap to undo)" : "Mark as a trade I took"}
       className={`inline-flex items-center gap-1 rounded-lg border transition disabled:opacity-50 ${
-        compact ? "p-1.5" : "px-2.5 py-1 text-xs font-semibold"
+        compact ? "p-1.5" : "p-1.5 @[22rem]:px-2.5 @[22rem]:py-1 text-xs font-semibold whitespace-nowrap"
       } ${
         taken
           ? "bg-green-500 border-green-500 text-slate-950"
@@ -39,7 +39,8 @@ export function TakenButton({ notification, headers, onChange, compact = false }
       }`}
     >
       <ShoppingCart size={compact ? 13 : 14} fill={taken ? "currentColor" : "none"} />
-      {!compact && (taken ? "Taken" : "Take")}
+      {/* Label only when the surrounding card (@container) has room. */}
+      {!compact && <span className="hidden @[22rem]:inline">{taken ? "Taken" : "Take"}</span>}
     </button>
   );
 }
