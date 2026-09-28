@@ -1,4 +1,5 @@
 const axios = require("axios");
+const pipelineStats = require("./pipelineStats");
 
 const TWELVE_DATA_KEY = process.env.TWELVE_DATA_KEY;
 
@@ -122,8 +123,18 @@ exports.getForexPrices = async () => {
       { timeout: 12000 }
     );
 
-    if (res.data && typeof res.data === "object") {
+    // Twelve Data reports problems (bad key, daily credit limit) as an
+    // HTTP 200 whose body is {status:"error", code, message} -- that
+    // previously just produced zero forex prices with nothing logged, and
+    // generation silently skips every pair without a price.
+    if (res.data?.status === "error") {
+      pipelineStats.recordError("twelvedata", `${res.data.code}: ${res.data.message}`);
+      pipelineStats.inc("prices.twelvedata.error");
+    } else if (res.data && typeof res.data === "object") {
       Object.entries(res.data).forEach(([key, val]) => {
+        if (val?.status === "error") {
+          pipelineStats.recordError("twelvedata", `${key} ${val.code}: ${val.message}`);
+        }
         if (val?.price && !isNaN(parseFloat(val.price))) {
           prices[key.replace("/", "")] = parseFloat(val.price);
         }
@@ -131,6 +142,8 @@ exports.getForexPrices = async () => {
     }
   } catch (err) {
     console.error("Twelve Data error:", err.message);
+    pipelineStats.recordError("twelvedata", err.message);
+    pipelineStats.inc("prices.twelvedata.error");
   }
 
   // Pata Gold price separately -- if it fails, prices["XAUUSD"] just stays

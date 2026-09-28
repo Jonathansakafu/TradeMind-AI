@@ -67,9 +67,22 @@ router.get("/health", async (req, res) => {
       User.countDocuments({ $or: [{ "pushSubscriptions.0": { $exists: true } }, { "fcmTokens.0": { $exists: true } }] }),
     ]);
 
+    // Per pair and direction over 7 days -- answers "why no EURUSD" /
+    // "why mostly SELL on gold" with data rather than guesses.
+    const byPair = await Notification.aggregate([
+      { $match: since(7 * 24 * H) },
+      { $group: { _id: { pair: "$pair", signal: "$signal" }, n: { $sum: 1 }, last: { $max: "$createdAt" } } },
+    ]);
+    const pairs7d = {};
+    for (const r of byPair) {
+      const p = (pairs7d[r._id.pair] ||= { buy: 0, sell: 0, last: null });
+      p[r._id.signal] = r.n;
+      if (!p.last || r.last > p.last) p.last = r.last;
+    }
+
     let pricesAvailable = null;
     try {
-      pricesAvailable = Object.keys(await marketService.getAllPrices()).length;
+      pricesAvailable = Object.keys(await marketService.getAllPrices()).sort();
     } catch (err) {
       pricesAvailable = `error: ${err.message}`;
     }
@@ -82,6 +95,7 @@ router.get("/health", async (req, res) => {
         latest: latest && { at: latest.createdAt, source: latest.source, type: latest.type },
         bySource24h: Object.fromEntries(bySource24h.map((r) => [r._id, r.n])),
         perDay7d: Object.fromEntries(byDay.map((r) => [r._id, r.n])),
+        pairs7d,
       },
       users,
       usersWithPushDevices: pushUsers,
