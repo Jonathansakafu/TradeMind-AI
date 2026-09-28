@@ -199,7 +199,7 @@ function NotificationBell() {
                       </div>
 
                       {/* Reasoning */}
-                      <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-2 line-clamp-2">
+                      <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-2 max-h-24 overflow-y-auto overscroll-contain whitespace-pre-line">
                         {n.reasoning}
                       </p>
 

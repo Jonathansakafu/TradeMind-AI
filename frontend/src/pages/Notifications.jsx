@@ -362,7 +362,10 @@ function Notifications() {
               )}
 
               {/* Reasoning */}
-              <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed mb-4 bg-slate-100/70 dark:bg-slate-800/50 rounded-xl p-3 line-clamp-3">
+              {/* Scrolls instead of being cut off after 3 lines (the full
+                  reasoning was unreadable). overscroll-contain keeps a swipe
+                  at its end from scrolling the whole page. */}
+              <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed mb-4 bg-slate-100/70 dark:bg-slate-800/50 rounded-xl p-3 max-h-40 overflow-y-auto overscroll-contain whitespace-pre-line">
                 {n.reasoning}
               </p>
 
