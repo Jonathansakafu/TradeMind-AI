@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { API_URL } from "../config/api";
 import { useAuth } from "../hooks/useAuth";
+import { RiskRewardTile } from "../components/RiskReward";
 
 const PAIRS = ["EURUSD","GBPUSD","USDJPY","XAUUSD","AUDUSD","GBPJPY","EURJPY","USDCAD","NZDUSD","USDCHF"];
 const SESSIONS = ["london","new_york","tokyo","sydney","overlap"];
@@ -358,7 +359,7 @@ function Analytics() {
                 </span>
               </div>
 
-              <div className="grid grid-cols-3 gap-3 mb-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
                 <div className="bg-slate-100 dark:bg-slate-800 rounded-xl p-3 text-center">
                   <p className="text-xs text-slate-400 dark:text-slate-500 mb-1">Entry</p>
                   <p className="font-mono font-bold text-slate-900 dark:text-white text-sm">{screenshotResult.entry || "—"}</p>
@@ -371,6 +372,7 @@ function Analytics() {
                   <p className="text-xs text-slate-400 dark:text-slate-500 mb-1">Take Profit</p>
                   <p className="font-mono font-bold text-green-400 text-sm">{screenshotResult.takeProfit || "—"}</p>
                 </div>
+                <RiskRewardTile entry={screenshotResult.entry} stopLoss={screenshotResult.stopLoss} takeProfit={screenshotResult.takeProfit} />
               </div>
 
               {screenshotResult.supportResistance?.length > 0 && (

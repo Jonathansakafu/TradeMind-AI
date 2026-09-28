@@ -6,6 +6,7 @@ import MainLayout from "../layouts/MainLayout";
 import { API_URL } from "../config/api";
 import { useAuth } from "../hooks/useAuth";
 import { computeStats, filterTrades, formatMoney } from "../utils/tradeStats";
+import { formatRR, breakevenWinRate } from "../utils/riskReward";
 import {
   OutcomeDonut, OutcomeBars, OutcomeLegend, TradeLine, BreakdownBars, TradeTable,
 } from "../components/PerformanceCharts";
@@ -112,7 +113,7 @@ function Performance() {
         ) : (
           <>
             {/* Key numbers */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 mb-6">
               <Tile label="Win rate" value={`${Math.round(stats.winRate)}%`} sub={`${stats.wins} W · ${stats.losses} L · ${stats.breakeven} BE`} tone={stats.winRate >= 50 ? "good" : "bad"} />
               <Tile label="Net P/L" value={formatMoney(stats.netPL)} sub={`${stats.closed} closed · ${stats.open} open`} tone={stats.netPL >= 0 ? "good" : "bad"} />
               <Tile label="Profit factor" value={pf} sub="gross profit ÷ gross loss (>1 = profitable)" tone={stats.profitFactor >= 1 ? "good" : "bad"} />
@@ -120,6 +121,11 @@ function Performance() {
               <Tile label="Avg win / avg loss" value={`${formatMoney(stats.avgWin, { sign: false })} / ${formatMoney(stats.avgLoss, { sign: false })}`} sub={stats.winLossRatio != null ? `ratio ${stats.winLossRatio.toFixed(2)} : 1` : "no losses yet"} />
               <Tile label="Max drawdown" value={formatMoney(-stats.maxDrawdown)} sub="largest fall from a P/L peak" tone={stats.maxDrawdown > 0 ? "bad" : undefined} />
               <Tile label="Best / worst trade" value={`${formatMoney(stats.largestWin)} / ${formatMoney(stats.largestLoss)}`} />
+              <Tile label="Avg risk : reward" value={formatRR(stats.avgRR)}
+                sub={stats.avgRR != null
+                  ? `break-even win rate ${Math.round(breakevenWinRate(stats.avgRR))}% · from ${stats.rrCount} trade${stats.rrCount === 1 ? "" : "s"} with SL & TP`
+                  : "no closed trades with both SL and TP"}
+                tone={stats.avgRR == null ? undefined : stats.winRate >= breakevenWinRate(stats.avgRR) ? "good" : "bad"} />
               <Tile label="Streaks" value={`${stats.longestWin}W · ${stats.longestLoss}L`}
                 sub={streak ? `current: ${streak.count} ${streak.type === "win" ? "win" : streak.type === "loss" ? "loss" : "breakeven"}${streak.count > 1 ? "s" : ""}` : ""} />
             </div>

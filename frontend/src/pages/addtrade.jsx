@@ -6,6 +6,8 @@ import { Upload, X, CheckCircle, Calculator, Camera, Sparkles, LineChart } from 
 import { API_URL } from "../config/api";
 import SnapshotCaptureModal from "../components/SnapshotCaptureModal";
 import { useAuth } from "../hooks/useAuth";
+import { RiskRewardText } from "../components/RiskReward";
+import { riskReward, breakevenWinRate } from "../utils/riskReward";
 
 const PAIRS = [
   "EURUSD","GBPUSD","USDJPY","USDCHF","AUDUSD",
@@ -331,6 +333,17 @@ function AddTrade() {
             <FormField label="Take Profit" name="takeProfit" value={form.takeProfit} onChange={handleChange} type="number" step="any" placeholder="1.09200" />
             <FormField label="Lot Size" name="lotSize" value={form.lotSize} onChange={handleChange} type="number" step="any" placeholder="0.01" required />
           </div>
+          {form.entryPrice && form.stopLoss && form.takeProfit && (
+            <p className="text-sm text-slate-600 dark:text-slate-300 -mt-1">
+              Risk : reward{" "}
+              <RiskRewardText entry={form.entryPrice} stopLoss={form.stopLoss} takeProfit={form.takeProfit} className="font-semibold" />
+              {riskReward(form.entryPrice, form.stopLoss, form.takeProfit) != null && (
+                <span className="text-slate-500 dark:text-slate-400">
+                  {" "}· you need a {Math.round(breakevenWinRate(riskReward(form.entryPrice, form.stopLoss, form.takeProfit)))}% win rate to break even
+                </span>
+              )}
+            </p>
+          )}
 
           {/* AUTO P&L */}
           {calculated ? (

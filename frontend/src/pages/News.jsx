@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { API_URL } from "../config/api";
 import { useAuth } from "../hooks/useAuth";
+import { RiskRewardTile } from "../components/RiskReward";
 
 function News() {
   const [news, setNews] = useState([]);
@@ -330,7 +331,7 @@ function News() {
                           </span>
                         </div>
                         {p.entry && (
-                          <div className="grid grid-cols-3 gap-2 mb-2">
+                          <div className="grid grid-cols-4 gap-2 mb-2">
                             <div className="bg-slate-200/60 dark:bg-slate-900/50 rounded-lg px-2 py-1 text-center">
                               <p className="text-xs text-slate-400 dark:text-slate-500">Entry</p>
                               <p className="text-xs font-mono text-slate-900 dark:text-white">{p.entry}</p>
@@ -343,6 +344,7 @@ function News() {
                               <p className="text-xs text-slate-400 dark:text-slate-500">TP</p>
                               <p className="text-xs font-mono text-green-400">{p.takeProfit}</p>
                             </div>
+                            <RiskRewardTile entry={p.entry} stopLoss={p.stopLoss} takeProfit={p.takeProfit} compact />
                           </div>
                         )}
                         <p className="text-xs text-slate-500 dark:text-slate-400">{p.reasoning}</p>

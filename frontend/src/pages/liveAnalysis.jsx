@@ -8,6 +8,8 @@ import { API_URL } from "../config/api";
 import { useAuth } from "../hooks/useAuth";
 import { useResource } from "../hooks/useResource";
 import { fetchMarketPrices } from "../api/resources";
+import { RiskRewardText } from "../components/RiskReward";
+import { riskReward } from "../utils/riskReward";
 
 const FOREX_PAIRS = [
   "EURUSD","GBPUSD","USDJPY","XAUUSD",
@@ -330,7 +332,9 @@ const sendToMT5 = async (analysisData) => {
                 <div className="flex justify-between">
                   <span className="text-slate-500 dark:text-slate-400 text-sm">Risk/Reward</span>
                   <span className="font-semibold text-slate-900 dark:text-white">
-                    {analysis.analysis?.riskRewardRatio || "—"}
+                    {riskReward(analysis.analysis?.entry, analysis.analysis?.stopLoss, analysis.analysis?.takeProfit) != null
+                      ? <RiskRewardText entry={analysis.analysis?.entry} stopLoss={analysis.analysis?.stopLoss} takeProfit={analysis.analysis?.takeProfit} />
+                      : analysis.analysis?.riskRewardRatio || "—"}
                   </span>
                 </div>
                 <div className="flex justify-between">

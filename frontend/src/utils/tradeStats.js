@@ -5,6 +5,8 @@
 // win rate broken down by pair, direction, session and weekday.
 // Pure functions over the trade list so they're easy to test.
 
+import { riskReward } from "./riskReward.js";
+
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const SESSION_LABELS = {
   london: "London", new_york: "New York", tokyo: "Tokyo", sydney: "Sydney", overlap: "Overlap",
@@ -85,6 +87,11 @@ export function computeStats(trades) {
   }
   const currentStreak = closed.length ? { type: runType, count: run } : null;
 
+  // Average planned risk:reward over closed trades that had both a stop
+  // loss and a take profit set.
+  const rrs = closed.map((t) => riskReward(t.entryPrice, t.stopLoss, t.takeProfit)).filter((v) => v != null);
+  const avgRR = rrs.length ? rrs.reduce((a, b) => a + b, 0) / rrs.length : null;
+
   return {
     total: trades.length,
     open: trades.filter((t) => !t.outcome).length,
@@ -107,6 +114,8 @@ export function computeStats(trades) {
     longestWin,
     longestLoss,
     currentStreak,
+    avgRR,
+    rrCount: rrs.length,
     series,
     breakdowns: {
       pair: group(closed, (t) => t.pair || "—"),

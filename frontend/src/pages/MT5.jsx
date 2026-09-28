@@ -14,6 +14,7 @@ import { downloadFile } from "../utils/nativeDownload";
 import { useAuth } from "../hooks/useAuth";
 import { useResource } from "../hooks/useResource";
 import { fetchMt5Dashboard } from "../api/resources";
+import { RiskRewardTile } from "../components/RiskReward";
 
 function MT5() {
   const { user, headers } = useAuth();
@@ -579,7 +580,7 @@ void OnDeinit(const int reason) {
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-2 mb-2">
+                  <div className="grid grid-cols-4 gap-2 mb-2">
                     <div className="bg-slate-100 dark:bg-slate-800 rounded-lg p-2 text-center">
                       <p className="text-xs text-slate-400 dark:text-slate-500">Entry</p>
                       <p className="font-mono text-xs font-bold text-slate-900 dark:text-white">
@@ -598,6 +599,7 @@ void OnDeinit(const int reason) {
                         {signal.takeProfit || "—"}
                       </p>
                     </div>
+                    <RiskRewardTile entry={signal.entry} stopLoss={signal.stopLoss} takeProfit={signal.takeProfit} compact className="p-2" />
                   </div>
 
                   <div className="flex items-center justify-between">

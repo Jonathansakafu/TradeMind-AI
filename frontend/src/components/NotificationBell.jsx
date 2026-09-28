@@ -10,6 +10,7 @@ import { useAuth } from "../hooks/useAuth";
 import { useResource } from "../hooks/useResource";
 import { fetchNotifications } from "../api/resources";
 import { TakenButton } from "./TakenButton";
+import { RiskRewardTile } from "./RiskReward";
 
 const SOURCE_ICONS = {
   past_trades: <History size={12} className="text-blue-400" />,
@@ -183,7 +184,7 @@ function NotificationBell() {
                       </div>
 
                       {/* Entry SL TP */}
-                      <div className="grid grid-cols-3 gap-2 mb-2">
+                      <div className="grid grid-cols-4 gap-2 mb-2">
                         <div className="bg-slate-100 dark:bg-slate-800 rounded-lg px-2 py-1 text-center">
                           <p className="text-xs text-slate-500">Entry</p>
                           <p className="text-xs font-mono text-slate-900 dark:text-white">{n.entry || "—"}</p>
@@ -196,6 +197,7 @@ function NotificationBell() {
                           <p className="text-xs text-slate-500">TP</p>
                           <p className="text-xs font-mono text-green-400">{n.takeProfit || "—"}</p>
                         </div>
+                        <RiskRewardTile entry={n.entry} stopLoss={n.stopLoss} takeProfit={n.takeProfit} compact />
                       </div>
 
                       {/* Reasoning */}

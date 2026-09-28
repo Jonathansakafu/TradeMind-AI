@@ -15,6 +15,7 @@ import { useAuth } from "../hooks/useAuth";
 import { useResource } from "../hooks/useResource";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { fetchMarketPrices } from "../api/resources";
+import { RiskRewardText } from "../components/RiskReward";
 
 const PIP_DECIMALS = {
   USDJPY: 100, GBPJPY: 100, EURJPY: 100,
@@ -356,7 +357,7 @@ function TradeHistory() {
                   )}
                 </div>
 
-                <div className="grid grid-cols-3 gap-2 mb-3">
+                <div className="grid grid-cols-4 gap-2 mb-3">
                   <div className="bg-slate-100 dark:bg-slate-800 rounded-lg p-2 text-center">
                     <p className="text-[10px] text-slate-400 dark:text-slate-500 mb-0.5">Entry</p>
                     <p className="font-mono text-xs text-slate-700 dark:text-slate-300">{trade.entryPrice || "—"}</p>
@@ -364,6 +365,10 @@ function TradeHistory() {
                   <div className="bg-slate-100 dark:bg-slate-800 rounded-lg p-2 text-center">
                     <p className="text-[10px] text-slate-400 dark:text-slate-500 mb-0.5">Exit</p>
                     <p className="font-mono text-xs text-slate-700 dark:text-slate-300">{trade.exitPrice || "—"}</p>
+                  </div>
+                  <div className="bg-slate-100 dark:bg-slate-800 rounded-lg p-2 text-center">
+                    <p className="text-[10px] text-slate-400 dark:text-slate-500 mb-0.5">R:R</p>
+                    <RiskRewardText entry={trade.entryPrice} stopLoss={trade.stopLoss} takeProfit={trade.takeProfit} className="text-xs" />
                   </div>
                   <div className="bg-slate-100 dark:bg-slate-800 rounded-lg p-2 text-center">
                     <p className="text-[10px] text-slate-400 dark:text-slate-500 mb-0.5">Live</p>
@@ -446,6 +451,7 @@ function TradeHistory() {
                   <th className="px-4 py-3.5 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Direction</th>
                   <th className="px-4 py-3.5 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Entry</th>
                   <th className="px-4 py-3.5 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Exit</th>
+                  <th className="px-4 py-3.5 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">R:R</th>
                   <th className="px-4 py-3.5 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Live Price</th>
                   <th className="px-4 py-3.5 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Strategy</th>
                   <th className="px-4 py-3.5 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
@@ -495,6 +501,11 @@ function TradeHistory() {
                         <span className="font-mono text-sm text-slate-700 dark:text-slate-300">
                           {trade.exitPrice || "—"}
                         </span>
+                      </td>
+
+                      {/* Planned risk:reward */}
+                      <td className="px-4 py-3.5 text-sm">
+                        <RiskRewardText entry={trade.entryPrice} stopLoss={trade.stopLoss} takeProfit={trade.takeProfit} />
                       </td>
 
                       {/* Live Price */}

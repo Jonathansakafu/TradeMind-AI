@@ -1,6 +1,7 @@
 import { forwardRef } from "react";
 import { TrendingUp, TrendingDown } from "lucide-react";
 import { useTheme } from "../hooks/useTheme";
+import { riskReward, formatRR } from "../utils/riskReward";
 
 // A self-rendered visual record of a trade's levels -- captured via
 // html2canvas into an image and used as the trade's screenshot. Exists
@@ -140,7 +141,7 @@ const TradeSnapshot = forwardRef(({
       )}
 
       {/* Numeric grid */}
-      <div className="grid grid-cols-3 gap-3 mb-4">
+      <div className="grid grid-cols-4 gap-3 mb-4">
         <div className="rounded-xl p-3 text-center" style={{ backgroundColor: c.boxBg, border: `1px solid ${c.boxBorder}` }}>
           <p className="text-xs mb-1" style={{ color: c.textMuted1 }}>Entry</p>
           <p className="font-mono font-bold text-sm" style={{ color: c.blueText }}>{entry || "—"}</p>
@@ -152,6 +153,10 @@ const TradeSnapshot = forwardRef(({
         <div className="rounded-xl p-3 text-center" style={{ backgroundColor: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.2)" }}>
           <p className="text-xs mb-1" style={{ color: c.textMuted1 }}>Take Profit</p>
           <p className="font-mono font-bold text-sm" style={{ color: c.greenText }}>{takeProfit || "—"}</p>
+        </div>
+        <div className="rounded-xl p-3 text-center" style={{ backgroundColor: c.boxBg, border: `1px solid ${c.boxBorder}` }}>
+          <p className="text-xs mb-1" style={{ color: c.textMuted1 }}>R:R</p>
+          <p className="font-mono font-bold text-sm" style={{ color: c.blueText }}>{formatRR(riskReward(entry, stopLoss, takeProfit))}</p>
         </div>
       </div>
 
