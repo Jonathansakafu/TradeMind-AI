@@ -8,8 +8,12 @@
     <title>TradeMind AI</title>
     <script>
       (function () {
-        var theme = localStorage.getItem("theme");
-        if (theme !== "light") document.documentElement.classList.add("dark");
+        var theme = null;
+        try { theme = localStorage.getItem("theme"); } catch (e) {}
+        var h = new Date().getHours();
+        var night = h >= 19 || h < 7;
+        // Must match ThemeContext's resolve() so there's no light/dark flash.
+        if (theme === "auto" ? night : theme !== "light") document.documentElement.classList.add("dark");
       })();
     </script>
   </head>

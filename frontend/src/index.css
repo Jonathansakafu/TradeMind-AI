@@ -1,3 +1,18 @@
 @import "tailwindcss";
 
 @custom-variant dark (&:where(.dark, .dark *));
+
+/* Softer light theme. Pure white (#fff) cards/pages were too bright to
+   look at in low light. Tailwind v4 utilities read these variables
+   (e.g. .bg-white -> var(--color-white)), so overriding them only while
+   light mode is active tones down every bg-white / bg-slate-100 surface,
+   hover states included, and leaves dark mode untouched. */
+html:not(.dark) {
+  --color-white: #f3f1ec;
+  --color-slate-50: #eceae4;
+  --color-slate-100: #e6e3dc;
+  --color-slate-200: #d9d5cc;
+}
+html:not(.dark) body {
+  background-color: #ebe8e1;
+}
