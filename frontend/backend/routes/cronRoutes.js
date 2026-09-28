@@ -118,6 +118,7 @@ router.get("/health", async (req, res) => {
         signalConfidence24h: Object.fromEntries(confidence24h.map((r) => [r._id === "other" ? "other" : `${r._id}+`, r.n])),
       },
       aiBudget: require("../services/claudeAI").getBackgroundBudget(),
+      gemini: require("../services/geminiText").status(),
       activeSessions: Object.fromEntries(activeSessions.map((r) => [r._id, r.n])),
       pricesAvailable,
       config: {
@@ -127,6 +128,7 @@ router.get("/health", async (req, res) => {
       },
       sinceBoot: pipelineStats.snapshot(),
       groq: req.query.probe ? await require("../services/claudeAI").probeGroq() : undefined,
+      geminiProbe: req.query.probe ? await require("../services/geminiText").probe() : undefined,
     });
   } catch (err) {
     res.status(500).json({ message: err.message });

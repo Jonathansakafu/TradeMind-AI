@@ -1,5 +1,6 @@
 const Groq = require("groq-sdk");
 const pipelineStats = require("./pipelineStats");
+const geminiText = require("./geminiText");
 const ragService = require("./ragService");
 const marketService = require("./marketService");
 const { computeMomentum, computeAtr, INTRADAY_LIMITS } = require("./marketAnalysis");
@@ -151,8 +152,27 @@ exports.getBackgroundBudget = () => ({
   pausedUntil: bgBudget.pausedUntil > Date.now() ? new Date(bgBudget.pausedUntil) : null,
 });
 
-// options.background: subject to the hourly budget above.
+// Every structured call goes through here: Groq first, then Gemini
+// (services/geminiText.js) if Groq refuses for any reason -- its daily
+// quota, the hourly background budget above, or an outage. Groq's paid
+// tier isn't open to upgrades, so without this, signals simply stopped
+// for hours whenever the free Groq allowance ran out.
 const askGroq = async (prompt, options = {}) => {
+  try {
+    return await askGroqPrimary(prompt, options);
+  } catch (groqErr) {
+    try {
+      const text = await geminiText.generate(prompt, { json: true, background: !!options.background });
+      pipelineStats.inc("ai.servedByGemini");
+      return text;
+    } catch {
+      throw groqErr; // both failed -- surface Groq's (already user-friendly) reason
+    }
+  }
+};
+
+// options.background: subject to the hourly budget above.
+const askGroqPrimary = async (prompt, options = {}) => {
   if (options.background) {
     try {
       claimBackgroundBudget();
@@ -641,9 +661,9 @@ exports.analyzeMarketSmart = async (pair, currentPrice, historicalPrices, pastTr
   // forex dedup window (also cut to 15min) -- a shorter dedup window alone
   // would have been meaningless, since this cache would still hand back the
   // exact same cached signal for the full original 30min regardless.
-  // 60 min (was 15) -- signals now refresh hourly per pair to fit Groq's
-  // free daily token cap; see BACKGROUND_TOKENS_PER_HOUR above.
-  const cacheKey = `market_${pair}_${Math.floor(Date.now() / (60 * 60 * 1000))}`;
+  // 30 min: hourly while Groq was the only model, halved once Gemini's
+  // separate free allowance became the backup (geminiText.js).
+  const cacheKey = `market_${pair}_${Math.floor(Date.now() / (30 * 60 * 1000))}`;
   const cached = getCached(cacheKey);
   if (cached) return cached;
 
@@ -973,7 +993,18 @@ exports.streamAnswer = async function* (question, retrievedChunks = [], extra = 
   const ragCtx = ragService.buildPromptContext({ retrievedChunks, bookSummary: extra.bookSummary });
   const messages = buildAnswerMessages(question, ragCtx, { jsonMode: false, history: extra.history });
 
-  yield* streamGroqWithTools(messages);
+  // Falls back to Gemini only if Groq fails before sending any text --
+  // switching models halfway through an answer would garble it.
+  let started = false;
+  try {
+    for await (const delta of streamGroqWithTools(messages)) {
+      started = true;
+      yield delta;
+    }
+  } catch (err) {
+    if (started) throw err;
+    yield* geminiText.streamChat(messages);
+  }
 };
 
 exports.answerSourcesFor = chunksToSources;

@@ -446,9 +446,9 @@ exports.autoGenerate = async (userId) => {
           // shorter dedup window alone would have been silently
           // meaningless, since that cache would keep returning the exact
           // same cached signal for pairs already deduped anyway.
-          // 15min -> 60min 2026-09-28, matching analyzeMarketSmart's cache
-          // (also now 60min) -- pairs refresh hourly to fit the AI budget.
-          const FOREX_DEDUP_WINDOW_MS = 60 * 60 * 1000;
+          // Matches analyzeMarketSmart's cache bucket (30 min) -- pairs
+          // refresh every 30 min with Gemini as the backup model.
+          const FOREX_DEDUP_WINDOW_MS = 30 * 60 * 1000;
           const existingToday = await Notification.findOne({
             user: userId,
             pair,
