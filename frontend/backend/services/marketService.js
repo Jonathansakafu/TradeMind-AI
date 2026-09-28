@@ -82,32 +82,50 @@ const isCacheValid = (entry) =>
 // one anchored to a fictional price.
 
 // Pata Gold price kutoka alternative API
+// Spot XAU/USD. Swissquote's public quote feed first: api.metals.live
+// (previously primary) no longer responds at all, so every call spent its
+// full 8s timeout before reaching the backup.
 const getGoldPrice = async () => {
   try {
     const res = await axios.get(
-      "https://api.metals.live/v1/spot/gold",
+      "https://forex-data-feed.swissquote.com/public-quotes/bboquotes/instrument/XAU/USD",
       { timeout: 8000 }
     );
-    if (res.data && res.data[0]?.price) {
-      return parseFloat(res.data[0].price);
-    }
-    return null;
+    const quote = res.data?.[0]?.spreadProfilePrices?.[0];
+    if (quote?.bid && quote?.ask) return (parseFloat(quote.bid) + parseFloat(quote.ask)) / 2;
   } catch {
-    try {
-      // Backup — goldapi alternative
-      const res2 = await axios.get(
-        "https://forex-data-feed.swissquote.com/public-quotes/bboquotes/instrument/XAU/USD",
-        { timeout: 8000 }
-      );
-      if (res2.data && res2.data[0]?.spreadProfilePrices?.[0]?.ask) {
-        return parseFloat(res2.data[0].spreadProfilePrices[0].ask);
-      }
-    } catch {
-      return null;
-    }
-    return null;
+    // fall through to the backup
   }
+  try {
+    const res = await axios.get("https://api.metals.live/v1/spot/gold", { timeout: 5000 });
+    if (res.data?.[0]?.price) return parseFloat(res.data[0].price);
+  } catch {
+    // no spot source available
+  }
+  return null;
 };
+
+// Yahoo Finance tickers for the same instruments, used as a fallback when
+// the primary feed (Twelve Data for forex, CoinGecko for crypto) fails --
+// both were confirmed failing live (2026-09-28), which silently removed
+// EURUSD/GBPUSD and all crypto from signal generation, since pairs without
+// a price are skipped entirely.
+const yahooForexSymbol = (pair) => `${pair.replace("/", "")}=X`;
+const yahooCryptoSymbol = (pair) => `${pair.split("/")[0]}-USD`;
+
+async function fillFromYahoo(prices, pairs, toYahoo) {
+  await Promise.all(pairs.map(async (pair) => {
+    const key = pair.replace("/", "");
+    if (prices[key]) return;
+    try {
+      const result = await fetchYahooChart(toYahoo(pair), { interval: "1d", range: "1d" });
+      const price = result?.meta?.regularMarketPrice;
+      if (price != null) prices[key] = price;
+    } catch (err) {
+      console.error(`Yahoo fallback price failed for ${pair}:`, err.message);
+    }
+  }));
+}
 
 // Pata forex prices kutoka Twelve Data
 exports.getForexPrices = async () => {
@@ -146,6 +164,8 @@ exports.getForexPrices = async () => {
     pipelineStats.inc("prices.twelvedata.error");
   }
 
+  await fillFromYahoo(prices, FOREX_PAIRS.filter((p) => p !== "XAU/USD"), yahooForexSymbol);
+
   // Pata Gold price separately -- if it fails, prices["XAUUSD"] just stays
   // whatever was already spread in from the cache above (a genuinely
   // fetched price, possibly past its freshness TTL) or absent entirely.
@@ -169,26 +189,30 @@ exports.getForexPrices = async () => {
 exports.getCryptoPrices = async () => {
   if (isCacheValid(priceCache.crypto)) return priceCache.crypto.data;
 
+  const prices = { ...priceCache.crypto.data };
+  const fresh = {};
   try {
     const ids = Object.values(CRYPTO_IDS).join(",");
     const res = await axios.get(
       `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd`,
       { timeout: 10000 }
     );
-    const prices = {};
     Object.entries(CRYPTO_IDS).forEach(([symbol, id]) => {
-      const key = symbol.replace("/", "");
-      if (res.data[id]?.usd) prices[key] = res.data[id].usd;
+      if (res.data?.[id]?.usd) fresh[symbol.replace("/", "")] = res.data[id].usd;
     });
-    if (Object.keys(prices).length > 0) {
-      priceCache.crypto.data = prices;
-      priceCache.crypto.timestamp = Date.now();
-    }
-    return prices;
   } catch (err) {
     console.error("Crypto prices error:", err.message);
-    return priceCache.crypto.data || {};
+    pipelineStats.recordError("coingecko", err.message);
+    pipelineStats.inc("prices.coingecko.error");
   }
+  await fillFromYahoo(fresh, Object.keys(CRYPTO_IDS), yahooCryptoSymbol);
+  Object.assign(prices, fresh);
+
+  if (Object.keys(fresh).length > 0) {
+    priceCache.crypto.data = prices;
+    priceCache.crypto.timestamp = Date.now();
+  }
+  return prices;
 };
 
 // Pata ALL prices
@@ -313,9 +337,25 @@ const yahooResultToCandles = (result, outputsize) => {
   return candles.slice(-outputsize);
 };
 
+// Yahoo has no spot-gold series, only COMEX futures (GC=F), which trade at
+// a premium to spot (~$30, observed 2026-09-28: futures 4205 vs spot
+// 4175). The AI was shown spot as "current price" next to futures candles,
+// so price always looked like it had just dropped below every recent
+// candle -- a built-in bearish tilt (389 of 413 gold signals over 7 days
+// were SELL). Shifting the candles by the current futures-spot basis keeps
+// the real shape of the move on the same level as the live price.
 const getGoldHistoricalCandles = async (outputsize) => {
   const result = await fetchYahooChart("GC=F");
-  return yahooResultToCandles(result, outputsize);
+  const candles = yahooResultToCandles(result, outputsize);
+  const futuresPrice = result?.meta?.regularMarketPrice;
+  const spot = await getGoldPrice().catch(() => null);
+  if (!candles.length || !futuresPrice || !spot) return candles;
+  const basis = futuresPrice - spot;
+  return candles.map((c) => ({
+    ...c,
+    open: c.open - basis, high: c.high - basis,
+    low: c.low - basis, close: c.close - basis,
+  }));
 };
 
 // Pata stock prices — Yahoo Finance, one request per symbol (no free
@@ -404,6 +444,17 @@ exports.getHistoricalData = async (pair, interval = "1h", outputsize = 20) => {
     }
   } catch (err) {
     console.error(`Historical data error for ${pair}:`, err.message);
+  }
+
+  // Same Yahoo fallback as the live prices above, before resorting to
+  // flat synthetic candles.
+  if (values.length === 0 && (CRYPTO_IDS[pair] || FOREX_PAIRS.includes(pair))) {
+    try {
+      const yahooSymbol = CRYPTO_IDS[pair] ? yahooCryptoSymbol(pair) : yahooForexSymbol(pair);
+      values = yahooResultToCandles(await fetchYahooChart(yahooSymbol), outputsize);
+    } catch (err) {
+      console.error(`Yahoo fallback candles failed for ${pair}:`, err.message);
+    }
   }
 
   if (values.length > 0) return values;
