@@ -199,8 +199,12 @@ function MainLayout({ children }) {
           <span className="w-[22px]" aria-hidden="true" />
         </div>
 
+        {/* md:pr-24 reserves room for the fixed notification bell (top-right,
+            desktop/tablet) -- page headers' right-aligned buttons (e.g. the
+            Dashboard's Add Trade) were sliding underneath it. On phones
+            the bell sits in the top bar instead, so no extra space is needed. */}
         <main
-          className="flex-1 p-4 pt-[calc(3.5rem+env(safe-area-inset-top)+1rem)] md:p-8"
+          className="flex-1 p-4 pt-[calc(3.5rem+env(safe-area-inset-top)+1rem)] md:p-8 md:pr-24"
           style={{ paddingBottom: "max(1rem, calc(env(safe-area-inset-bottom) + 0.5rem))" }}
         >
           {children}
