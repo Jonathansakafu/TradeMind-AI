@@ -1,15 +1,16 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import axios from "axios";
 import MainLayout from "../layouts/MainLayout";
 import {
   Bell, BookOpen, Brain,
-  History, X, CheckCheck, PlusCircle, Zap,
+  History, X, CheckCheck, PlusCircle, Zap, ShoppingCart,
   TrendingUp, TrendingDown, Clock,
   ShieldCheck, ShieldAlert, Newspaper, Webhook,
 } from "lucide-react";
 import { API_URL } from "../config/api";
 import SessionBanner from "../components/SessionBanner";
+import { TakenButton, TradeResultBadge } from "../components/TakenButton";
 import { useAuth } from "../hooks/useAuth";
 import { useResource } from "../hooks/useResource";
 import { fetchNotifications as fetchNotificationsResource, fetchActiveSession } from "../api/resources";
@@ -65,8 +66,27 @@ function Notifications() {
   );
   const activeSession = sessionResourceData?.session ?? null;
 
-  const [filter, setFilter] = useState("all");
+  // ?filter=taken opens straight into the taken list (the bell's shortcut).
+  const [searchParams] = useSearchParams();
+  const [filter, setFilter] = useState(() => (searchParams.get("filter") === "taken" ? "taken" : "all"));
+  const [takenList, setTakenList] = useState(null);
   const [sendingId, setSendingId] = useState(null);
+
+  // "Taken" shows every signal the trader took, not just ones among the
+  // latest 20 in the shared list above.
+  const loadTaken = useCallback(() =>
+    axios.get(`${API_URL}/api/notifications/taken`, { headers })
+      .then((res) => setTakenList(res.data.notifications || []))
+      .catch(() => setTakenList([])), [headers]);
+
+  useEffect(() => {
+    if (filter === "taken") loadTaken();
+  }, [filter, loadTaken]);
+
+  const refreshAfterTaken = async () => {
+    await refetchNotifications();
+    if (filter === "taken") await loadTaken();
+  };
   const [reportingId, setReportingId] = useState(null);
 
   const markAsRead = async (id) => {
@@ -107,6 +127,7 @@ function Notifications() {
           takeProfit: n.takeProfit,
           reasoning: n.reasoning,
           sourceLabel: n.sourceLabel,
+          notificationId: n._id,
         }
       }
     });
@@ -162,6 +183,7 @@ function Notifications() {
           profitLoss,
           status: "closed",
           closedAt: new Date().toISOString(),
+          notificationId: notification._id,
         },
         { headers }
       );
@@ -174,7 +196,7 @@ function Notifications() {
     }
   };
 
-  const filtered = notifications.filter((n) => {
+  const filtered = filter === "taken" ? (takenList || []) : notifications.filter((n) => {
     if (filter === "unread") return !n.read;
     if (filter === "buy") return n.signal === "buy";
     if (filter === "sell") return n.signal === "sell";
@@ -196,6 +218,17 @@ function Notifications() {
           </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
+          <button
+            onClick={() => setFilter(filter === "taken" ? "all" : "taken")}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border transition ${
+              filter === "taken"
+                ? "bg-green-500 border-green-500 text-slate-950"
+                : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-green-600 dark:text-green-400 hover:border-green-500/50"
+            }`}
+          >
+            <ShoppingCart size={14} />
+            {filter === "taken" ? "Show all signals" : "Taken trades"}
+          </button>
           {unreadCount > 0 && (
             <button
               onClick={markAllAsRead}
@@ -212,7 +245,7 @@ function Notifications() {
 
       {/* Filters */}
       <div className="flex gap-2 mb-6 flex-wrap">
-        {["all", "unread", "buy", "sell"].map((f) => (
+        {["all", "unread", "buy", "sell", "taken"].map((f) => (
           <button
             key={f}
             onClick={() => setFilter(f)}
@@ -224,22 +257,27 @@ function Notifications() {
           >
             {f === "all" ? "All"
               : f === "unread" ? `Unread (${unreadCount})`
+              : f === "taken" ? "🛒 Taken"
               : f.toUpperCase()}
           </button>
         ))}
       </div>
 
       {/* Content */}
-      {loading ? (
+      {loading || (filter === "taken" && takenList === null) ? (
         <div className="flex justify-center py-20">
           <div className="w-8 h-8 border-4 border-green-500 border-t-transparent rounded-full animate-spin" />
         </div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-20">
           <Bell size={48} className="text-slate-300 dark:text-slate-700 mx-auto mb-4" />
-          <p className="text-slate-500 dark:text-slate-400 text-lg font-semibold">No alerts yet</p>
+          <p className="text-slate-500 dark:text-slate-400 text-lg font-semibold">
+            {filter === "taken" ? "No taken trades yet" : "No alerts yet"}
+          </p>
           <p className="text-slate-400 dark:text-slate-500 text-sm mt-2">
-            New AI signals appear here automatically. Turn on alerts in Settings to get them even when the app is closed.
+            {filter === "taken"
+              ? "Tap the 🛒 on a signal you trade (or use Add Trade) and it will be listed here with its result."
+              : "New AI signals appear here automatically. Turn on alerts in Settings to get them even when the app is closed."}
           </p>
         </div>
       ) : (
@@ -273,6 +311,7 @@ function Notifications() {
                     <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
                       {new Date(n.createdAt).toLocaleString()}
                     </p>
+                    <TradeResultBadge notification={n} />
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -283,6 +322,7 @@ function Notifications() {
                   }`}>
                     {n.confidence}%
                   </span>
+                  <TakenButton notification={n} headers={headers} onChange={refreshAfterTaken} />
                   <button
                     onClick={() => deleteNotification(n._id)}
                     aria-label="Delete notification"

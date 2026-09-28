@@ -63,6 +63,8 @@ const tradeSchema = new mongoose.Schema({
   // position upsert instead of duplicating, without forcing every other
   // trade to carry a null-clashing unique field.
   mt5Ticket: { type: Number, unique: true, sparse: true },
+  // The signal (Notification) this trade was taken from, if any.
+  notificationId: { type: mongoose.Schema.Types.ObjectId, ref: "Notification" },
 }, { timestamps: true });
 
 tradeSchema.index({ user: 1, createdAt: -1 });

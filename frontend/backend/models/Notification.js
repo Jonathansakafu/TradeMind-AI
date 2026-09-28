@@ -49,11 +49,18 @@ const notificationSchema = new mongoose.Schema({
   },
   botClaimedAt: { type: Date },
   botError: { type: String },
+  // The trader marked this signal as one they actually traded (cart icon
+  // on the Notifications page), or logged a trade from it. tradeId links
+  // the resulting trade, so its outcome can be shown on the signal later.
+  taken: { type: Boolean, default: false },
+  takenAt: { type: Date },
+  tradeId: { type: mongoose.Schema.Types.ObjectId, ref: "Trade" },
 }, { timestamps: true });
 
 notificationSchema.index({ user: 1, createdAt: -1 });
 notificationSchema.index({ pair: 1, type: 1, createdAt: -1 });
 notificationSchema.index({ tradingSessionId: 1, botStatus: 1 });
+notificationSchema.index({ user: 1, taken: 1, createdAt: -1 });
 
 // Push/email the trader for every newly created notification (not on
 // later saves like marking read or a bot status update). Hooked here

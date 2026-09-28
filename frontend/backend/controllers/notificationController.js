@@ -555,7 +555,8 @@ exports.getNotifications = async (req, res) => {
     }
 
     const notifications = await Notification.find({ user: req.user._id })
-      .sort({ createdAt: -1 }).limit(20);
+      .sort({ createdAt: -1 }).limit(20)
+      .populate("tradeId", TRADE_RESULT_FIELDS);
     const unreadCount = await Notification.countDocuments({
       user: req.user._id, read: false,
     });
@@ -565,11 +566,47 @@ exports.getNotifications = async (req, res) => {
   }
 };
 
+// Fields of a linked trade shown on its signal (result once closed).
+const TRADE_RESULT_FIELDS = "status outcome profitLoss closedAt";
+
+// Every per-notification action below is scoped to the logged-in user --
+// these previously updated/deleted by id alone, so any logged-in account
+// could modify another account's notifications given an id.
+
 // Mark as read
 exports.markAsRead = async (req, res) => {
   try {
-    await Notification.findByIdAndUpdate(req.params.id, { read: true });
+    await Notification.updateOne({ _id: req.params.id, user: req.user._id }, { read: true });
     res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// Mark (or unmark) a signal as one the trader actually took.
+exports.setTaken = async (req, res) => {
+  try {
+    const taken = req.body?.taken !== false;
+    const notification = await Notification.findOneAndUpdate(
+      { _id: req.params.id, user: req.user._id },
+      taken ? { taken: true, takenAt: new Date(), read: true } : { taken: false, $unset: { takenAt: 1 } },
+      { returnDocument: "after" }
+    ).populate("tradeId", TRADE_RESULT_FIELDS);
+    if (!notification) return res.status(404).json({ message: "Notification not found" });
+    res.json(notification);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// All signals the trader took (not limited to the latest 20 like the main
+// list), newest first, with each linked trade's result.
+exports.getTaken = async (req, res) => {
+  try {
+    const notifications = await Notification.find({ user: req.user._id, taken: true })
+      .sort({ createdAt: -1 }).limit(200)
+      .populate("tradeId", TRADE_RESULT_FIELDS);
+    res.json({ notifications });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -588,7 +625,7 @@ exports.markAllAsRead = async (req, res) => {
 // Delete notification
 exports.deleteNotification = async (req, res) => {
   try {
-    await Notification.findByIdAndDelete(req.params.id);
+    await Notification.deleteOne({ _id: req.params.id, user: req.user._id });
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ message: err.message });

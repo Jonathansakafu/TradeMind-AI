@@ -1,4 +1,5 @@
 const Trade = require("../models/Trade");
+const Notification = require("../models/Notification");
 const ragService = require("../services/ragService");
 const { checkAndUpdateSession } = require("../utils/sessionLimits");
 
@@ -61,7 +62,21 @@ exports.createTrade = async (req, res) => {
       };
     }
 
+    // Only link a signal that belongs to this user.
+    if (tradeData.notificationId) {
+      const owned = await Notification.exists({ _id: tradeData.notificationId, user: req.user._id }).catch(() => null);
+      if (!owned) delete tradeData.notificationId;
+    }
+
     const trade = await Trade.create(tradeData);
+    // Logging a trade from a signal marks that signal as taken and links
+    // it, so the signal later shows this trade's result.
+    if (trade.notificationId) {
+      await Notification.updateOne(
+        { _id: trade.notificationId, user: req.user._id },
+        { taken: true, takenAt: new Date(), tradeId: trade._id, read: true }
+      );
+    }
     ragService.indexTrade(req.user._id, trade).catch((err) =>
       console.error("RAG index trade failed:", err.message)
     );

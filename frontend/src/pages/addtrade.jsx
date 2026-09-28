@@ -260,6 +260,9 @@ function AddTrade() {
         formData.append("outcome", calculated.outcome);
       }
       formData.append("screenshot", screenshot);
+      // Links the trade to the signal it came from (marks that signal as
+      // taken and shows this trade's result on it later).
+      if (signalData?.notificationId) formData.append("notificationId", signalData.notificationId);
       await axios.post(`${API_URL}/api/trades`, formData, {
         headers: {
           Authorization: `Bearer ${token}`,

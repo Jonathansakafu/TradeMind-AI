@@ -1,13 +1,15 @@
 import { useState, useRef, useEffect } from "react";
+import { Link } from "react-router-dom";
 import axios from "axios";
 import {
-  Bell, X,
+  Bell, X, ShoppingCart,
   BookOpen, Brain, History
 } from "lucide-react";
 import { API_URL } from "../config/api";
 import { useAuth } from "../hooks/useAuth";
 import { useResource } from "../hooks/useResource";
 import { fetchNotifications } from "../api/resources";
+import { TakenButton } from "./TakenButton";
 
 const SOURCE_ICONS = {
   past_trades: <History size={12} className="text-blue-400" />,
@@ -113,6 +115,13 @@ function NotificationBell() {
               </p>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
+              <Link
+                to="/notifications?filter=taken"
+                onClick={() => setOpen(false)}
+                className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400 hover:underline"
+              >
+                <ShoppingCart size={12} /> Taken
+              </Link>
               {unreadCount > 0 && (
                 <button
                   onClick={markAllAsRead}
@@ -208,6 +217,8 @@ function NotificationBell() {
                       </div>
                     </div>
 
+                    <div className="flex flex-col items-center gap-2">
+                    <TakenButton notification={n} headers={headers} onChange={refetch} compact />
                     {/* Delete */}
                     <button
                       onClick={(e) => {
@@ -219,6 +230,7 @@ function NotificationBell() {
                     >
                       <X size={14} />
                     </button>
+                    </div>
                   </div>
                 </div>
               ))
