@@ -92,24 +92,26 @@ function Dashboard() {
 
       {/* STATS */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-800">
+        {/* Each card opens the matching view: trade history (all / wins /
+            losses) or, for win rate, the per-pair breakdown in AI Analytics. */}
+        <Link to="/history" className="block bg-white dark:bg-slate-900 p-5 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-800 hover:border-green-500/50 hover:-translate-y-0.5 transition">
           <h3 className="text-slate-500 dark:text-slate-400 mb-2 text-sm">{t("stats.totalTrades", { ns: "dashboard" })}</h3>
           <p className="text-3xl font-bold">{trades.length}</p>
-        </div>
-        <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-800">
+        </Link>
+        <Link to="/history?filter=win" className="block bg-white dark:bg-slate-900 p-5 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-800 hover:border-green-500/50 hover:-translate-y-0.5 transition">
           <h3 className="text-slate-500 dark:text-slate-400 mb-2 text-sm">{t("stats.wins", { ns: "dashboard" })}</h3>
           <p className="text-3xl font-bold text-green-400">{wins}</p>
-        </div>
-        <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-800">
+        </Link>
+        <Link to="/history?filter=loss" className="block bg-white dark:bg-slate-900 p-5 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-800 hover:border-green-500/50 hover:-translate-y-0.5 transition">
           <h3 className="text-slate-500 dark:text-slate-400 mb-2 text-sm">{t("stats.losses", { ns: "dashboard" })}</h3>
           <p className="text-3xl font-bold text-red-400">{losses}</p>
-        </div>
-        <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-800">
+        </Link>
+        <Link to="/analytics" className="block bg-white dark:bg-slate-900 p-5 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-800 hover:border-green-500/50 hover:-translate-y-0.5 transition">
           <h3 className="text-slate-500 dark:text-slate-400 mb-2 text-sm">{t("stats.winRate", { ns: "dashboard" })}</h3>
           <p className={`text-3xl font-bold ${winRate >= 50 ? "text-green-400" : "text-red-400"}`}>
             {winRate}%
           </p>
-        </div>
+        </Link>
       </div>
 
       {/* TOTAL P&L — Hidden by default */}

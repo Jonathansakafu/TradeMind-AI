@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import axios from "axios";
 import MainLayout from "../layouts/MainLayout";
 import {
@@ -41,7 +41,12 @@ function TradeHistory() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState("all");
+  // ?filter=win|loss|open|closed -- set by the Dashboard's stats cards.
+  const [searchParams] = useSearchParams();
+  const [filter, setFilter] = useState(() => {
+    const f = searchParams.get("filter");
+    return ["open", "win", "loss", "closed"].includes(f) ? f : "all";
+  });
   const [closingTrade, setClosingTrade] = useState(null);
   const [exitPrice, setExitPrice] = useState("");
   const [closeLoading, setCloseLoading] = useState(false);
