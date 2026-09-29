@@ -13,13 +13,19 @@ function Home() {
     <div className="min-h-screen bg-white dark:bg-slate-950 text-slate-900 dark:text-white">
 
       {/* NAV */}
-      <nav className="flex items-center justify-between px-10 py-6 border-b border-slate-200 dark:border-slate-800">
-        <h1 className="text-2xl font-bold text-green-600 dark:text-green-400">TradeMind AI</h1>
-        <div className="flex gap-3">
-          <Link to="/login" className="px-5 py-2.5 rounded-xl text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition font-medium">
+      {/* Sized for phones first (was fixed 40px side padding and a large
+          button that got squeezed), and padded below the Android/iOS status
+          bar -- the app opens on this page when logged out. */}
+      <nav
+        className="flex items-center justify-between gap-3 px-4 sm:px-10 pb-4 sm:pb-6 border-b border-slate-200 dark:border-slate-800"
+        style={{ paddingTop: "max(1rem, calc(env(safe-area-inset-top) + 0.75rem))" }}
+      >
+        <h1 className="text-xl sm:text-2xl font-bold text-green-600 dark:text-green-400 whitespace-nowrap">TradeMind AI</h1>
+        <div className="flex items-center gap-2 sm:gap-3">
+          <Link to="/login" className="px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 hover:border-green-500 transition font-semibold text-sm sm:text-base whitespace-nowrap">
             Login
           </Link>
-           <Link to="/register" className="bg-green-500 hover:bg-green-600 px-8 py-4 rounded-xl font-bold text-lg transition text-slate-950">
+          <Link to="/register" className="bg-green-500 hover:bg-green-600 px-4 py-2.5 sm:px-6 rounded-xl font-bold text-sm sm:text-base transition text-slate-950 whitespace-nowrap">
             Start Free
           </Link>
         </div>

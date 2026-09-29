@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import axios from "axios";
 import { AuthContext } from "./auth-context";
 import { disablePush } from "../utils/pushNotifications";
 
@@ -42,6 +43,24 @@ export function AuthProvider({ children }) {
   const updateUser = useCallback((nextUser) => {
     localStorage.setItem("user", JSON.stringify(nextUser));
     setUser(nextUser);
+  }, []);
+
+  // A login expires after 7 days (JWT). Without this the app kept acting
+  // logged in while every request quietly failed; now the backend's
+  // "not logged in" answers (authMiddleware's 401 messages) end the
+  // session cleanly so ProtectedRoute sends the user to the login page.
+  useEffect(() => {
+    const AUTH_FAILURES = ["Not authorized", "No token provided", "User not found"];
+    const id = axios.interceptors.response.use(undefined, (error) => {
+      if (error.response?.status === 401 && AUTH_FAILURES.includes(error.response.data?.message) && localStorage.getItem("token")) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        setToken(null);
+        setUser({});
+      }
+      return Promise.reject(error);
+    });
+    return () => axios.interceptors.response.eject(id);
   }, []);
 
   const headers = useMemo(

@@ -29,6 +29,15 @@ import TradingSession from "./pages/TradingSession";
 import UpdateBanner from "./components/UpdateBanner";
 import { refreshPushRegistration } from "./utils/pushNotifications";
 
+// Welcome and login pages for someone already logged in: go straight to
+// the dashboard. The Android app always reopens at "/" (the welcome page,
+// with its big Login buttons), which made a still-valid session look like
+// the user had been logged out.
+const GuestRoute = ({ children }) => {
+  const { token } = useAuth();
+  return token ? <Navigate to="/dashboard" replace /> : children;
+};
+
 const ProtectedRoute = ({ children }) => {
   const { token } = useAuth();
   return token ? children : <Navigate to="/login" />;
@@ -81,8 +90,8 @@ function App() {
       <Router>
         <PushSync />
         <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/login" element={<Login />} />
+          <Route path="/" element={<GuestRoute><Home /></GuestRoute>} />
+          <Route path="/login" element={<GuestRoute><Login /></GuestRoute>} />
           <Route path="/register" element={<Register />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />

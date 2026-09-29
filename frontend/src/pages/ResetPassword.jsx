@@ -48,7 +48,7 @@ function ResetPassword() {
 
   if (!token || !email) {
     return (
-      <div className="min-h-screen bg-white dark:bg-slate-950 flex items-center justify-center text-slate-900 dark:text-white px-4">
+      <div className="min-h-screen bg-white dark:bg-slate-950 flex items-center justify-center text-slate-900 dark:text-white px-4 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
         <div className="bg-white dark:bg-slate-900 p-10 rounded-2xl w-full max-w-md shadow-xl text-center">
           <h1 className="text-2xl font-bold text-red-400 mb-3">{t("resetPassword.invalidLinkTitle", { ns: "auth" })}</h1>
           <p className="text-slate-500 dark:text-slate-400 mb-6">
@@ -66,7 +66,7 @@ function ResetPassword() {
   }
 
   return (
-    <div className="min-h-screen bg-white dark:bg-slate-950 flex items-center justify-center text-slate-900 dark:text-white px-4">
+    <div className="min-h-screen bg-white dark:bg-slate-950 flex items-center justify-center text-slate-900 dark:text-white px-4 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
       <div className="bg-white dark:bg-slate-900 p-10 rounded-2xl w-full max-w-md shadow-xl">
         <h1 className="text-4xl font-bold text-center text-green-600 dark:text-green-400 mb-8">
           {t("appName", { ns: "common" })}

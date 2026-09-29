@@ -40,13 +40,20 @@ function UpdateBanner() {
   };
 
   return (
-    <div className="sticky top-0 z-[1000] bg-green-500 text-slate-950 px-4 py-2.5 flex items-center justify-between gap-3 text-sm font-semibold">
-      <span className="flex-1 min-w-0">A new version of TradeMind AI is available.</span>
+    // Bottom floating card rather than a top bar: at the top it covered the
+    // app's header (menu + bell) and sat under the phone's status bar.
+    // right: leaves room for the floating AI chat button.
+    <div
+      role="status"
+      className="fixed z-[1000] left-3 right-[5.5rem] flex items-center gap-2 rounded-2xl bg-green-500 text-slate-950 shadow-2xl px-3 py-2.5 text-sm font-semibold"
+      style={{ bottom: "calc(env(safe-area-inset-bottom) + 1.25rem)" }}
+    >
+      <span className="flex-1 min-w-0 leading-tight">Update available</span>
       <button
         onClick={openDownload}
         className="flex items-center gap-1.5 bg-slate-950 text-white px-3 py-1.5 rounded-lg flex-shrink-0"
       >
-        <Download size={13} /> Update Now
+        <Download size={13} /> Install
       </button>
       <button onClick={dismiss} aria-label="Dismiss" className="p-1 -m-1 flex-shrink-0">
         <X size={16} />

@@ -8,6 +8,7 @@ import {
   Activity, Eye, EyeOff, ExternalLink
 } from "lucide-react";
 import { API_URL } from "../config/api";
+import { computeStats } from "../utils/tradeStats";
 import PriceTicker from "../components/PriceTicker";
 import BrokerModal from "../components/BrokerModal";
 import SessionBanner from "../components/SessionBanner";
@@ -25,20 +26,24 @@ function Dashboard() {
 
   useEffect(() => {
     axios
-      .get(`${API_URL}/api/trades?limit=100`, { headers })
+      // Same trade set as the Performance page (was the latest 100 only),
+      // so both always show the same win rate.
+      .get(`${API_URL}/api/trades?limit=2000`, { headers })
       .then((res) => setTrades(res.data.trades || []))
       .catch((err) => console.log(err))
       .finally(() => setLoading(false));
   }, [headers]);
 
-  const { wins, losses, winRate, totalPL, recentTrades } = useMemo(() => {
-    const closedTrades = trades.filter((t) => t.outcome);
-    const w = trades.filter((t) => t.outcome === "win").length;
-    const l = trades.filter((t) => t.outcome === "loss").length;
+  // One calculation shared with the Performance page (utils/tradeStats.js)
+  // so the two screens can't disagree.
+  const { wins, losses, breakeven, closed, winRate, totalPL, recentTrades } = useMemo(() => {
+    const s = computeStats(trades);
     return {
-      wins: w,
-      losses: l,
-      winRate: closedTrades.length > 0 ? Math.round((w / closedTrades.length) * 100) : 0,
+      wins: s.wins,
+      losses: s.losses,
+      breakeven: s.breakeven,
+      closed: s.closed,
+      winRate: Math.round(s.winRate),
       totalPL: trades.reduce((sum, t) => sum + (Number(t.profitLoss) || 0), 0),
       recentTrades: trades.slice(0, 6),
     };
@@ -110,6 +115,9 @@ function Dashboard() {
           <h3 className="text-slate-500 dark:text-slate-400 mb-2 text-sm">{t("stats.winRate", { ns: "dashboard" })}</h3>
           <p className={`text-3xl font-bold ${winRate >= 50 ? "text-green-400" : "text-red-400"}`}>
             {winRate}%
+          </p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+            {wins} W · {losses} L{breakeven ? ` · ${breakeven} BE` : ""} of {closed} closed
           </p>
         </Link>
       </div>
