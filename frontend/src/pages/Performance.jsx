@@ -38,10 +38,10 @@ function usePref(key, initial) {
 
 function Segmented({ options, value, onChange, label }) {
   return (
-    <div role="group" aria-label={label} className="inline-flex rounded-xl border border-slate-200 dark:border-slate-700 p-0.5 bg-slate-100 dark:bg-slate-800">
+    <div role="group" aria-label={label} className="inline-flex flex-wrap max-w-full rounded-xl border border-slate-200 dark:border-slate-700 p-0.5 bg-slate-100 dark:bg-slate-800">
       {options.map(([v, text]) => (
         <button key={v} onClick={() => onChange(v)} aria-pressed={value === v}
-          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+          className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition ${
             value === v ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow" : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
           }`}
         >{text}</button>
@@ -53,15 +53,18 @@ function Segmented({ options, value, onChange, label }) {
 function Tile({ label, value, sub, tone }) {
   const color = tone === "good" ? "text-green-600 dark:text-green-400" : tone === "bad" ? "text-red-600 dark:text-red-400" : "text-slate-900 dark:text-white";
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4">
+    <div className="min-w-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-3 sm:p-4">
       <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
-      <p className={`text-2xl font-bold mt-1 ${color}`}>{value}</p>
+      <p className={`text-xl sm:text-2xl font-bold mt-1 break-words ${color}`}>{value}</p>
       {sub && <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{sub}</p>}
     </div>
   );
 }
 
-const card = "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5";
+// min-w-0: without it a grid/flex child can't shrink below its widest
+// content (switch buttons, the trade table), which pushed cards past the
+// phone screen's edge.
+const card = "min-w-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 sm:p-5";
 
 function Performance() {
   const { headers } = useAuth();
@@ -86,11 +89,11 @@ function Performance() {
   return (
     <MainLayout>
       <style>{VIZ_STYLE}</style>
-      <div className="perf-viz">
+      <div className="perf-viz min-w-0">
         <Link to="/dashboard" className="inline-flex items-center gap-1 text-sm text-slate-500 dark:text-slate-400 hover:text-green-600 mb-3">
           <ArrowLeft size={14} /> Dashboard
         </Link>
-        <h2 className="text-3xl md:text-4xl font-bold flex items-center gap-3 mb-1">
+        <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold flex items-center gap-3 mb-1">
           <PieChart className="text-green-600 dark:text-green-400" size={30} /> Performance
         </h2>
         <p className="text-slate-500 dark:text-slate-400 mb-6">Win rate and the statistics behind it — choose how each chart is shown.</p>
@@ -130,7 +133,7 @@ function Performance() {
                 sub={streak ? `current: ${streak.count} ${streak.type === "win" ? "win" : streak.type === "loss" ? "loss" : "breakeven"}${streak.count > 1 ? "s" : ""}` : ""} />
             </div>
 
-            <div className="grid lg:grid-cols-5 gap-6 mb-6">
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 sm:gap-6 mb-6">
               {/* Win / loss split */}
               <div className={`${card} lg:col-span-2`}>
                 <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">

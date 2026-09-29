@@ -206,7 +206,9 @@ function MainLayout({ children }) {
             the bell sits in the top bar instead, so no extra space is needed. */}
         <main
           className="flex-1 p-4 pt-[calc(3.5rem+env(safe-area-inset-top)+1rem)] md:p-8 md:pr-24"
-          style={{ paddingBottom: "max(1rem, calc(env(safe-area-inset-bottom) + 0.5rem))" }}
+          // Bottom room for the floating AI chat button (56px + margin) so
+          // it never sits on top of a page's last buttons/rows.
+          style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 6rem)" }}
         >
           {children}
         </main>

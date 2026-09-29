@@ -54,7 +54,7 @@ export function OutcomeDonut({ stats }) {
   let offset = 0;
   const gap = total > 1 ? 3 : 0; // 2-3px surface gap between segments
   return (
-    <div className="relative mx-auto" style={{ width: size, maxWidth: "100%" }}>
+    <div className="relative mx-auto w-full" style={{ maxWidth: size }}>
       <svg viewBox={`0 0 ${size} ${size}`} role="img" aria-label={`Win rate ${Math.round(stats.winRate)}%`}>
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--viz-track)" strokeWidth={stroke} />
         {total > 0 && OUTCOMES.map((o) => {
@@ -221,9 +221,9 @@ export function BreakdownBars({ rows }) {
     <ul className="space-y-3">
       {rows.map((g) => (
         <li key={g.key} title={`${g.key}: ${g.wins} wins of ${g.trades} trades, net ${formatMoney(g.netPL)}`}>
-          <div className="flex items-baseline justify-between gap-3 text-sm mb-1">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3 text-sm mb-1">
             <span className="font-semibold text-slate-900 dark:text-white truncate">{g.key}</span>
-            <span className="text-slate-600 dark:text-slate-300 whitespace-nowrap">
+            <span className="text-slate-600 dark:text-slate-300">
               <span className="font-semibold text-slate-900 dark:text-white">{Math.round(g.winRate)}%</span>
               {" · "}{g.wins}/{g.trades} won{" · "}
               <span className={g.netPL >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}>{formatMoney(g.netPL)}</span>
@@ -241,14 +241,14 @@ export function BreakdownBars({ rows }) {
 // Table view of the same data (accessibility / exact numbers).
 export function TradeTable({ series }) {
   return (
-    <div className="max-h-72 overflow-auto overscroll-contain rounded-xl border border-slate-200 dark:border-slate-800">
-      <table className="w-full text-sm">
+    <div className="max-h-72 max-w-full overflow-auto overscroll-contain rounded-xl border border-slate-200 dark:border-slate-800">
+      <table className="w-full min-w-[520px] text-sm">
         <thead className="sticky top-0 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
           <tr>{["#", "Date", "Pair", "Result", "P/L", "Cumulative", "Win rate"].map((hd) => <th key={hd} className="px-3 py-2 text-left font-semibold">{hd}</th>)}</tr>
         </thead>
         <tbody>
           {[...series].reverse().map((p) => (
-            <tr key={p.n} className="border-t border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300">
+            <tr key={p.n} className="border-t border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 whitespace-nowrap">
               <td className="px-3 py-1.5">{p.n}</td>
               <td className="px-3 py-1.5 whitespace-nowrap">{p.date.toLocaleDateString()}</td>
               <td className="px-3 py-1.5">{p.pair}</td>
