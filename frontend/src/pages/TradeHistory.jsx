@@ -64,7 +64,10 @@ function TradeHistory() {
   const [editProfitLoss, setEditProfitLoss] = useState("");
   const [editLoading, setEditLoading] = useState(false);
   const { headers } = useAuth();
-  const isDesktop = useMediaQuery("(min-width: 1024px)");
+  // Full table only from 1280px: at 1024 the sidebar leaves ~640px, too
+  // narrow for its 11 columns (they clipped/wrapped) -- the card list is
+  // used below that instead.
+  const isDesktop = useMediaQuery("(min-width: 1280px)");
   // Shared with PriceTicker (also rendered on this page) — previously this
   // page ran its own independent 60s poll of the same endpoint alongside
   // PriceTicker's own 30s poll.
@@ -444,7 +447,7 @@ function TradeHistory() {
         {isDesktop && (
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px]">
+            <table className="w-full min-w-[640px] whitespace-nowrap">
               <thead>
                 <tr className="text-left border-b border-slate-200 dark:border-slate-800">
                   <th className="px-4 py-3.5 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Pair</th>

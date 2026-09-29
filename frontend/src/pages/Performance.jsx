@@ -116,7 +116,9 @@ function Performance() {
         ) : (
           <>
             {/* Key numbers */}
-            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 mb-6">
+            {/* Tiles per row follow the space actually available (sidebar or not):
+                as many ~170px tiles as fit, never fewer than 2 on a phone. */}
+            <div className="grid gap-3 mb-6 grid-cols-2 sm:grid-cols-[repeat(auto-fill,minmax(170px,1fr))]">
               <Tile label="Win rate" value={`${Math.round(stats.winRate)}%`} sub={`${stats.wins} W · ${stats.losses} L · ${stats.breakeven} BE`} tone={stats.winRate >= 50 ? "good" : "bad"} />
               <Tile label="Net P/L" value={formatMoney(stats.netPL)} sub={`${stats.closed} closed · ${stats.open} open`} tone={stats.netPL >= 0 ? "good" : "bad"} />
               <Tile label="Profit factor" value={pf} sub="gross profit ÷ gross loss (>1 = profitable)" tone={stats.profitFactor >= 1 ? "good" : "bad"} />

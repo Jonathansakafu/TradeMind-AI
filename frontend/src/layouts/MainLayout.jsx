@@ -40,7 +40,7 @@ function SidebarContent({ pathname, onNavigate, onClose, user, onLogout }) {
         <button
           onClick={onClose}
           aria-label="Close menu"
-          className="md:hidden p-2 -m-2 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+          className="lg:hidden p-2 -m-2 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
         >
           <X size={20} />
         </button>
@@ -135,7 +135,7 @@ function MainLayout({ children }) {
           real device -- invisible in a browser tab, which has no status
           bar to collide with. */}
       <div
-        className="fixed right-3 md:top-4 md:right-4 z-40"
+        className="fixed right-3 lg:top-4 lg:right-4 z-40"
         style={{ top: "max(0.75rem, calc(env(safe-area-inset-top) + 0.25rem))" }}
       >
         <NotificationBell />
@@ -144,12 +144,12 @@ function MainLayout({ children }) {
 
       {sidebarOpen && (
         <div
-          className="fixed inset-0 bg-black/60 z-40 md:hidden touch-none"
+          className="fixed inset-0 bg-black/60 z-40 lg:hidden touch-none"
           onClick={closeSidebar}
         />
       )}
 
-      <aside className="hidden md:flex flex-col w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 fixed h-full z-30 p-6 overflow-y-auto overscroll-contain">
+      <aside className="hidden lg:flex flex-col w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 fixed h-full z-30 p-6 overflow-y-auto overscroll-contain">
         <SidebarContent
           pathname={location.pathname}
           onNavigate={closeSidebar}
@@ -160,7 +160,7 @@ function MainLayout({ children }) {
       </aside>
 
       <aside
-        className={`md:hidden fixed top-0 left-0 h-full w-72 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 z-50 p-6 overflow-y-auto overscroll-contain transform transition-transform duration-300 ${
+        className={`lg:hidden fixed top-0 left-0 h-full w-72 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 z-50 p-6 overflow-y-auto overscroll-contain transform transition-transform duration-300 ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
         style={{
@@ -177,7 +177,7 @@ function MainLayout({ children }) {
         />
       </aside>
 
-      <div className="flex-1 min-w-0 md:ml-64 flex flex-col min-h-screen">
+      <div className="flex-1 min-w-0 lg:ml-64 flex flex-col min-h-screen">
         {/* `fixed` instead of `sticky`: the header stayed in the document
             flow under `sticky`, which on Android's WebView could visibly
             shift/glitch during the elastic overscroll bounce at the top of
@@ -186,7 +186,7 @@ function MainLayout({ children }) {
             the status bar via `top` (not padding), so its own height stays
             fixed and predictable for the spacer padding on <main> below. */}
         <div
-          className="md:hidden fixed left-0 right-0 z-20 h-14 flex items-center justify-between px-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800"
+          className="lg:hidden fixed left-0 right-0 z-20 h-14 flex items-center justify-between px-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800"
           style={{ top: "env(safe-area-inset-top)" }}
         >
           <button
@@ -200,12 +200,16 @@ function MainLayout({ children }) {
           <span className="w-[22px]" aria-hidden="true" />
         </div>
 
-        {/* md:pr-24 reserves room for the fixed notification bell (top-right,
-            desktop/tablet) -- page headers' right-aligned buttons (e.g. the
+        {/* The permanent sidebar only appears from lg (1024px): at tablet
+            widths (768-1023) it took 256px and left pages ~380px -- as
+            cramped as a phone but laid out for desktop. Below lg the
+            hamburger drawer is used instead, so pages get the full width.
+            lg:pr-24 reserves room for the fixed notification bell (top-right,
+            desktop) -- page headers' right-aligned buttons (e.g. the
             Dashboard's Add Trade) were sliding underneath it. On phones
             the bell sits in the top bar instead, so no extra space is needed. */}
         <main
-          className="flex-1 p-4 pt-[calc(3.5rem+env(safe-area-inset-top)+1rem)] md:p-8 md:pr-24"
+          className="flex-1 p-4 pt-[calc(3.5rem+env(safe-area-inset-top)+1rem)] lg:p-8 lg:pr-24"
           // Bottom room for the floating AI chat button (56px + margin) so
           // it never sits on top of a page's last buttons/rows.
           style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 6rem)" }}

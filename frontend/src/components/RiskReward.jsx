@@ -31,5 +31,5 @@ export function RiskRewardTile({ entry, stopLoss, takeProfit, compact = false, c
 // Inline text form, for tables and one-line summaries.
 export function RiskRewardText({ entry, stopLoss, takeProfit, className = "" }) {
   const rr = riskReward(entry, stopLoss, takeProfit);
-  return <span title={hint(rr)} className={`font-mono ${tone(rr)} ${className}`}>{formatRR(rr)}</span>;
+  return <span title={hint(rr)} className={`font-mono whitespace-nowrap ${tone(rr)} ${className}`}>{formatRR(rr)}</span>;
 }

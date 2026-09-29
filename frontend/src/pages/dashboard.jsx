@@ -210,12 +210,12 @@ function Dashboard() {
             <table className="w-full hidden sm:table">
               <thead>
                 <tr className="text-left text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
-                  <th className="pb-4 text-sm font-medium">{t("table.pair", { ns: "dashboard" })}</th>
-                  <th className="pb-4 text-sm font-medium">{t("table.direction", { ns: "dashboard" })}</th>
-                  <th className="pb-4 text-sm font-medium">{t("table.entry", { ns: "dashboard" })}</th>
-                  <th className="pb-4 text-sm font-medium">{t("table.exit", { ns: "dashboard" })}</th>
-                  <th className="pb-4 text-sm font-medium">{t("table.result", { ns: "dashboard" })}</th>
-                  <th className="pb-4 text-sm font-medium text-right">{t("table.pl", { ns: "dashboard" })}</th>
+                  <th className="pb-4 pr-4 text-sm font-medium whitespace-nowrap">{t("table.pair", { ns: "dashboard" })}</th>
+                  <th className="pb-4 pr-4 text-sm font-medium whitespace-nowrap">{t("table.direction", { ns: "dashboard" })}</th>
+                  <th className="pb-4 pr-4 text-sm font-medium whitespace-nowrap">{t("table.entry", { ns: "dashboard" })}</th>
+                  <th className="pb-4 pr-4 text-sm font-medium whitespace-nowrap">{t("table.exit", { ns: "dashboard" })}</th>
+                  <th className="pb-4 pr-4 text-sm font-medium whitespace-nowrap">{t("table.result", { ns: "dashboard" })}</th>
+                  <th className="pb-4 pr-4 text-sm font-medium whitespace-nowrap text-right">{t("table.pl", { ns: "dashboard" })}</th>
                 </tr>
               </thead>
               <tbody>
@@ -224,8 +224,8 @@ function Dashboard() {
                     key={index}
                     className="border-b border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800/40 transition"
                   >
-                    <td className="py-4 font-semibold">{trade.pair}</td>
-                    <td className="py-4">
+                    <td className="py-4 pr-4 whitespace-nowrap font-semibold">{trade.pair}</td>
+                    <td className="py-4 pr-4 whitespace-nowrap">
                       <span className={`flex items-center gap-1.5 ${
                         trade.direction === "buy" ? "text-green-400" : "text-red-400"
                       }`}>
@@ -236,13 +236,13 @@ function Dashboard() {
                         {trade.direction || "—"}
                       </span>
                     </td>
-                    <td className="py-4 text-slate-700 dark:text-slate-300 font-mono text-sm">
+                    <td className="py-4 pr-4 whitespace-nowrap text-slate-700 dark:text-slate-300 font-mono text-sm">
                       {trade.entryPrice || "—"}
                     </td>
-                    <td className="py-4 text-slate-700 dark:text-slate-300 font-mono text-sm">
+                    <td className="py-4 pr-4 whitespace-nowrap text-slate-700 dark:text-slate-300 font-mono text-sm">
                       {trade.exitPrice || "—"}
                     </td>
-                    <td className="py-4">
+                    <td className="py-4 pr-4 whitespace-nowrap">
                       <span className={`px-3 py-1 rounded-lg text-xs font-semibold ${
                         trade.outcome === "win" ? "bg-green-500/10 text-green-400"
                         : trade.outcome === "loss" ? "bg-red-500/10 text-red-400"
@@ -251,7 +251,7 @@ function Dashboard() {
                         {trade.outcome?.toUpperCase() || t("table.open", { ns: "dashboard" })}
                       </span>
                     </td>
-                    <td className="py-4 text-right">
+                    <td className="py-4 pr-4 whitespace-nowrap text-right">
                       {showPL ? (
                         <span className={`font-semibold ${
                           Number(trade.profitLoss) >= 0 ? "text-green-400" : "text-red-400"
