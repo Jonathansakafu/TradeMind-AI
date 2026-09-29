@@ -119,6 +119,7 @@ router.get("/health", async (req, res) => {
       },
       aiBudget: require("../services/claudeAI").getBackgroundBudget(),
       gemini: require("../services/geminiText").status(),
+      gold: marketService.getGoldStatus(),
       activeSessions: Object.fromEntries(activeSessions.map((r) => [r._id, r.n])),
       pricesAvailable,
       config: {

@@ -82,28 +82,112 @@ const isCacheValid = (entry) =>
 // one anchored to a fictional price.
 
 // Pata Gold price kutoka alternative API
-// Spot XAU/USD. Swissquote's public quote feed first: api.metals.live
-// (previously primary) no longer responds at all, so every call spent its
-// full 8s timeout before reaching the backup.
+// Spot XAU/USD, tracked with when and where it came from.
+//
+// Stale-price bug (2026-09-29): when every source failed, the last gold
+// price was silently reused with no time limit -- two real alerts 4.5h
+// apart both used entry 4114.42 while the market was ~4127-4140. Now:
+//   1. Swissquote spot (primary).
+//   2. Yahoo COMEX futures (GC=F) minus the futures-spot basis learned the
+//      last time both were fresh (basis moves slowly; only used if learned
+//      within BASIS_MAX_AGE_MS and the futures quote itself is recent).
+//   3. api.metals.live (legacy backup, currently not responding).
+// A price older than GOLD_MAX_AGE_MS is never used (see getFreshGold):
+// no gold signal is better than one built on an old price.
+const GOLD_MAX_AGE_MS = 5 * 60 * 1000;
+const BASIS_MAX_AGE_MS = 6 * 60 * 60 * 1000;
+const FUTURES_QUOTE_MAX_AGE_MS = 15 * 60 * 1000;
+const goldState = { price: null, at: 0, source: null, basis: null, basisAt: 0, lastError: null };
+
+async function fetchSwissquoteGold() {
+  const res = await axios.get(
+    "https://forex-data-feed.swissquote.com/public-quotes/bboquotes/instrument/XAU/USD",
+    { timeout: 8000 }
+  );
+  const quote = res.data?.[0]?.spreadProfilePrices?.[0];
+  if (quote?.bid && quote?.ask) return (parseFloat(quote.bid) + parseFloat(quote.ask)) / 2;
+  throw new Error("Swissquote returned no XAU/USD quote");
+}
+
+async function fetchFuturesAdjustedGold() {
+  if (goldState.basis == null || Date.now() - goldState.basisAt > BASIS_MAX_AGE_MS) {
+    throw new Error("no recent futures-spot basis to adjust with");
+  }
+  const result = await fetchYahooChart("GC=F", { interval: "1m", range: "1d" });
+  const futures = result?.meta?.regularMarketPrice;
+  const quotedAt = (result?.meta?.regularMarketTime || 0) * 1000;
+  if (!futures || Date.now() - quotedAt > FUTURES_QUOTE_MAX_AGE_MS) {
+    throw new Error("Yahoo gold futures quote missing or not recent");
+  }
+  return futures - goldState.basis;
+}
+
+async function fetchMetalsLiveGold() {
+  const res = await axios.get("https://api.metals.live/v1/spot/gold", { timeout: 5000 });
+  if (res.data?.[0]?.price) return parseFloat(res.data[0].price);
+  throw new Error("metals.live returned no price");
+}
+
+const GOLD_SOURCES = [
+  ["Swissquote spot", fetchSwissquoteGold],
+  ["COMEX futures minus basis", fetchFuturesAdjustedGold],
+  ["metals.live", fetchMetalsLiveGold],
+];
+
+// Keeps the futures-spot basis current (at most every 30 min) while the
+// spot source works, so the futures fallback is ready if it later fails.
+// Fire-and-forget: never delays or fails a price lookup.
+function refreshBasis(spot) {
+  if (Date.now() - goldState.basisAt < 30 * 60 * 1000) return;
+  fetchYahooChart("GC=F", { interval: "1m", range: "1d" })
+    .then((result) => {
+      const futures = result?.meta?.regularMarketPrice;
+      const quotedAt = (result?.meta?.regularMarketTime || 0) * 1000;
+      if (futures && Date.now() - quotedAt <= FUTURES_QUOTE_MAX_AGE_MS) {
+        goldState.basis = futures - spot;
+        goldState.basisAt = Date.now();
+      }
+    })
+    .catch(() => {});
+}
+
+// Returns a *freshly fetched* spot price, or null if every source failed.
 const getGoldPrice = async () => {
-  try {
-    const res = await axios.get(
-      "https://forex-data-feed.swissquote.com/public-quotes/bboquotes/instrument/XAU/USD",
-      { timeout: 8000 }
-    );
-    const quote = res.data?.[0]?.spreadProfilePrices?.[0];
-    if (quote?.bid && quote?.ask) return (parseFloat(quote.bid) + parseFloat(quote.ask)) / 2;
-  } catch {
-    // fall through to the backup
+  const errors = [];
+  for (const [source, fetchFn] of GOLD_SOURCES) {
+    try {
+      const price = await fetchFn();
+      if (price > 0) {
+        Object.assign(goldState, { price, at: Date.now(), source, lastError: null });
+        if (source === "Swissquote spot") refreshBasis(price);
+        return price;
+      }
+    } catch (err) {
+      errors.push(`${source}: ${err.message}`);
+    }
   }
-  try {
-    const res = await axios.get("https://api.metals.live/v1/spot/gold", { timeout: 5000 });
-    if (res.data?.[0]?.price) return parseFloat(res.data[0].price);
-  } catch {
-    // no spot source available
-  }
+  goldState.lastError = errors.join(" | ");
+  pipelineStats.inc("prices.gold.allSourcesFailed");
+  pipelineStats.recordError("gold", goldState.lastError);
   return null;
 };
+
+// The last gold price only if it's still within GOLD_MAX_AGE_MS.
+function getFreshGold() {
+  return goldState.price && Date.now() - goldState.at <= GOLD_MAX_AGE_MS ? goldState.price : null;
+}
+
+// For the health report and for labeling gold signals with their price.
+exports.getGoldStatus = () => ({
+  price: goldState.price,
+  source: goldState.source,
+  at: goldState.at ? new Date(goldState.at) : null,
+  ageSeconds: goldState.at ? Math.round((Date.now() - goldState.at) / 1000) : null,
+  fresh: !!getFreshGold(),
+  basis: goldState.basis,
+  basisAt: goldState.basisAt ? new Date(goldState.basisAt) : null,
+  lastError: goldState.lastError,
+});
 
 // Yahoo Finance tickers for the same instruments, used as a fallback when
 // the primary feed (Twelve Data for forex, CoinGecko for crypto) fails --
@@ -170,12 +254,9 @@ exports.getForexPrices = async () => {
   // whatever was already spread in from the cache above (a genuinely
   // fetched price, possibly past its freshness TTL) or absent entirely.
   // No hardcoded constant standing in as if it were real anymore.
-  try {
-    const goldPrice = await getGoldPrice();
-    if (goldPrice) prices["XAUUSD"] = goldPrice;
-  } catch {
-    // prices["XAUUSD"] already holds whatever was cached, if anything.
-  }
+  const goldPrice = await getGoldPrice().catch(() => null);
+  if (goldPrice) prices["XAUUSD"] = goldPrice;
+  else if (!getFreshGold()) delete prices["XAUUSD"]; // no gold rather than an old gold price
 
   if (Object.keys(prices).length > 0) {
     priceCache.forex.data = prices;
@@ -254,7 +335,9 @@ exports.getLivePrice = async (pair) => {
     } else {
       // Angalia cache kwanza
       const cached = priceCache.forex.data[symbol];
-      if (cached && isCacheValid(priceCache.forex)) {
+      // Gold has its own freshness rule (the forex cache's timestamp moves
+      // whenever any forex pair refreshes, even if gold itself didn't).
+      if (cached && isCacheValid(priceCache.forex) && (symbol !== "XAUUSD" || getFreshGold())) {
         return { pair: symbol, price: cached, timestamp: new Date() };
       }
 
@@ -266,8 +349,8 @@ exports.getLivePrice = async (pair) => {
           priceCache.forex.timestamp = Date.now();
           return { pair: symbol, price: goldPrice, timestamp: new Date() };
         }
-        const lastKnownGold = priceCache.forex.data["XAUUSD"];
-        if (lastKnownGold) return { pair: symbol, price: lastKnownGold, timestamp: new Date() };
+        const freshGold = getFreshGold();
+        if (freshGold) return { pair: symbol, price: freshGold, timestamp: new Date(goldState.at) };
         return null;
       }
 
@@ -348,9 +431,15 @@ const getGoldHistoricalCandles = async (outputsize) => {
   const result = await fetchYahooChart("GC=F");
   const candles = yahooResultToCandles(result, outputsize);
   const futuresPrice = result?.meta?.regularMarketPrice;
-  const spot = await getGoldPrice().catch(() => null);
+  const spot = getFreshGold() || await getGoldPrice().catch(() => null);
   if (!candles.length || !futuresPrice || !spot) return candles;
   const basis = futuresPrice - spot;
+  // Remember the basis only when the spot came from a real spot quote --
+  // it's what the futures fallback subtracts later.
+  if (goldState.source === "Swissquote spot" || goldState.source === "metals.live") {
+    goldState.basis = basis;
+    goldState.basisAt = Date.now();
+  }
   return candles.map((c) => ({
     ...c,
     open: c.open - basis, high: c.high - basis,

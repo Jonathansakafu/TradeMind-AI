@@ -17,6 +17,16 @@ const FOREX_PAIRS = ["EURUSD", "GBPUSD", "XAUUSD"];
 // Stocks — same real-data pipeline as gold (marketService's Yahoo Finance
 // path), analyzed alongside forex/crypto rather than as a separate mode.
 const STOCK_PAIRS = marketService.STOCK_SYMBOLS;
+// Gold only: says which price the signal was built on and when, so an
+// out-of-date price is visible on the signal itself.
+function goldPriceNote(pair) {
+  if (pair !== "XAUUSD") return "";
+  const g = marketService.getGoldStatus();
+  if (!g.at) return "";
+  const time = g.at.toISOString().slice(11, 16);
+  return `\n\n💰 Gold price used: ${g.price.toFixed(2)} (${g.source}, ${time} UTC)`;
+}
+
 const LIMIT_STOPPED_STATUSES = ["stopped_profit", "stopped_risk", "stopped_trades"];
 
 // Pocket Option/Expert Option OTC instruments (e.g. "EUR/USD OTC") are
@@ -467,7 +477,8 @@ exports.autoGenerate = async (userId) => {
               stopLoss: levels.stopLoss || 0,
               takeProfit: levels.takeProfit || 0,
               reasoning: (analysis.reasoning || "AI generated signal")
-                + (levels.adjusted ? `\n\n📏 Levels adjusted for an intraday trade: ${levels.note}.` : ""),
+                + (levels.adjusted ? `\n\n📏 Levels adjusted for an intraday trade: ${levels.note}.` : "")
+                + goldPriceNote(pair),
               confidence: analysis.confidence || 60,
               source: analysis.source || "ai_auto",
               sourceLabel: analysis.sourceLabel || "AI Auto",
