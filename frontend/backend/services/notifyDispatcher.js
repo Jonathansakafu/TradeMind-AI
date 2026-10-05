@@ -166,10 +166,21 @@ async function sendFcm(user, msg) {
     android: {
       priority: "high",
       ttl: msg.ttlSeconds * 1000,
-      // Channel created by the app on startup (src/utils/pushNotifications.js)
-      // with high importance, so signals pop up with sound rather than
-      // landing silently in Android's generic "Miscellaneous" channel.
-      notification: { channelId: "signals", sound: "default", tag: msg.id },
+      // Messaging-app style (heads-up pop-up, sound, vibration, lock screen):
+      // the "signals" channel is created by the app on every start
+      // (src/utils/pushNotifications.js) with high importance, and is also
+      // AndroidManifest's default channel. ic_stat_tm is the white
+      // status-bar silhouette; color tints it and the app name.
+      notification: {
+        channelId: "signals",
+        icon: "ic_stat_tm",
+        color: "#22C55E",
+        sound: "default",
+        defaultVibrateTimings: true,
+        priority: "max",
+        visibility: "public",
+        tag: msg.id,
+      },
     },
   });
 

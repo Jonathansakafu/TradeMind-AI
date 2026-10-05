@@ -22,6 +22,20 @@
             </intent-filter>
         </activity>
 
+        <!-- Defaults for push alerts (FCM): status-bar icon, accent colour and
+             the high-importance "signals" channel (heads-up pop-up, sound,
+             vibration), so alerts look and behave like a messaging app's even
+             if a message arrives before the app has created its channel. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_tm" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/tm_notification" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="signals" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

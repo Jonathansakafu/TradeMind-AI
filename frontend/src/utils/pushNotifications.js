@@ -90,17 +90,7 @@ async function enableNative(headers) {
   if (!FCM_ENABLED) throw new Error("This version of the app doesn't support push alerts yet. Update the app and try again.");
 
   const PushNotifications = await nativePush();
-  // High importance = heads-up pop-up with sound. Must match the
-  // channelId the backend sends with (notifyDispatcher.js's sendFcm).
-  await PushNotifications.createChannel({
-    id: "signals",
-    name: "Trading signals",
-    description: "New AI trading signals",
-    importance: 5,
-    visibility: 1,
-    sound: "default",
-    vibration: true,
-  }).catch(() => {});
+  await ensureSignalsChannel();
 
   let { receive } = await PushNotifications.checkPermissions();
   if (receive !== "granted") ({ receive } = await PushNotifications.requestPermissions());
@@ -127,6 +117,84 @@ async function enableNative(headers) {
 
   await axios.post(`${API_URL}/api/push/fcm-token`, { token }, { headers });
   localStorageSet("fcmToken", token);
+}
+
+// High importance = heads-up pop-up with sound and vibration, shown on the
+// lock screen (visibility 1 = public). Must match the channelId the backend
+// sends with (notifyDispatcher.js) and AndroidManifest's default channel.
+// Created on every app start, not only when push is switched on -- an alert
+// arriving before the channel exists lands silently in "Miscellaneous".
+async function ensureSignalsChannel() {
+  const PushNotifications = await nativePush();
+  await PushNotifications.createChannel({
+    id: "signals",
+    name: "Trading signals",
+    description: "New AI trading signals",
+    importance: 5,
+    visibility: 1,
+    sound: "default",
+    vibration: true,
+    lights: true,
+    lightColor: "#22C55E",
+  }).catch(() => {});
+}
+
+const ASKED_KEY = "pushPermissionAsked";
+
+// WhatsApp-style setup for the Android app, run once per app start while
+// logged in: create the channel, ask for notification permission the first
+// time (Android shows its own Allow / Don't allow dialog), and keep this
+// phone registered with the server. Never asks twice -- if the user said
+// no, Settings -> Alerts explains how to allow it later.
+export async function autoSetupAndroidPush(headers) {
+  if (!isAndroidApp() || !FCM_ENABLED) return;
+  try {
+    await ensureSignalsChannel();
+    const PushNotifications = await nativePush();
+    const { receive } = await PushNotifications.checkPermissions();
+    if (receive === "granted") {
+      await enableNative(headers);
+    } else if (receive !== "denied" && !localStorageGet(ASKED_KEY)) {
+      localStorageSet(ASKED_KEY, "1");
+      await enableNative(headers); // triggers the system permission dialog
+    }
+  } catch (err) {
+    console.warn("Android push setup failed:", err.message);
+  }
+}
+
+// Shows alerts that arrive while the app is open. Android doesn't display
+// push notifications for the app in the foreground on its own (the plugin
+// just hands them to JS), so they'd silently vanish -- this re-posts them
+// as normal pop-ups. Taps on either kind open the given screen.
+export async function initAndroidAlertDisplay(onOpen) {
+  if (!isAndroidApp() || !FCM_ENABLED) return () => {};
+  const PushNotifications = await nativePush();
+  const { LocalNotifications } = await import("@capacitor/local-notifications");
+  let nextId = Math.floor(Date.now() % 1000000);
+
+  const handles = await Promise.all([
+    PushNotifications.addListener("pushNotificationReceived", (n) => {
+      LocalNotifications.schedule({
+        notifications: [{
+          id: nextId++,
+          title: n.title || "TradeMind AI",
+          body: n.body || "New trading signal",
+          channelId: "signals",
+          smallIcon: "ic_stat_tm",
+          iconColor: "#22C55E",
+          extra: { url: n.data?.url || "/notifications" },
+        }],
+      }).catch(() => {});
+    }),
+    PushNotifications.addListener("pushNotificationActionPerformed", (a) => {
+      onOpen(a.notification?.data?.url || "/notifications");
+    }),
+    LocalNotifications.addListener("localNotificationActionPerformed", (a) => {
+      onOpen(a.notification?.extra?.url || "/notifications");
+    }),
+  ]);
+  return () => handles.forEach((h) => h.remove());
 }
 
 // Removes this device from the account (Settings toggle-off and logout),

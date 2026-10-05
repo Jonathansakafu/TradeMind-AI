@@ -27,7 +27,7 @@ import AskAI from "./pages/AskAI";
 import Guide from "./pages/Guide";
 import TradingSession from "./pages/TradingSession";
 import UpdateBanner from "./components/UpdateBanner";
-import { refreshPushRegistration } from "./utils/pushNotifications";
+import { refreshPushRegistration, autoSetupAndroidPush, initAndroidAlertDisplay } from "./utils/pushNotifications";
 
 // Welcome and login pages for someone already logged in: go straight to
 // the dashboard. The Android app always reopens at "/" (the welcome page,
@@ -63,19 +63,23 @@ function PushSync() {
   const { token, headers } = useAuth();
   const navigate = useNavigate();
 
+  // Browsers: refresh an existing subscription. Android app: WhatsApp-style
+  // automatic setup (permission prompt once, channel, registration).
   useEffect(() => {
-    if (token) refreshPushRegistration(headers);
+    if (!token) return;
+    if (Capacitor.getPlatform() === "android") autoSetupAndroidPush(headers);
+    else refreshPushRegistration(headers);
   }, [token, headers]);
 
+  // Android: show alerts that arrive while the app is open, and open the
+  // right screen when any alert is tapped.
   useEffect(() => {
-    if (Capacitor.getPlatform() !== "android" || import.meta.env.VITE_FCM_ENABLED !== "true") return;
-    let handle;
-    import("@capacitor/push-notifications").then(({ PushNotifications }) =>
-      PushNotifications.addListener("pushNotificationActionPerformed", (action) => {
-        navigate(action.notification?.data?.url || "/notifications");
-      })
-    ).then((h) => { handle = h; });
-    return () => handle?.remove();
+    let cleanup = () => {};
+    let cancelled = false;
+    initAndroidAlertDisplay((url) => navigate(url)).then((fn) => {
+      if (cancelled) fn(); else cleanup = fn;
+    });
+    return () => { cancelled = true; cleanup(); };
   }, [navigate]);
 
   return null;
