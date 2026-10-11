@@ -678,7 +678,7 @@ Set verified=false only if the reasoning contradicts the given context, cites so
 // ragService.buildPromptContext, and reflects which of those sources
 // actually contributed in sourceLabel so that's visible, not just internal.
 exports.analyzeMarketSmart = async (pair, currentPrice, historicalPrices, pastTrades, retrievedChunks = [], newsArticles = [], extra = {}) => {
-  const { bookSummary = "", momentum = null, pairTrades = [], learnedSummary = "", marketContext = "", signalStats = "" } = extra;
+  const { bookSummary = "", momentum = null, pairTrades = [], learnedSummary = "", marketContext = "", signalStats = "", newsCalendar = "" } = extra;
   // Shortened from 30min to 15min 2026-09-23 alongside notificationController's
   // forex dedup window (also cut to 15min) -- a shorter dedup window alone
   // would have been meaningless, since this cache would still hand back the
@@ -748,6 +748,7 @@ ${newsContext}${sizingContext}
 ${marketContext ? `\n${marketContext}\nRules: trade in the direction of the 4H trend (when 4H is ranging, follow 1H); prefer entries after a pullback toward support (buys) or resistance (sells), not right in front of an opposing level; put the stop beyond the nearest swing; when 4H and 1H disagree and there's no clear break of structure, answer "wait".
 How to read the structure: "internal" uses every swing, "major" only swings at least half an ATR (more reliable). BOS = a break in the trend's direction (continuation); CHoCH = the first break against it (early reversal warning) -- a fresh CHoCH against your idea on 1H or 15m is a reason for caution or "wait", a fresh CHoCH in its favour can be an entry trigger. A liquidity sweep (wick through a swing, close back inside) often precedes a move the other way; equal highs/lows are resting liquidity price tends to run toward. Weigh all of these yourself.` : ""}
 ${signalStats ? `\n${signalStats}` : ""}
+${newsCalendar ? `\n${newsCalendar}` : ""}
 
 Respond ONLY in JSON with no markdown ("confidence" is a 0-100 integer percentage, e.g. 78 for 78% -- never a 0-1 decimal):
 {

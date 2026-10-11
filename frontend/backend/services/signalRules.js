@@ -9,11 +9,9 @@
 // Uses services/marketContext.js (structure, S/R, multi-timeframe) and
 // services/economicCalendar.js (high-impact news).
 
-const { currenciesFor } = require("./economicCalendar");
+const { currenciesFor, isTopTier, quietAfterMs, QUIET_BEFORE_MS } = require("./economicCalendar");
 
 const MIN_RR = 1.5;
-const NEWS_BEFORE_MS = 30 * 60 * 1000; // no new signal 30 min before...
-const NEWS_AFTER_MS = 15 * 60 * 1000; // ...or 15 min after high-impact news
 
 const isUp = (t) => t === "up" || t === "up-leaning";
 const isDown = (t) => t === "down" || t === "down-leaning";
@@ -104,13 +102,16 @@ exports.checklist = ({ signal, entry, stopLoss, takeProfit }, ctx, events, now =
   else if (weak) add("room", "Room to target", false, `minor ${side} at ${fmt(weak.price, entry)} on the way`, false);
   else add("room", "Room to target", true, "no level in the way within 1R");
 
-  // 4. High-impact news
+  // 4. High-impact news: no new signal from 30 min before to 15 min after
+  // a release -- 60 min after for top-tier ones (NFP, CPI, rate decisions).
   if (!events) add("news", "News", true, "calendar unavailable", true);
   else {
     const ccys = currenciesFor(ctx?.pair || "");
     const near = events.find((e) => ccys.includes(e.currency)
-      && e.time - now <= NEWS_BEFORE_MS && now - e.time <= NEWS_AFTER_MS);
-    add("news", "News", !near, near ? `${near.currency} ${near.title} at ${near.time.toISOString().slice(11, 16)} UTC` : "no high-impact news within 30 min");
+      && e.time - now <= QUIET_BEFORE_MS && now - e.time <= quietAfterMs(e));
+    add("news", "News", !near, near
+      ? `${near.currency} ${near.title} at ${near.time.toISOString().slice(11, 16)} UTC — no new trades ${now < near.time ? "before" : "right after"} it${isTopTier(near) ? " (top-tier: 60 min quiet after)" : ""}`
+      : "no high-impact news within the quiet window");
   }
 
   // 5. Change of character (soft): a fresh CHoCH against the signal on 1H

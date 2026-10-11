@@ -15,6 +15,7 @@ const signalRules = require("../services/signalRules");
 const economicCalendar = require("../services/economicCalendar");
 const signalOutcomes = require("../services/signalOutcomes");
 const signalNotes = require("../services/signalNotes");
+const newsContext = require("../services/newsContext");
 const pipelineStats = require("../services/pipelineStats");
 
 // Forex zitatumika kama zinapatikana tu
@@ -463,6 +464,9 @@ exports.autoGenerate = async (userId) => {
         } catch (err) {
           console.error(`Market context failed for ${pair}:`, err.message);
         }
+        // Upcoming high-impact releases (with forecast / previous) and how
+        // price reacted to recent ones. Never throws; empty when unavailable.
+        const newsCtx = await newsContext.getNewsContext(pair, { atrH1: ctx?.atrH1 });
         const gate = signalRules.preGate(ctx);
         if (!gate.analyze) {
           pipelineStats.inc("rules.gateSkipped");
@@ -481,6 +485,7 @@ exports.autoGenerate = async (userId) => {
             bookSummary, momentum, learnedSummary,
             marketContext: ctx?.summary || "",
             signalStats: signalStatsByPair[pair] || "",
+            newsCalendar: newsCtx.text,
           }
         );
         pipelineStats.inc("forex.analyzed");
@@ -546,6 +551,7 @@ exports.autoGenerate = async (userId) => {
                 + signalNotes.forAiSignal({
                   analysis,
                   ctx,
+                  newsCtx,
                   price: currentPrice,
                   inputs: {
                     structure: !!ctx,

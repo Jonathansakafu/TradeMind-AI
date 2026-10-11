@@ -5,6 +5,7 @@ const { extractSkillKnowledgeFromNews } = require("./newsKnowledgeService");
 const pipelineStats = require("./pipelineStats");
 const signalOutcomes = require("./signalOutcomes");
 const morningBrief = require("./morningBrief");
+const newsWarnings = require("./newsWarnings");
 
 // Checked on every cycle (see below) but only actually fires about once a
 // week per user -- same self-throttling pattern as autoGenerate's own
@@ -98,6 +99,14 @@ async function runCycle() {
     await morningBrief.maybeSendMorningBrief();
   } catch (err) {
     console.error("Morning brief failed:", err.message);
+  }
+
+  // Heads-up 15-45 min before high-impact news for trades users have on.
+  try {
+    const { sent } = await newsWarnings.sendPreNewsWarnings();
+    if (sent) console.log(`⚠️ Sent ${sent} pre-news warning(s)`);
+  } catch (err) {
+    console.error("Pre-news warnings failed:", err.message);
   }
 
   pipelineStats.inc("cycles.completed");

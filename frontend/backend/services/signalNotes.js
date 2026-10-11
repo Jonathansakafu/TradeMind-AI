@@ -28,7 +28,7 @@ function liquidityLine(ctx, fmt) {
 }
 
 // AI market-analysis signal (the main forex/gold pipeline).
-exports.forAiSignal = ({ analysis, ctx, inputs, price }) => {
+exports.forAiSignal = ({ analysis, ctx, newsCtx, inputs, price }) => {
   const fmt = fmtFor(price || 1);
   const used = [];
   if (inputs.structure) used.push("market structure (4H / 1H / 15m)");
@@ -39,6 +39,7 @@ exports.forAiSignal = ({ analysis, ctx, inputs, price }) => {
   if (inputs.learned) used.push("self-learning notes from your results");
   if (inputs.news) used.push(`${inputs.news} news headline${inputs.news === 1 ? "" : "s"}`);
   if (inputs.momentum) used.push("momentum / RSI");
+  if (newsCtx?.text) used.push("economic calendar");
 
   const lines = [
     `• Source: AI analysis of live market data${analysis.provider ? ` by ${analysis.provider}` : ""}${analysis.verified === true ? ", double-checked by a second AI pass" : ""}`,
@@ -51,6 +52,11 @@ exports.forAiSignal = ({ analysis, ctx, inputs, price }) => {
   if (tfs.length) lines.push(`• Timeframes: ${tfs.join(" | ")}`);
   const liq = liquidityLine(ctx, fmt);
   if (liq) lines.push(`• Liquidity: ${liq}`);
+  for (const e of (newsCtx?.upcoming || []).slice(0, 2)) {
+    const mins = Math.round((e.time - Date.now()) / 60000);
+    lines.push(`• News ahead: ${e.currency} ${e.title} at ${e.time.toISOString().slice(11, 16)} UTC (in ${mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins} min`})${e.forecast ? `, forecast ${e.forecast}` : ""}${e.previous ? `, previous ${e.previous}` : ""}`);
+  }
+  for (const r of (newsCtx?.reactions || []).slice(0, 2)) lines.push(`• News reaction: ${r.line}`);
   return `\n\n📌 Signal basis\n${lines.join("\n")}`;
 };
 

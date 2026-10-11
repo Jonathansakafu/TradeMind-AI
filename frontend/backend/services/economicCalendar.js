@@ -19,7 +19,7 @@ exports.getHighImpactEvents = async () => {
     const res = await axios.get(FEED, { timeout: 10000, headers: { "User-Agent": "Mozilla/5.0" } });
     const events = (Array.isArray(res.data) ? res.data : [])
       .filter((e) => e.impact === "High" && e.date)
-      .map((e) => ({ time: new Date(e.date), currency: e.country, title: e.title }))
+      .map((e) => ({ time: new Date(e.date), currency: e.country, title: e.title, forecast: e.forecast || "", previous: e.previous || "" }))
       .filter((e) => !Number.isNaN(e.time.getTime()));
     cache = { at: Date.now(), events, error: null };
     AppConfig.updateOne({ key: "economicCalendar" }, { $set: { value: { savedAt: new Date(), events } } }, { upsert: true })
@@ -38,6 +38,21 @@ exports.getHighImpactEvents = async () => {
     } catch { /* no saved copy */ }
     return null;
   }
+};
+
+// Top-tier releases (NFP, CPI, central-bank rate decisions / FOMC) keep the
+// market jumpy for up to an hour, so their quiet window after the release
+// is 60 min instead of 15.
+const TOP_TIER = /non-?farm|\bnfp\b|\bcpi\b|fomc|federal funds|rate decision|interest rate|monetary policy|official bank rate|main refinancing|cash rate/i;
+exports.isTopTier = (event) => TOP_TIER.test(event?.title || "");
+exports.QUIET_BEFORE_MS = 30 * 60 * 1000;
+exports.quietAfterMs = (event) => (exports.isTopTier(event) ? 60 : 15) * 60 * 1000;
+
+// Events for a pair's currencies inside [from, to].
+exports.eventsFor = (events, pair, from, to) => {
+  const ccys = exports.currenciesFor(pair);
+  return (events || []).filter((e) => ccys.includes(e.currency) && e.time >= from && e.time <= to)
+    .sort((a, b) => a.time - b.time);
 };
 
 // Currencies whose news moves a pair. Gold is priced in USD.
