@@ -765,7 +765,7 @@ Respond ONLY in JSON with no markdown ("confidence" is a 0-100 integer percentag
   "historicalMatch": "",
   "warnings": [],
   "bestTimeToTrade": "",
-  "newsImpact": "",
+  "newsImpact": {"level": "high|medium|low|none -- how much scheduled/recent news should move THIS pair in the next few hours", "bias": "bullish|bearish|neutral for this pair", "reason": "short: which release / headline and why"},
   "basis": ["each technical reason you used, short, e.g. '4H uptrend (major structure up)', '1H bullish BOS at 4200', 'sweep of 15m lows at 4190', 'pullback to support 4190'"],
   "primarySource": "the ONE input that most drove this decision: market structure | uploaded books | past trades | news | momentum | signal track record"
 }`;

@@ -89,16 +89,21 @@ exports.checklist = ({ signal, entry, stopLoss, takeProfit }, ctx, events, now =
   const rr = risk > 0 ? reward / risk : 0;
   add("rr", "Risk:reward", rr >= MIN_RR - 1e-9, `1 : ${rr.toFixed(1)} (minimum 1 : ${MIN_RR})`);
 
-  // 3. Room to move: no *strong* opposing level (touched 2+ times) closer
-  // than the stop distance. Single-touch levels sit every few pips and
-  // would block nearly everything, so they're a warning, not a block.
+  // 3. Room to move. Hard block only when a *strong* opposing level
+  // (touched 2+ times) is within half the stop distance -- right in front
+  // of the entry. A strong level further out (still inside 1R) or any
+  // minor level is a warning. (The first version blocked on any strong
+  // level inside 1R and stopped ~15 of 16 signals in one live cycle.)
   const dir = signal === "buy" ? 1 : -1;
   const opposing = ((signal === "buy" ? ctx?.levels?.resistances : ctx?.levels?.supports) || [])
-    .filter((l) => (l.price - entry) * dir > 0 && Math.abs(l.price - entry) < risk);
-  const strong = opposing.find((l) => l.strength >= 2);
-  const weak = opposing.find((l) => l.strength < 2);
+    .filter((l) => (l.price - entry) * dir > 0 && Math.abs(l.price - entry) < risk)
+    .sort((a, b) => Math.abs(a.price - entry) - Math.abs(b.price - entry));
   const side = signal === "buy" ? "resistance" : "support";
-  if (strong) add("room", "Room to target", false, `strong ${side} at ${fmt(strong.price, entry)} is closer than the stop distance`);
+  const wall = opposing.find((l) => l.strength >= 2 && Math.abs(l.price - entry) < 0.5 * risk);
+  const nearStrong = opposing.find((l) => l.strength >= 2);
+  const weak = opposing[0];
+  if (wall) add("room", "Room to target", false, `strong ${side} at ${fmt(wall.price, entry)} right in front of the entry (under half the stop distance)`);
+  else if (nearStrong) add("room", "Room to target", false, `strong ${side} at ${fmt(nearStrong.price, entry)} on the way (inside 1R) — may slow the move`, false);
   else if (weak) add("room", "Room to target", false, `minor ${side} at ${fmt(weak.price, entry)} on the way`, false);
   else add("room", "Room to target", true, "no level in the way within 1R");
 

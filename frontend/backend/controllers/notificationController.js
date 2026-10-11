@@ -140,10 +140,12 @@ async function createNewsImpactNotifications(userId, newsArticles, prices, type)
       // news alerts were the original source of 8%-stop suggestions.
       let levels = { entry: affectedPair.entry || 0, stopLoss: affectedPair.stopLoss || 0, takeProfit: affectedPair.takeProfit || 0 };
       const livePrice = prices[pair];
+      let newsAtr = null;
       if (livePrice) {
         try {
           const candles = await marketService.getHistoricalData(pair.slice(0, 3) + "/" + pair.slice(3), "1h", 10);
-          levels = fitIntradayLevels({ signal: signalType, ...levels }, livePrice, computeAtr(candles));
+          newsAtr = computeAtr(candles);
+          levels = fitIntradayLevels({ signal: signalType, ...levels }, livePrice, newsAtr);
         } catch (err) {
           console.error(`News impact level sizing failed for ${pair}:`, err.message);
         }
@@ -156,7 +158,8 @@ async function createNewsImpactNotifications(userId, newsArticles, prices, type)
         entry: levels.entry,
         stopLoss: levels.stopLoss,
         takeProfit: levels.takeProfit,
-        reasoning: `📰 ${article.title}\n\n${impact.tradingAdvice}` + signalNotes.forNewsImpact(),
+        reasoning: `📰 ${article.title}\n\n${impact.tradingAdvice}` + signalNotes.forNewsImpact()
+          + signalNotes.newsAlertImpact({ level: impact.impactLevel, bias: affectedPair.impact, atr: newsAtr, price: livePrice }),
         confidence: 65,
         source: "news_impact",
         sourceLabel: "News Impact Alert",
@@ -563,6 +566,9 @@ exports.autoGenerate = async (userId) => {
                     news: relevantNews.length,
                     momentum: !!momentum?.summary,
                   },
+                })
+                + signalNotes.newsImpactSection({
+                  analysis, newsCtx, atr: atrNow, price: currentPrice, isTopTier: economicCalendar.isTopTier,
                 })
                 + (structured.note ? `\n\n📐 Levels from market structure: ${structured.note}.` : "")
                 + (levels.adjusted ? `\n\n📏 Levels adjusted for an intraday trade: ${levels.note}.` : "")
