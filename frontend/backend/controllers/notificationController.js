@@ -14,6 +14,7 @@ const marketContext = require("../services/marketContext");
 const signalRules = require("../services/signalRules");
 const economicCalendar = require("../services/economicCalendar");
 const signalOutcomes = require("../services/signalOutcomes");
+const signalNotes = require("../services/signalNotes");
 const pipelineStats = require("../services/pipelineStats");
 
 // Forex zitatumika kama zinapatikana tu
@@ -154,7 +155,7 @@ async function createNewsImpactNotifications(userId, newsArticles, prices, type)
         entry: levels.entry,
         stopLoss: levels.stopLoss,
         takeProfit: levels.takeProfit,
-        reasoning: `📰 ${article.title}\n\n${impact.tradingAdvice}`,
+        reasoning: `📰 ${article.title}\n\n${impact.tradingAdvice}` + signalNotes.forNewsImpact(),
         confidence: 65,
         source: "news_impact",
         sourceLabel: "News Impact Alert",
@@ -277,7 +278,8 @@ async function generateQuickTradeSignals(userId, session) {
           user: userId,
           pair,
           signal: analysis.direction,
-          reasoning: analysis.reasoning || "AI generated quick trade signal",
+          reasoning: (analysis.reasoning || "AI generated quick trade signal")
+            + signalNotes.forQuickTrade({ news: relevantNews.length > 0, books: !!bookSummary, learned: !!learnedSummary }),
           confidence: analysis.confidence || 60,
           source: "ai_auto",
           sourceLabel: "Quick Trade Signal",
@@ -541,6 +543,21 @@ exports.autoGenerate = async (userId) => {
               stopLoss: levels.stopLoss || 0,
               takeProfit: levels.takeProfit || 0,
               reasoning: (analysis.reasoning || "AI generated signal")
+                + signalNotes.forAiSignal({
+                  analysis,
+                  ctx,
+                  price: currentPrice,
+                  inputs: {
+                    structure: !!ctx,
+                    books: !!bookSummary || retrievedChunks.some((c) => c.source === "book"),
+                    screenshots: retrievedChunks.some((c) => c.source === "screenshot"),
+                    pastTrades: pastTrades.length,
+                    trackRecord: !!signalStatsByPair[pair],
+                    learned: !!learnedSummary,
+                    news: relevantNews.length,
+                    momentum: !!momentum?.summary,
+                  },
+                })
                 + (structured.note ? `\n\n📐 Levels from market structure: ${structured.note}.` : "")
                 + (levels.adjusted ? `\n\n📏 Levels adjusted for an intraday trade: ${levels.note}.` : "")
                 + (check ? signalRules.checklistText(check) : "")

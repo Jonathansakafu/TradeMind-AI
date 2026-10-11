@@ -23,7 +23,10 @@ const isDown = (t) => t === "down" || t === "down-leaning";
 exports.preGate = (ctx) => {
   if (!ctx || ctx.h1.trend === "unknown") return { analyze: true, reason: "no structure data -- analyze anyway" };
   const directional = [ctx.h4.trend, ctx.h1.trend].some((t) => isUp(t) || isDown(t));
-  if (directional || ctx.h1.bos) return { analyze: true, reason: "trend or break of structure present" };
+  // A fresh BOS / CHoCH on 1H or 15m (internal or major) also counts --
+  // a reversal setup can start while both trends still read as ranging.
+  const freshEvent = [ctx.h1, ctx.m15].some((r) => [r?.internal?.lastEvent, r?.major?.lastEvent].some((e) => e && e.ago <= 6));
+  if (directional || ctx.h1.bos || freshEvent) return { analyze: true, reason: "trend, break of structure or change of character present" };
   return { analyze: false, reason: "4H and 1H both ranging, no break of structure" };
 };
 
@@ -110,7 +113,28 @@ exports.checklist = ({ signal, entry, stopLoss, takeProfit }, ctx, events, now =
     add("news", "News", !near, near ? `${near.currency} ${near.title} at ${near.time.toISOString().slice(11, 16)} UTC` : "no high-impact news within 30 min");
   }
 
-  // 5. Session (soft): London + New York hours, Mon-Fri
+  // 5. Change of character (soft): a fresh CHoCH against the signal on 1H
+  // or 15m is an early reversal warning. Shown to the trader and given to
+  // the AI as a factor -- the AI decides; it doesn't block on its own.
+  const against = (e) => e && ((signal === "buy" && e.dir === "bearish") || (signal === "sell" && e.dir === "bullish"));
+  const recentChoch = [["1H", ctx?.h1, 6], ["15m", ctx?.m15, 8]]
+    .flatMap(([tf, read, maxAgo]) => [read?.internal?.lastChoch, read?.major?.lastChoch]
+      .filter((e) => e && e.ago <= maxAgo && against(e)).map((e) => `${tf} ${e.dir} CHoCH at ${fmt(e.level, entry)} (${e.ago} candles ago)`));
+  add("choch", "Change of character", recentChoch.length === 0,
+    recentChoch.length ? `${recentChoch[0]} — against this ${signal.toUpperCase()}` : `no recent CHoCH against this ${signal.toUpperCase()}`, false);
+
+  // 6. Liquidity (soft): a recent sweep in the signal's favour (e.g. lows
+  // swept before a BUY) supports it; one against it is a warning.
+  const sweeps = [["4H", ctx?.h4], ["1H", ctx?.h1], ["15m", ctx?.m15]]
+    .flatMap(([tf, read]) => (read?.liquidity?.sweeps || []).map((sw) => ({ ...sw, tf })));
+  const favour = sweeps.find((sw) => (signal === "buy" ? sw.dir === "bullish" : sw.dir === "bearish"));
+  const oppose = sweeps.find((sw) => (signal === "buy" ? sw.dir === "bearish" : sw.dir === "bullish"));
+  add("liquidity", "Liquidity", !oppose || !!favour,
+    favour ? `${favour.tf} sweep of ${favour.side} at ${fmt(favour.level, entry)} supports this ${signal.toUpperCase()}`
+      : oppose ? `${oppose.tf} sweep of ${oppose.side} at ${fmt(oppose.level, entry)} points the other way`
+        : "no recent liquidity sweep", false);
+
+  // 7. Session (soft): London + New York hours, Mon-Fri
   const h = now.getUTCHours(), d = now.getUTCDay();
   const inSession = d >= 1 && d <= 5 && h >= 7 && h < 21;
   add("session", "Session", inSession, inSession ? "London / New York hours" : "outside London / New York hours (thinner market)", false);

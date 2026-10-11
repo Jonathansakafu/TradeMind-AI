@@ -157,13 +157,18 @@ exports.getBackgroundBudget = () => ({
 // quota, the hourly background budget above, or an outage. Groq's paid
 // tier isn't open to upgrades, so without this, signals simply stopped
 // for hours whenever the free Groq allowance ran out.
+// options.meta (optional object) gets .provider set to whichever AI
+// actually answered, so a signal can say where its analysis came from.
 const askGroq = async (prompt, options = {}) => {
   try {
-    return await askGroqPrimary(prompt, options);
+    const text = await askGroqPrimary(prompt, options);
+    if (options.meta) options.meta.provider = `Groq (${GROQ_MODEL_FAST})`;
+    return text;
   } catch (groqErr) {
     try {
       const text = await geminiText.generate(prompt, { json: true, background: !!options.background });
       pipelineStats.inc("ai.servedByGemini");
+      if (options.meta) options.meta.provider = "Gemini (backup AI)";
       return text;
     } catch {
       throw groqErr; // both failed -- surface Groq's (already user-friendly) reason
@@ -740,7 +745,8 @@ Recent 1H candles, oldest first (the last one is the most recent): ${JSON.string
 ${hasTrades ? `Trader's recent past trades: ${JSON.stringify(tradeSummary)}` : ""}
 ${fusedContext}
 ${newsContext}${sizingContext}
-${marketContext ? `\n${marketContext}\nRules: trade in the direction of the 4H trend (when 4H is ranging, follow 1H); prefer entries after a pullback toward support (buys) or resistance (sells), not right in front of an opposing level; put the stop beyond the nearest swing; when 4H and 1H disagree and there's no clear break of structure, answer "wait".` : ""}
+${marketContext ? `\n${marketContext}\nRules: trade in the direction of the 4H trend (when 4H is ranging, follow 1H); prefer entries after a pullback toward support (buys) or resistance (sells), not right in front of an opposing level; put the stop beyond the nearest swing; when 4H and 1H disagree and there's no clear break of structure, answer "wait".
+How to read the structure: "internal" uses every swing, "major" only swings at least half an ATR (more reliable). BOS = a break in the trend's direction (continuation); CHoCH = the first break against it (early reversal warning) -- a fresh CHoCH against your idea on 1H or 15m is a reason for caution or "wait", a fresh CHoCH in its favour can be an entry trigger. A liquidity sweep (wick through a swing, close back inside) often precedes a move the other way; equal highs/lows are resting liquidity price tends to run toward. Weigh all of these yourself.` : ""}
 ${signalStats ? `\n${signalStats}` : ""}
 
 Respond ONLY in JSON with no markdown ("confidence" is a 0-100 integer percentage, e.g. 78 for 78% -- never a 0-1 decimal):
@@ -758,15 +764,20 @@ Respond ONLY in JSON with no markdown ("confidence" is a 0-100 integer percentag
   "historicalMatch": "",
   "warnings": [],
   "bestTimeToTrade": "",
-  "newsImpact": ""
+  "newsImpact": "",
+  "basis": ["each technical reason you used, short, e.g. '4H uptrend (major structure up)', '1H bullish BOS at 4200', 'sweep of 15m lows at 4190', 'pullback to support 4190'"],
+  "primarySource": "the ONE input that most drove this decision: market structure | uploaded books | past trades | news | momentum | signal track record"
 }`;
 
-  const text = await askGroq(prompt, { background: true });
+  const meta = {};
+  const text = await askGroq(prompt, { background: true, meta });
   try {
     const result = JSON.parse(text.replace(/```json|```/g, "").trim());
     result.confidence = normalizeConfidence(result.confidence);
     result.source = source;
     result.sourceLabel = sourceLabel;
+    result.provider = meta.provider || null;
+    if (!Array.isArray(result.basis)) result.basis = [];
     // Fresh (non-cached) analysis time -- lets the signal loop rotate
     // which pair gets the next share of the hourly AI budget.
     result.analyzedAt = Date.now();

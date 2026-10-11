@@ -67,6 +67,81 @@ function swings(candles, k = 2) {
   return { highs, lows };
 }
 
+// Major swings (added 2026-10, alongside the fractal "internal" swings
+// above, which stay as they were): the same swing points reduced to an
+// alternating high/low zigzag where every leg is at least `minLeg`
+// (half an ATR) -- small wiggles that aren't real swings are dropped.
+function majorSwings(candles, minLeg) {
+  const { highs, lows } = swings(candles);
+  const pts = [...highs.map((h) => ({ ...h, type: "H" })), ...lows.map((l) => ({ ...l, type: "L" }))]
+    .sort((a, b) => a.i - b.i);
+  const zz = [];
+  for (const p of pts) {
+    const last = zz[zz.length - 1];
+    if (!last) { zz.push(p); continue; }
+    if (last.type === p.type) {
+      // two highs (or lows) in a row: keep the more extreme one
+      if ((p.type === "H" && p.price > last.price) || (p.type === "L" && p.price < last.price)) zz[zz.length - 1] = p;
+      continue;
+    }
+    if (Math.abs(p.price - last.price) >= minLeg) zz.push(p);
+  }
+  return { highs: zz.filter((p) => p.type === "H"), lows: zz.filter((p) => p.type === "L") };
+}
+
+// Walks forward through the candles; every close beyond the latest
+// confirmed swing (confirmed 2 candles after it formed) is a break:
+// in the direction of the current structure = BOS (continuation),
+// against it = CHoCH (change of character, first sign of a reversal).
+function structureEvents(candles, highs, lows, k = 2) {
+  let trend = null, hi = 0, lo = 0, lastHigh = null, lastLow = null, brokenH = null, brokenL = null;
+  const events = [];
+  for (let i = 0; i < candles.length; i++) {
+    while (hi < highs.length && highs[hi].i + k <= i) lastHigh = highs[hi++];
+    while (lo < lows.length && lows[lo].i + k <= i) lastLow = lows[lo++];
+    const c = candles[i];
+    if (lastHigh && lastHigh !== brokenH && c.close > lastHigh.price) {
+      events.push({ type: trend === "down" ? "CHoCH" : "BOS", dir: "bullish", level: lastHigh.price, i, time: c.datetime });
+      trend = "up"; brokenH = lastHigh;
+    } else if (lastLow && lastLow !== brokenL && c.close < lastLow.price) {
+      events.push({ type: trend === "up" ? "CHoCH" : "BOS", dir: "bearish", level: lastLow.price, i, time: c.datetime });
+      trend = "down"; brokenL = lastLow;
+    }
+  }
+  return { events, trend };
+}
+
+// Liquidity: (1) sweeps -- a candle in the last 6 that wicked beyond a
+// recent swing but closed back inside (stops taken, often a reversal
+// trigger); (2) equal highs / lows still above / below price -- resting
+// stop orders that price often runs toward.
+function liquidity(candles, highs, lows, atrV) {
+  const n = candles.length, last = candles[n - 1]?.close;
+  const tol = (atrV || 0) * 0.1;
+  const sweeps = [];
+  for (let i = Math.max(0, n - 6); i < n; i++) {
+    const c = candles[i];
+    const sh = highs.filter((h) => h.i < i - 2).slice(-3).find((h) => c.high > h.price && c.close < h.price);
+    if (sh) sweeps.push({ dir: "bearish", level: sh.price, ago: n - 1 - i, side: "highs" });
+    const sl = lows.filter((l) => l.i < i - 2).slice(-3).find((l) => c.low < l.price && c.close > l.price);
+    if (sl) sweeps.push({ dir: "bullish", level: sl.price, ago: n - 1 - i, side: "lows" });
+  }
+  const equal = (pts, above) => {
+    const r = pts.slice(-6);
+    for (let a = r.length - 1; a > 0; a--) {
+      for (let b = a - 1; b >= 0; b--) {
+        const lvl = (r[a].price + r[b].price) / 2;
+        if (Math.abs(r[a].price - r[b].price) <= tol && (above ? lvl > last : lvl < last)) return lvl;
+      }
+    }
+    return null;
+  };
+  // Several candles can sweep the same level -- keep its most recent sweep only.
+  const unique = [];
+  for (const sw of sweeps.reverse()) if (!unique.some((u) => u.dir === sw.dir && u.level === sw.level)) unique.push(sw);
+  return { sweeps: unique.slice(0, 2).reverse(), equalHighs: equal(highs, true), equalLows: equal(lows, false) };
+}
+
 // Group 1H candles into 4H candles on UTC 4-hour boundaries.
 function toFourHour(h1) {
   const out = [];
@@ -124,11 +199,30 @@ function analyzeTimeframe(candles, label) {
   if (lastHigh && recent.some((c) => c.close > lastHigh.price) && last > lastHigh.price) bos = { dir: "bullish", level: lastHigh.price };
   if (lastLow && recent.some((c) => c.close < lastLow.price) && last < lastLow.price) bos = { dir: "bearish", level: lastLow.price };
 
+  // Added alongside the reads above (nothing above changed):
+  const atrV = atr(candles);
+  const n = candles.length;
+  const tag = (e) => e && ({ type: e.type, dir: e.dir, level: e.level, ago: n - 1 - e.i });
+  const internalEv = structureEvents(candles, highs, lows);
+  const maj = majorSwings(candles, 0.5 * (atrV || 0));
+  const majorEv = structureEvents(candles, maj.highs, maj.lows);
+  const lastOf = (ev, type) => tag([...ev.events].reverse().find((e) => !type || e.type === type));
+
   return {
     label,
     trend, // up | down | up-leaning | down-leaning | range | unknown
     structure,
     bos,
+    // Internal structure = every confirmed swing; major = swings >= 0.5 ATR.
+    internal: { lastEvent: lastOf(internalEv), lastChoch: lastOf(internalEv, "CHoCH") },
+    major: {
+      trend: majorEv.trend || "unknown",
+      lastEvent: lastOf(majorEv),
+      lastChoch: lastOf(majorEv, "CHoCH"),
+      swingHighs: maj.highs.slice(-4).map((s) => s.price),
+      swingLows: maj.lows.slice(-4).map((s) => s.price),
+    },
+    liquidity: liquidity(candles, highs, lows, atrV),
     close: last,
     ema20: e20,
     ema50: e50,
@@ -174,6 +268,19 @@ function describe(tf, fmt) {
   if (tf.ema20 && tf.ema50) parts.push(`price ${tf.close > tf.ema50 ? "above" : "below"} 50 EMA, 20 EMA ${tf.ema20 > tf.ema50 ? "above" : "below"} 50 EMA`);
   if (tf.rsi != null) parts.push(`RSI ${Math.round(tf.rsi)}`);
   if (tf.bos) parts.push(`recent ${tf.bos.dir} break of structure at ${fmt(tf.bos.level)}`);
+  const ev = (e) => `${e.dir} ${e.type} at ${fmt(e.level)} (${e.ago} candle${e.ago === 1 ? "" : "s"} ago)`;
+  if (tf.internal?.lastEvent) parts.push(`internal structure: last ${ev(tf.internal.lastEvent)}`);
+  if (tf.major) {
+    parts.push(`major structure (swings >= 0.5 ATR): ${tf.major.trend}${tf.major.lastEvent ? `, last ${ev(tf.major.lastEvent)}` : ""}`);
+    const mc = tf.major.lastChoch, me = tf.major.lastEvent;
+    if (mc && mc.ago <= 30 && !(me && me.type === "CHoCH" && me.ago === mc.ago)) parts.push(`major CHoCH: ${ev(mc)}`);
+  }
+  const lq = tf.liquidity;
+  if (lq) {
+    for (const sw of lq.sweeps) parts.push(`liquidity sweep of ${sw.side} at ${fmt(sw.level)} (${sw.dir}, ${sw.ago} candle${sw.ago === 1 ? "" : "s"} ago)`);
+    if (lq.equalHighs) parts.push(`equal highs (resting liquidity) at ${fmt(lq.equalHighs)} above`);
+    if (lq.equalLows) parts.push(`equal lows (resting liquidity) at ${fmt(lq.equalLows)} below`);
+  }
   return parts.join(", ");
 }
 
@@ -215,4 +322,4 @@ exports.getMarketContext = async (pair, price) => {
 };
 
 // Exported for tests.
-exports._internals = { ema, rsi, atr, swings, toFourHour, analyzeTimeframe, supportResistance };
+exports._internals = { ema, rsi, atr, swings, majorSwings, structureEvents, liquidity, toFourHour, analyzeTimeframe, supportResistance };

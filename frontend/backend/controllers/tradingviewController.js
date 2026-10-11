@@ -68,7 +68,7 @@ exports.webhook = async (req, res) => {
       entry: entry != null && entry !== "" ? Number(entry) : undefined,
       stopLoss: stopLoss != null && stopLoss !== "" ? Number(stopLoss) : undefined,
       takeProfit: takeProfit != null && takeProfit !== "" ? Number(takeProfit) : undefined,
-      reasoning: reasoning || "Signal from a TradingView alert.",
+      reasoning: (reasoning || "Signal from a TradingView alert.") + require("../services/signalNotes").forTradingView(),
       confidence: confidence != null && confidence !== "" ? Number(confidence) : undefined,
       source: "tradingview",
       sourceLabel: "TradingView Alert",
