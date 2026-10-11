@@ -270,4 +270,24 @@ async function dispatchNotification(notification, options = {}) {
   return results;
 }
 
-module.exports = { dispatchNotification, getVapidPublicKey, buildMessage };
+// A non-signal message (e.g. the morning brief) to one user's devices and,
+// if they've switched email alerts on, their inbox. Same channels and
+// prefs as signals; no confidence floor (it isn't a signal).
+async function dispatchMessage(userId, { title, body, text, url = "/dashboard", id }) {
+  const user = await User.findById(userId).select("email notificationPrefs +pushSubscriptions +fcmTokens");
+  if (!user) return null;
+  const prefs = user.notificationPrefs || {};
+  const msg = { title, body, url, id: id || `msg-${Date.now()}`, ttlSeconds: 6 * 60 * 60 };
+  const results = {};
+  if (prefs.push !== false) {
+    results.browser = await sendWebPush(user, msg).catch((err) => ({ error: err.message }));
+    results.android = await sendFcm(user, msg).catch((err) => ({ error: err.message }));
+  }
+  if (prefs.email) {
+    results.email = await sendEmail(user, { signal: "wait", reasoning: text || body }, { ...msg, body: "" })
+      .catch((err) => ({ error: err.message }));
+  }
+  return results;
+}
+
+module.exports = { dispatchNotification, dispatchMessage, getVapidPublicKey, buildMessage };

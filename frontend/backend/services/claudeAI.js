@@ -217,6 +217,23 @@ const askGroqPrimary = async (prompt, options = {}) => {
 // to tell whether the signal model is currently blocked by Groq's per-day
 // token quota (a 429 whose message states limit/used), which otherwise
 // just silently turns every generation cycle into zero signals.
+// Morning brief (services/morningBrief.js): turns computed facts (trend,
+// levels, today's high-impact news) into a short plain-language plan. One
+// background call per weekday; falls back to Gemini like every askGroq call.
+exports.writeMorningBrief = async (facts) => {
+  const prompt = `You are TradeMind AI. Write today's pre-London trading plan for a retail forex/gold trader from the facts below (computed from price data -- don't invent levels or news). For each pair give one line: bias (buy / sell / wait) and the key level(s) to watch. Then one line on news times to avoid. Plain words, under 90 words total.
+
+${facts}
+
+Respond ONLY in JSON with no markdown: {"plan": "line 1\nline 2\n..."}`;
+  const text = await askGroq(prompt, { background: true });
+  try {
+    return JSON.parse(text.replace(/```json|```/g, "").trim()).plan || null;
+  } catch {
+    return null;
+  }
+};
+
 exports.probeGroq = async () => {
   try {
     const { data, response } = await getGroqClient().chat.completions.create({
@@ -656,7 +673,7 @@ Set verified=false only if the reasoning contradicts the given context, cites so
 // ragService.buildPromptContext, and reflects which of those sources
 // actually contributed in sourceLabel so that's visible, not just internal.
 exports.analyzeMarketSmart = async (pair, currentPrice, historicalPrices, pastTrades, retrievedChunks = [], newsArticles = [], extra = {}) => {
-  const { bookSummary = "", momentum = null, pairTrades = [], learnedSummary = "" } = extra;
+  const { bookSummary = "", momentum = null, pairTrades = [], learnedSummary = "", marketContext = "", signalStats = "" } = extra;
   // Shortened from 30min to 15min 2026-09-23 alongside notificationController's
   // forex dedup window (also cut to 15min) -- a shorter dedup window alone
   // would have been meaningless, since this cache would still hand back the
@@ -723,6 +740,8 @@ Recent 1H candles, oldest first (the last one is the most recent): ${JSON.string
 ${hasTrades ? `Trader's recent past trades: ${JSON.stringify(tradeSummary)}` : ""}
 ${fusedContext}
 ${newsContext}${sizingContext}
+${marketContext ? `\n${marketContext}\nRules: trade in the direction of the 4H trend (when 4H is ranging, follow 1H); prefer entries after a pullback toward support (buys) or resistance (sells), not right in front of an opposing level; put the stop beyond the nearest swing; when 4H and 1H disagree and there's no clear break of structure, answer "wait".` : ""}
+${signalStats ? `\n${signalStats}` : ""}
 
 Respond ONLY in JSON with no markdown ("confidence" is a 0-100 integer percentage, e.g. 78 for 78% -- never a 0-1 decimal):
 {

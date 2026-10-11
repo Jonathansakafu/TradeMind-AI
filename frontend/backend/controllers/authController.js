@@ -225,7 +225,58 @@ const updatePassword = async (req, res) => {
   }
 };
 
+// RISK SETTINGS (logged in): account balance, risk % per trade, daily
+// loss limit %, plus today's closed P/L so the app can show the guard.
+const getRiskSettings = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select("riskSettings");
+    const start = new Date();
+    start.setUTCHours(0, 0, 0, 0);
+    const Trade = require("../models/Trade");
+    const today = await Trade.aggregate([
+      { $match: { user: req.user._id, outcome: { $exists: true }, closedAt: { $gte: start } } },
+      { $group: { _id: null, pl: { $sum: "$profitLoss" } } },
+    ]);
+    const rs = user?.riskSettings || {};
+    const todayPL = today[0]?.pl || 0;
+    const limit = rs.balance && rs.dailyLossLimitPercent ? (rs.balance * rs.dailyLossLimitPercent) / 100 : null;
+    res.json({
+      balance: rs.balance ?? null,
+      currency: rs.currency || "USD",
+      riskPercent: rs.riskPercent ?? 1,
+      dailyLossLimitPercent: rs.dailyLossLimitPercent ?? 3,
+      todayPL,
+      dailyLimitHit: limit != null && todayPL <= -limit,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+const updateRiskSettings = async (req, res) => {
+  try {
+    const { balance, riskPercent, dailyLossLimitPercent, currency } = req.body || {};
+    const set = {};
+    const num = (v, min, max) => {
+      const n = Number(v);
+      return Number.isFinite(n) && n >= min && n <= max ? n : undefined;
+    };
+    if (balance !== undefined) set["riskSettings.balance"] = balance === null || balance === "" ? undefined : num(balance, 1, 1e9);
+    if (riskPercent !== undefined) set["riskSettings.riskPercent"] = num(riskPercent, 0.1, 10);
+    if (dailyLossLimitPercent !== undefined) set["riskSettings.dailyLossLimitPercent"] = num(dailyLossLimitPercent, 0.5, 50);
+    if (currency) set["riskSettings.currency"] = String(currency).slice(0, 3).toUpperCase();
+    const bad = Object.entries(set).find(([k, v]) => v === undefined && k !== "riskSettings.balance");
+    if (bad) return res.status(400).json({ message: "Risk % must be 0.1-10 and daily loss limit 0.5-50%" });
+    await User.updateOne({ _id: req.user._id }, { $set: set });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
+  getRiskSettings,
+  updateRiskSettings,
   registerUser,
   loginUser,
   forgotPassword,

@@ -3,6 +3,8 @@ const { autoGenerate } = require("../controllers/notificationController");
 const { runWeeklyLearningForUser } = require("./learningService");
 const { extractSkillKnowledgeFromNews } = require("./newsKnowledgeService");
 const pipelineStats = require("./pipelineStats");
+const signalOutcomes = require("./signalOutcomes");
+const morningBrief = require("./morningBrief");
 
 // Checked on every cycle (see below) but only actually fires about once a
 // week per user -- same self-throttling pattern as autoGenerate's own
@@ -83,6 +85,21 @@ async function runCycle() {
     // Pumzika sekunde 5 kati ya users
     await new Promise((resolve) => setTimeout(resolve, 5000));
   }
+  // Score earlier signals against real prices (TP or SL first?).
+  try {
+    const { resolved } = await signalOutcomes.evaluateOpenSignals();
+    if (resolved) console.log(`📊 Scored ${resolved} signal(s) against real prices`);
+  } catch (err) {
+    console.error("Signal outcome tracking failed:", err.message);
+  }
+
+  // Weekday pre-London plan, once a day (no-op outside 04:00-10:00 UTC).
+  try {
+    await morningBrief.maybeSendMorningBrief();
+  } catch (err) {
+    console.error("Morning brief failed:", err.message);
+  }
+
   pipelineStats.inc("cycles.completed");
   pipelineStats.setLastCycle({ startedAt, finishedAt: new Date(), userCount: users.length, created, reasons });
   console.log("✅ Auto-generate complete");

@@ -7,6 +7,7 @@ import { API_URL } from "../config/api";
 import { useAuth } from "../hooks/useAuth";
 import { computeStats, filterTrades, formatMoney } from "../utils/tradeStats";
 import { formatRR, breakevenWinRate } from "../utils/riskReward";
+import SignalAccuracy from "../components/SignalAccuracy";
 import {
   OutcomeDonut, OutcomeBars, OutcomeLegend, TradeLine, BreakdownBars, TradeTable,
 } from "../components/PerformanceCharts";
@@ -177,6 +178,9 @@ function Performance() {
             </div>
           </>
         )}
+
+        {/* AI accuracy is independent of the trader's own trades. */}
+        <SignalAccuracy card={card} days={{ "7d": 7, "30d": 30, "90d": 90 }[period] || 365} />
       </div>
     </MainLayout>
   );

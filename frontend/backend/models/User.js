@@ -91,6 +91,17 @@ const userSchema = new mongoose.Schema(
       select: false,
     },
 
+    // Risk settings (Settings -> Risk): used to suggest a lot size per
+    // signal (riskPercent of balance between entry and stop loss) and to
+    // pause MT5 auto-sending once today's closed losses reach
+    // dailyLossLimitPercent of balance.
+    riskSettings: {
+      balance: { type: Number },
+      currency: { type: String, default: "USD" },
+      riskPercent: { type: Number, default: 1 },
+      dailyLossLimitPercent: { type: Number, default: 3 },
+    },
+
     // Firebase Cloud Messaging registration tokens from the Android app.
     fcmTokens: {
       type: [String],

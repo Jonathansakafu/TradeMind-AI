@@ -55,12 +55,22 @@ const notificationSchema = new mongoose.Schema({
   taken: { type: Boolean, default: false },
   takenAt: { type: Date },
   tradeId: { type: mongoose.Schema.Types.ObjectId, ref: "Trade" },
+  // Rule checklist the signal passed (services/signalRules.js):
+  // [{ key, label, passed, detail, hard }]
+  checklist: { type: [mongoose.Schema.Types.Mixed], default: undefined },
+  // Automatic result tracking (services/signalOutcomes.js), for every
+  // forex/gold signal whether or not the trader took it: which of
+  // take-profit / stop-loss price reached first.
+  simOutcome: { type: String, enum: ["win", "loss", "expired"] },
+  simR: { type: Number }, // result in R (risk units): +2.0 = won 2x the risk
+  simResolvedAt: { type: Date },
 }, { timestamps: true });
 
 notificationSchema.index({ user: 1, createdAt: -1 });
 notificationSchema.index({ pair: 1, type: 1, createdAt: -1 });
 notificationSchema.index({ tradingSessionId: 1, botStatus: 1 });
 notificationSchema.index({ user: 1, taken: 1, createdAt: -1 });
+notificationSchema.index({ simOutcome: 1, type: 1, createdAt: -1 });
 
 // Push/email the trader for every newly created notification (not on
 // later saves like marking read or a bot status update). Hooked here

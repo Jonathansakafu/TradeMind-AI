@@ -10,6 +10,10 @@ const ragService = require("../services/ragService");
 const learningService = require("../services/learningService");
 const { computeMomentum, computeAtr, fitIntradayLevels } = require("../services/marketAnalysis");
 const AppConfig = require("../models/AppConfig");
+const marketContext = require("../services/marketContext");
+const signalRules = require("../services/signalRules");
+const economicCalendar = require("../services/economicCalendar");
+const signalOutcomes = require("../services/signalOutcomes");
 const pipelineStats = require("../services/pipelineStats");
 
 // Forex zitatumika kama zinapatikana tu
@@ -17,6 +21,23 @@ const FOREX_PAIRS = ["EURUSD", "GBPUSD", "XAUUSD"];
 // Stocks — same real-data pipeline as gold (marketService's Yahoo Finance
 // path), analyzed alongside forex/crypto rather than as a separate mode.
 const STOCK_PAIRS = marketService.STOCK_SYMBOLS;
+// True once today's closed trades have lost at least the user's daily
+// loss limit (Settings -> Risk). Only gates MT5 auto-sending; signals and
+// alerts still arrive so the trader stays informed.
+async function dailyLossLimitHit(userId) {
+  const User = require("../models/User");
+  const u = await User.findById(userId).select("riskSettings");
+  const rs = u?.riskSettings;
+  if (!rs?.balance || !rs?.dailyLossLimitPercent) return false;
+  const start = new Date();
+  start.setUTCHours(0, 0, 0, 0);
+  const agg = await Trade.aggregate([
+    { $match: { user: u._id, outcome: { $exists: true }, closedAt: { $gte: start } } },
+    { $group: { _id: null, pl: { $sum: "$profitLoss" } } },
+  ]);
+  return (agg[0]?.pl || 0) <= -(rs.balance * rs.dailyLossLimitPercent) / 100;
+}
+
 // Gold only: says which price the signal was built on and when, so an
 // out-of-date price is visible on the signal itself.
 function goldPriceNote(pair) {
@@ -396,9 +417,12 @@ exports.autoGenerate = async (userId) => {
 
     // Fetched once per cycle, not per pair -- same reasoning as the Quick
     // Trade path above.
-    const [bookSummary, learnedSummary] = await Promise.all([
+    const [bookSummary, learnedSummary, signalStatsByPair] = await Promise.all([
       ragService.getBookConceptSummary(userId),
       learningService.getLearnedSummary(userId),
+      // How this user's past signals actually played out, per pair --
+      // fed back into the AI prompt (services/signalOutcomes.js).
+      signalOutcomes.statsTextByPair(userId).catch(() => ({})),
     ]);
 
     for (const pair of pairsToAnalyze) {
@@ -427,6 +451,23 @@ exports.autoGenerate = async (userId) => {
         );
         const momentum = computeMomentum(historical);
 
+        // Market structure, S/R and 4H/1H/15m trend, computed (no AI) and
+        // cached per pair for 10 min. Skip the AI call when there's no
+        // setup at all -- saves the limited free AI allowance for pairs
+        // that are actually moving (services/signalRules.js preGate).
+        let ctx = null;
+        try {
+          ctx = await marketContext.getMarketContext(pair, currentPrice);
+        } catch (err) {
+          console.error(`Market context failed for ${pair}:`, err.message);
+        }
+        const gate = signalRules.preGate(ctx);
+        if (!gate.analyze) {
+          pipelineStats.inc("rules.gateSkipped");
+          console.log(`⏭ ${pair}: ${gate.reason} -- no AI call`);
+          continue;
+        }
+
         const analysis = await claudeAI.analyzeMarketSmart(
           formattedPair,
           currentPrice || 0,
@@ -434,7 +475,11 @@ exports.autoGenerate = async (userId) => {
           pastTrades,
           retrievedChunks,
           relevantNews,
-          { bookSummary, momentum, learnedSummary }
+          {
+            bookSummary, momentum, learnedSummary,
+            marketContext: ctx?.summary || "",
+            signalStats: signalStatsByPair[pair] || "",
+          }
         );
         pipelineStats.inc("forex.analyzed");
         if (analysis.analyzedAt && analysis.analyzedAt > (lastAnalyzed[pair] || 0)) {
@@ -467,8 +512,27 @@ exports.autoGenerate = async (userId) => {
           });
 
           if (!existingToday) {
-            const levels = fitIntradayLevels(analysis, currentPrice, computeAtr(historical));
+            // Levels: entry from the AI (kept within 1 ATR of price), stop
+            // beyond real structure and target at the next level
+            // (placeLevels), then the intraday safety clamp as before.
+            const atrNow = ctx?.atrH1 || computeAtr(historical);
+            const first = fitIntradayLevels(analysis, currentPrice, atrNow);
+            const structured = ctx ? signalRules.placeLevels({ signal: analysis.signal, ...first }, ctx) : first;
+            const levels = fitIntradayLevels({ signal: analysis.signal, ...structured }, currentPrice, atrNow);
             if (levels.adjusted) pipelineStats.inc("forex.levelsAdjusted");
+
+            // Fixed rule checklist: a signal failing a hard rule (against
+            // the 4H trend, R:R under 1:1.5, strong level in the way,
+            // high-impact news within 30 min) is not sent.
+            const events = await economicCalendar.getHighImpactEvents();
+            const check = ctx ? signalRules.checklist({ signal: analysis.signal, ...levels }, ctx, events) : null;
+            if (check && !check.passed) {
+              pipelineStats.inc("rules.blocked");
+              check.blocked.forEach((k) => pipelineStats.inc(`rules.blocked.${k}`));
+              console.log(`🚫 ${pair} ${analysis.signal} blocked by rules: ${check.blocked.join(", ")}`);
+              continue;
+            }
+
             const notification = await Notification.create({
               user: userId,
               pair,
@@ -477,8 +541,11 @@ exports.autoGenerate = async (userId) => {
               stopLoss: levels.stopLoss || 0,
               takeProfit: levels.takeProfit || 0,
               reasoning: (analysis.reasoning || "AI generated signal")
+                + (structured.note ? `\n\n📐 Levels from market structure: ${structured.note}.` : "")
                 + (levels.adjusted ? `\n\n📏 Levels adjusted for an intraday trade: ${levels.note}.` : "")
+                + (check ? signalRules.checklistText(check) : "")
                 + goldPriceNote(pair),
+              checklist: check?.rules,
               confidence: analysis.confidence || 60,
               source: analysis.source || "ai_auto",
               sourceLabel: analysis.sourceLabel || "AI Auto",
@@ -496,7 +563,12 @@ exports.autoGenerate = async (userId) => {
             // verification-unavailable (null) signal still waits for
             // manual review via the "Send to MT5" button, same as today.
             if (analysis.verified === true && latestMt5?.status === "active" && latestMt5.autoSendToMT5) {
-              await autoForwardToMT5(userId, latestMt5, notification);
+              if (await dailyLossLimitHit(userId)) {
+                console.log(`🛑 Daily loss limit reached for ${userId} -- MT5 auto-send paused`);
+                pipelineStats.inc("risk.autoSendPaused");
+              } else {
+                await autoForwardToMT5(userId, latestMt5, notification);
+              }
             }
           } else {
             console.log(`⏭ Skipped duplicate: ${pair} ${analysis.signal}`);
@@ -605,6 +677,26 @@ exports.setTaken = async (req, res) => {
     ).populate("tradeId", TRADE_RESULT_FIELDS);
     if (!notification) return res.status(404).json({ message: "Notification not found" });
     res.json(notification);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// Today's (latest) morning brief for the Dashboard.
+exports.getBrief = async (req, res) => {
+  try {
+    res.json({ brief: await require("../services/morningBrief").getLatestBrief() });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// How the AI's signals actually played out (auto-tracked against real
+// prices, taken or not), by pair and direction.
+exports.getSignalStats = async (req, res) => {
+  try {
+    const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 365);
+    res.json(await signalOutcomes.getStats(req.user._id, days));
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

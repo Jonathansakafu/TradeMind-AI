@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { API_URL } from "../config/api";
 import { computeStats } from "../utils/tradeStats";
+import DailyBrief from "../components/DailyBrief";
 import PriceTicker from "../components/PriceTicker";
 import BrokerModal from "../components/BrokerModal";
 import SessionBanner from "../components/SessionBanner";
@@ -94,6 +95,8 @@ function Dashboard() {
           </button>
         </div>
       </div>
+
+      <DailyBrief />
 
       {/* STATS */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">

@@ -15,6 +15,8 @@ import { useAuth } from "../hooks/useAuth";
 import { useResource } from "../hooks/useResource";
 import { fetchNotifications as fetchNotificationsResource, fetchActiveSession } from "../api/resources";
 import { RiskRewardTile } from "../components/RiskReward";
+import { SignalResultBadge, LotSuggestion } from "../components/SignalExtras";
+import { useRiskSettings } from "../hooks/useRiskSettings";
 
 const SOURCE_ICONS = {
   past_trades: <History size={14} className="text-blue-400" />,
@@ -69,6 +71,7 @@ function Notifications() {
 
   // ?filter=taken opens straight into the taken list (the bell's shortcut).
   const [searchParams] = useSearchParams();
+  const { settings: riskSettings } = useRiskSettings();
   const [filter, setFilter] = useState(() => (searchParams.get("filter") === "taken" ? "taken" : "all"));
   const [takenList, setTakenList] = useState(null);
   const [sendingId, setSendingId] = useState(null);
@@ -313,6 +316,7 @@ function Notifications() {
                     {new Date(n.createdAt).toLocaleString()}
                   </p>
                   <TradeResultBadge notification={n} />
+                  <div><SignalResultBadge notification={n} /></div>
                 </div>
                 <div className="flex items-center gap-1 flex-shrink-0">
                   <TakenButton notification={n} headers={headers} onChange={refreshAfterTaken} />
@@ -363,6 +367,11 @@ function Notifications() {
                     </p>
                   </div>
                   <RiskRewardTile entry={n.entry} stopLoss={n.stopLoss} takeProfit={n.takeProfit} />
+                </div>
+              )}
+              {n.type !== "quick_trade" && (
+                <div className="-mt-2 mb-4">
+                  <LotSuggestion notification={n} settings={riskSettings} />
                 </div>
               )}
 

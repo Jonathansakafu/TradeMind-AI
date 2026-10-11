@@ -447,6 +447,26 @@ const getGoldHistoricalCandles = async (outputsize) => {
   }));
 };
 
+// Candles for multi-timeframe structure analysis (services/marketContext.js):
+// interval "15m" | "60m" over `range` (e.g. "5d", "30d"), oldest first.
+// Forex from Yahoo's spot FX series (EURUSD=X); gold from COMEX futures
+// shifted onto spot like getGoldHistoricalCandles -- and only with a fresh
+// spot price, so gold levels are never drawn against a stale anchor.
+exports.getYahooCandles = async (pair, { interval = "60m", range = "30d" } = {}) => {
+  const symbol = exports.normalizeSymbol(pair);
+  const isGold = symbol === "XAUUSD";
+  const result = await fetchYahooChart(isGold ? "GC=F" : `${symbol}=X`, { interval, range });
+  const candles = yahooResultToCandles(result, 100000);
+  if (!isGold) return candles;
+  const futures = result?.meta?.regularMarketPrice;
+  const spot = getFreshGold() || await getGoldPrice().catch(() => null);
+  if (!futures || !spot) return [];
+  const basis = futures - spot;
+  return candles.map((c) => ({
+    ...c, open: c.open - basis, high: c.high - basis, low: c.low - basis, close: c.close - basis,
+  }));
+};
+
 // Pata stock prices — Yahoo Finance, one request per symbol (no free
 // multi-symbol batch quote endpoint available unauthenticated).
 exports.getStockPrices = async () => {

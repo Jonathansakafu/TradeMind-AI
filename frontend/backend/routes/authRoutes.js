@@ -7,6 +7,8 @@ const {
   resetPassword,
   updateProfile,
   updatePassword,
+  getRiskSettings,
+  updateRiskSettings,
 } = require("../controllers/authController");
 const { protect } = require("../middleware/authMiddleware");
 
@@ -35,6 +37,11 @@ router.put("/profile", protect, updateProfile);
 
 // UPDATE PASSWORD (logged in)
 router.put("/password", protect, updatePassword);
+
+
+// RISK SETTINGS (logged in)
+router.get("/risk-settings", protect, getRiskSettings);
+router.put("/risk-settings", protect, updateRiskSettings);
 
 
 module.exports = router;
