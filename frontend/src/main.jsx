@@ -6,6 +6,7 @@ import { SplashScreen } from "@capacitor/splash-screen";
 import "./index.css";
 import "./i18n";
 import App from "./App";
+import { warmUpVoices } from "./utils/voices";
 
 // No timeout was set anywhere in this app -- every axios call (login
 // included) would wait indefinitely if a response never came back, which
@@ -22,6 +23,10 @@ axios.defaults.timeout = 60000;
 if (Capacitor.isNativePlatform()) {
   SplashScreen.hide();
 }
+
+// Load the device's read-aloud voices now, so the first tap on 🔊 doesn't
+// wait for the list (on Android that lookup is slow).
+warmUpVoices();
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>

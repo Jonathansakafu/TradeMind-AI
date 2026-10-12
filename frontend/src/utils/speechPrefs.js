@@ -9,9 +9,9 @@ export const LANG_NAMES = { sw: "Kiswahili", fr: "Français", ar: "العربي�
 export function getSpeechPrefs() {
   try {
     const p = JSON.parse(localStorage.getItem(KEY) || "{}");
-    return { speed: p.speed === "normal" ? "normal" : "slow", langChoice: p.langChoice || {} };
+    return { speed: p.speed === "normal" ? "normal" : "slow", langChoice: p.langChoice || {}, voice: p.voice || {} };
   } catch {
-    return { speed: "slow", langChoice: {} };
+    return { speed: "slow", langChoice: {}, voice: {} };
   }
 }
 

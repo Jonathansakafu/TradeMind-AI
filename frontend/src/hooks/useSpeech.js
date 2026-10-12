@@ -5,6 +5,7 @@ import { Capacitor } from "@capacitor/core";
 import { TextToSpeech } from "@capacitor-community/text-to-speech";
 import { speechChunks } from "../utils/speechText";
 import { getSpeechPrefs, SPEEDS, LANG_NAMES } from "../utils/speechPrefs";
+import { loadVoices, pickVoice } from "../utils/voices";
 import { API_URL } from "../config/api";
 import { useAuth } from "./useAuth";
 
@@ -20,31 +21,6 @@ import { useAuth } from "./useAuth";
 const isNative = Capacitor.isNativePlatform();
 const LOCALES = { en: "en-US", sw: "sw-KE", fr: "fr-FR", ar: "ar-SA" };
 
-// Male voices: Google TTS codes (en-gb-x-rjs, en-us-x-iom, fr-fr-x-frd,
-// ar-xa-x-ard...), Samsung (SMTm00), and well-known male voice names on
-// Windows / macOS / Chrome.
-const MALE_CODE = /-x-(iol|iom|tpd|gbb|gbd|rjs|aub|aud|enc|end|frb|frd|ard|arz)[-_]|smtm\d/i;
-const MALE_NAME = /\bmale\b|david|mark|guy|daniel|alex\b|fred|aaron|arthur|george|ryan|james|thomas|oliver|rishi|maged|tarik|andrew|brian|christopher|eric|roger|william|liam|henri|paul\b/i;
-const isMale = (v) => !/female/i.test(v.name || v.voiceURI || "") && (MALE_CODE.test(v.voiceURI || v.name || "") || MALE_NAME.test(v.name || ""));
-
-let nativeVoices = null; // cached getSupportedVoices() result
-async function nativeVoiceFor(lang) {
-  if (!nativeVoices) {
-    try { nativeVoices = (await TextToSpeech.getSupportedVoices()).voices || []; } catch { nativeVoices = []; }
-  }
-  const prefix = lang.slice(0, 2).toLowerCase();
-  const same = nativeVoices.map((v, i) => ({ v, i })).filter(({ v }) => (v.lang || "").toLowerCase().replace("_", "-").startsWith(prefix));
-  const male = same.find(({ v }) => isMale(v) && v.localService) || same.find(({ v }) => isMale(v));
-  return { index: male?.i, male: !!male, any: same.length > 0 };
-}
-
-function webVoiceFor(prefix) {
-  const voices = window.speechSynthesis.getVoices();
-  const same = voices.filter((v) => v.lang.toLowerCase().startsWith(prefix));
-  const male = same.find(isMale);
-  return { voice: male || same.find((v) => /en-gb|en-us/i.test(v.lang)) || same[0] || null, male: !!male, any: same.length > 0 };
-}
-
 function useSpeech() {
   const { i18n, t } = useTranslation();
   const { headers } = useAuth();
@@ -55,10 +31,19 @@ function useSpeech() {
 
   const appLang = (i18n.language || "en").slice(0, 2);
 
+  // Chosen voice for a language: the user's pick (Settings) or a male
+  // on-device voice; pitch is lowered only when no male voice exists.
+  const voiceFor = useCallback(async (lang) => {
+    const voices = await loadVoices();
+    const prefix = lang.slice(0, 2).toLowerCase();
+    const v = pickVoice(voices, prefix, getSpeechPrefs().voice[prefix]);
+    return { v, any: voices.some((x) => x.lang.toLowerCase().startsWith(prefix)) };
+  }, []);
+
   const speakNative = useCallback(async (chunks, lang, rate) => {
-    const { index, male, any } = await nativeVoiceFor(lang);
+    const { v, any } = await voiceFor(lang);
     if (!any && lang !== "en-US") return false; // no voice for this language
-    const opts = { lang, rate, pitch: male ? 1.0 : 0.85, ...(index != null ? { voice: index } : {}) };
+    const opts = { lang: v?.lang || lang, rate, pitch: v?.male ? 1.0 : 0.85, ...(v ? { voice: v.index } : {}) };
     for (const chunk of chunks) {
       if (cancelled.current) break;
       try {
@@ -69,29 +54,31 @@ function useSpeech() {
       }
     }
     return true;
-  }, []);
+  }, [voiceFor]);
 
-  const speakWeb = useCallback((chunks, lang, rate) => new Promise((resolve) => {
+  const speakWeb = useCallback(async (chunks, lang, rate) => {
+    const { v, any } = await voiceFor(lang);
+    if (!any && !lang.startsWith("en")) return false;
     const synth = window.speechSynthesis;
-    const { voice, male, any } = webVoiceFor(lang.slice(0, 2).toLowerCase());
-    if (!any && !lang.startsWith("en")) return resolve(false);
-    let i = 0;
-    const next = () => {
-      if (cancelled.current || i >= chunks.length) return resolve(true);
-      const u = new SpeechSynthesisUtterance(chunks[i++]);
-      if (voice) u.voice = voice;
-      u.lang = voice?.lang || lang;
-      u.rate = rate;
-      u.pitch = male ? 1.0 : 0.85;
-      u.onend = next;
-      u.onerror = next;
-      synth.speak(u);
-    };
-    // Chrome can delay or drop speech queued right after cancel() -- only
-    // cancel when something is actually playing.
-    if (synth.speaking || synth.pending) synth.cancel();
-    next();
-  }), []);
+    return new Promise((resolve) => {
+      let i = 0;
+      const next = () => {
+        if (cancelled.current || i >= chunks.length) return resolve(true);
+        const u = new SpeechSynthesisUtterance(chunks[i++]);
+        if (v?.raw) u.voice = v.raw;
+        u.lang = v?.lang || lang;
+        u.rate = rate;
+        u.pitch = v?.male ? 1.0 : 0.85;
+        u.onend = next;
+        u.onerror = next;
+        synth.speak(u);
+      };
+      // Chrome can delay or drop speech queued right after cancel() -- only
+      // cancel when something is actually playing.
+      if (synth.speaking || synth.pending) synth.cancel();
+      next();
+    });
+  }, [voiceFor]);
 
   const run = useCallback(async (chunks, lang, rate) => {
     if (isNative) return speakNative(chunks, lang, rate);

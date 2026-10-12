@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Volume2 } from "lucide-react";
 import { getSpeechPrefs, setSpeechPrefs, onSpeechPrefsChange, LANG_NAMES } from "../utils/speechPrefs";
+import { loadVoices, voicesFor, pickVoice } from "../utils/voices";
 import SpeakButton from "./SpeakButton";
 
 // Settings card for the 🔊 read-aloud button: speed, and (for non-English
@@ -10,7 +11,12 @@ function ReadAloudSettings() {
   const { i18n } = useTranslation();
   const appLang = (i18n.language || "en").slice(0, 2);
   const [prefs, setPrefs] = useState(getSpeechPrefs);
+  const [voices, setVoices] = useState([]);
   useEffect(() => onSpeechPrefsChange(setPrefs), []);
+  useEffect(() => { loadVoices().then(setVoices).catch(() => {}); }, []);
+  const english = voicesFor(voices, "en");
+  const current = pickVoice(voices, "en", prefs.voice.en);
+  const setVoice = (id) => setSpeechPrefs({ voice: { ...prefs.voice, en: id || undefined } });
 
   const seg = (value, current, onClick, label) => (
     <button key={value} onClick={onClick} aria-pressed={current === value}
@@ -44,6 +50,21 @@ function ReadAloudSettings() {
               {seg("ask", langChoice, () => { const lc = { ...prefs.langChoice }; delete lc[appLang]; setSpeechPrefs({ langChoice: lc }); }, "Ask me")}
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Trading terms and numbers always stay in English so their meaning doesn't change.</p>
+          </div>
+        )}
+        {english.length > 0 && (
+          <div>
+            <label className="text-sm text-slate-500 dark:text-slate-400 mb-1 block" htmlFor="tm-voice">Voice</label>
+            <select id="tm-voice" value={prefs.voice.en || ""} onChange={(e) => setVoice(e.target.value)}
+              className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-xl text-slate-900 dark:text-white text-sm">
+              <option value="">Automatic — {current ? `${current.male ? "male" : "default"} voice (${current.name})` : "device default"}</option>
+              {english.map((v) => (
+                <option key={v.id} value={v.id}>{v.male ? "♂ Male · " : ""}{v.name} · {v.lang}{v.local ? "" : " · online (slower to start)"}</option>
+              ))}
+            </select>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              {english.some((v) => v.male) ? "Male voices are marked ♂ and listed first." : "No male voice was found on this device — the app lowers the pitch instead. You can download more voices in your phone's text-to-speech settings."} Pick one and press the 🔊 below to test it.
+            </p>
           </div>
         )}
         <div className="flex items-center gap-3 text-sm text-slate-700 dark:text-slate-300">
