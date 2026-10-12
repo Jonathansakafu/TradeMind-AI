@@ -2,6 +2,7 @@ import { useState, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Capacitor } from "@capacitor/core";
 import { TextToSpeech } from "@capacitor-community/text-to-speech";
+import { speechChunks } from "../utils/speechText";
 
 // `window.speechSynthesis` (the browser Web Speech API) is what the website
 // uses, but Android's Capacitor WebView doesn't reliably expose it -- on a
@@ -11,44 +12,79 @@ import { TextToSpeech } from "@capacitor-community/text-to-speech";
 // native Android/iOS TTS engines instead, so it works inside the app too.
 const isNative = Capacitor.isNativePlatform();
 
+// App language -> speech locale. If the phone/browser has no voice for it
+// (common for Swahili), English is used instead of staying silent -- the
+// old code swallowed that error and nothing was read at all.
+const LOCALES = { en: "en-US", sw: "sw-KE", fr: "fr-FR", ar: "ar-SA" };
+
 function useSpeech() {
   const { i18n } = useTranslation();
   const [speaking, setSpeaking] = useState(false);
-  const utteranceRef = useRef(null);
+  const cancelled = useRef(false);
+
+  const appLang = (i18n.language || "en").slice(0, 2);
+  const locale = LOCALES[appLang] || "en-US";
 
   const pickVoice = useCallback(() => {
     if (typeof window === "undefined" || !window.speechSynthesis) return null;
     const voices = window.speechSynthesis.getVoices();
-    return voices.find((v) => v.lang.toLowerCase().startsWith(i18n.language)) || null;
-  }, [i18n.language]);
+    return voices.find((v) => v.lang.toLowerCase().startsWith(appLang))
+      || voices.find((v) => v.lang.toLowerCase().startsWith("en"))
+      || null;
+  }, [appLang]);
 
-  const speak = useCallback((text) => {
-    if (!text) return;
-
-    if (isNative) {
-      setSpeaking(true);
-      TextToSpeech.speak({ text, lang: i18n.language })
-        .catch(() => {})
-        .finally(() => setSpeaking(false));
-      return;
+  const speakNative = useCallback(async (chunks) => {
+    let lang = locale;
+    try {
+      const { supported } = await TextToSpeech.isLanguageSupported({ lang });
+      if (!supported) lang = "en-US";
+    } catch {
+      lang = "en-US";
     }
+    for (const chunk of chunks) {
+      if (cancelled.current) break;
+      try {
+        await TextToSpeech.speak({ text: chunk, lang, rate: 1.0 });
+      } catch {
+        if (lang === "en-US") break;
+        lang = "en-US"; // voice missing after all -- retry this chunk in English
+        await TextToSpeech.speak({ text: chunk, lang }).catch(() => {});
+      }
+    }
+  }, [locale]);
 
-    if (typeof window === "undefined" || !window.speechSynthesis) return;
-    window.speechSynthesis.cancel();
-
-    const utterance = new SpeechSynthesisUtterance(text);
+  const speakWeb = useCallback((chunks) => new Promise((resolve) => {
+    const synth = window.speechSynthesis;
     const voice = pickVoice();
-    if (voice) utterance.voice = voice;
-    utterance.lang = voice?.lang || i18n.language;
-    utterance.onend = () => setSpeaking(false);
-    utterance.onerror = () => setSpeaking(false);
+    let i = 0;
+    const next = () => {
+      if (cancelled.current || i >= chunks.length) return resolve();
+      const u = new SpeechSynthesisUtterance(chunks[i++]);
+      if (voice) u.voice = voice;
+      u.lang = voice?.lang || locale;
+      u.onend = next;
+      u.onerror = next;
+      synth.speak(u);
+    };
+    synth.cancel();
+    next();
+  }), [pickVoice, locale]);
 
-    utteranceRef.current = utterance;
+  const speak = useCallback(async (text) => {
+    const chunks = speechChunks(text);
+    if (!chunks.length) return;
+    cancelled.current = false;
     setSpeaking(true);
-    window.speechSynthesis.speak(utterance);
-  }, [pickVoice, i18n.language]);
+    try {
+      if (isNative) await speakNative(chunks);
+      else if (typeof window !== "undefined" && window.speechSynthesis) await speakWeb(chunks);
+    } finally {
+      setSpeaking(false);
+    }
+  }, [speakNative, speakWeb]);
 
   const stop = useCallback(() => {
+    cancelled.current = true;
     if (isNative) {
       TextToSpeech.stop().catch(() => {});
     } else if (typeof window !== "undefined" && window.speechSynthesis) {
