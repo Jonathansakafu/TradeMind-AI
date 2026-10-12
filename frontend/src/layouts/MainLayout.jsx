@@ -187,6 +187,11 @@ function MainLayout({ children }) {
             the status bar via `top` (not padding), so its own height stays
             fixed and predictable for the spacer padding on <main> below. */}
         <div
+          // dir="ltr": in Arabic (right-to-left) the bar flipped and moved the
+          // menu button to the right edge, under the fixed notification bell
+          // -- it couldn't be seen or tapped. The bar keeps the same layout in
+          // every language (menu left, bell right); page content stays RTL.
+          dir="ltr"
           className="lg:hidden fixed left-0 right-0 z-20 h-14 flex items-center justify-between px-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800"
           style={{ top: "env(safe-area-inset-top)" }}
         >
