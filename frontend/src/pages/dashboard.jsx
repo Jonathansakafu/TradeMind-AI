@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { API_URL } from "../config/api";
 import { computeStats } from "../utils/tradeStats";
-import DailyBrief from "../components/DailyBrief";
+import TodaysPlan, { DailyLossBanner } from "../components/DailyBrief";
 import PriceTicker from "../components/PriceTicker";
 import BrokerModal from "../components/BrokerModal";
 import SessionBanner from "../components/SessionBanner";
@@ -96,7 +96,7 @@ function Dashboard() {
         </div>
       </div>
 
-      <DailyBrief />
+      <DailyLossBanner />
 
       {/* STATS */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
@@ -124,6 +124,8 @@ function Dashboard() {
           </p>
         </Link>
       </div>
+
+      <TodaysPlan />
 
       {/* TOTAL P&L — Hidden by default */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 mb-8">
