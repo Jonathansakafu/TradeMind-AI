@@ -17,6 +17,10 @@ const isNative = Capacitor.isNativePlatform();
 // old code swallowed that error and nothing was read at all.
 const LOCALES = { en: "en-US", sw: "sw-KE", fr: "fr-FR", ar: "ar-SA" };
 
+// Languages the phone turned down this session -> spoken in English
+// straight away next time instead of failing first again.
+const unsupported = new Set();
+
 function useSpeech() {
   const { i18n } = useTranslation();
   const [speaking, setSpeaking] = useState(false);
@@ -33,21 +37,20 @@ function useSpeech() {
       || null;
   }, [appLang]);
 
+  // Speaks straight away -- no separate "is this language supported?"
+  // round trip first (that waited on the TTS engine and delayed every
+  // start); the plugin's speak() rejects at once for a missing voice, and
+  // only then is English used (and remembered for the session).
   const speakNative = useCallback(async (chunks) => {
-    let lang = locale;
-    try {
-      const { supported } = await TextToSpeech.isLanguageSupported({ lang });
-      if (!supported) lang = "en-US";
-    } catch {
-      lang = "en-US";
-    }
+    let lang = unsupported.has(locale) ? "en-US" : locale;
     for (const chunk of chunks) {
       if (cancelled.current) break;
       try {
         await TextToSpeech.speak({ text: chunk, lang, rate: 1.0 });
       } catch {
-        if (lang === "en-US") break;
-        lang = "en-US"; // voice missing after all -- retry this chunk in English
+        if (lang === "en-US" || cancelled.current) break;
+        unsupported.add(lang);
+        lang = "en-US";
         await TextToSpeech.speak({ text: chunk, lang }).catch(() => {});
       }
     }
@@ -66,7 +69,9 @@ function useSpeech() {
       u.onerror = next;
       synth.speak(u);
     };
-    synth.cancel();
+    // Chrome can delay or drop speech queued right after cancel() -- only
+    // cancel when something is actually playing.
+    if (synth.speaking || synth.pending) synth.cancel();
     next();
   }), [pickVoice, locale]);
 
