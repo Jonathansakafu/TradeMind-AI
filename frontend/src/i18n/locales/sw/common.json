@@ -56,5 +56,14 @@
     "demo": "Jaribio",
     "real": "Halisi"
   },
-  "appName": "TradeMind AI"
+  "appName": "TradeMind AI",
+  "speech": {
+    "question": "Usikilize kwa lugha gani?",
+    "note": "Maneno ya kibiashara (BUY, SELL, stop loss, take profit, pips, CPI, NFP…) na namba zote hubaki kwa Kiingereza ili maana yake isibadilike.",
+    "remember": "Itakumbukwa wakati ujao. Badilisha kwenye Mipangilio → Read aloud.",
+    "noVoice": "Kifaa hiki hakina sauti ya {{lang}} — inasoma kwa Kiingereza. Unaweza kuongeza sauti kwenye mipangilio ya text-to-speech ya simu yako.",
+    "noTranslate": "Imeshindwa kutafsiri sasa hivi — inasoma kwa Kiingereza.",
+    "read": "Soma kwa sauti",
+    "stop": "Acha kusoma"
+  }
 }

@@ -10,6 +10,7 @@ import LanguageToggle from "../components/LanguageToggle";
 import SpeakButton from "../components/SpeakButton";
 import AlertSettings from "../components/AlertSettings";
 import RiskSettings from "../components/RiskSettings";
+import ReadAloudSettings from "../components/ReadAloudSettings";
 import { useAuth } from "../hooks/useAuth";
 
 function Settings() {
@@ -102,6 +103,8 @@ function Settings() {
         <AlertSettings />
 
         <RiskSettings />
+
+        <ReadAloudSettings />
 
         {/* Profile */}
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6">

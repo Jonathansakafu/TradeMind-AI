@@ -392,6 +392,18 @@ exports.askQuestionStream = async (req, res) => {
   }
 };
 
+// Read-aloud in the user's language (trading terms kept in English).
+exports.translateForSpeech = async (req, res) => {
+  try {
+    const { text, lang } = req.body || {};
+    if (!text || !["sw", "fr", "ar"].includes(lang)) return res.status(400).json({ message: "text and lang (sw|fr|ar) required" });
+    res.json({ text: await claudeAI.translateForSpeech(text, lang) });
+  } catch (err) {
+    console.error("Speech translation failed:", err.message);
+    res.status(503).json({ message: "Couldn't translate right now — try again, or listen in English." });
+  }
+};
+
 // Saved Ask AI conversations
 exports.listConversations = async (req, res) => {
   try {

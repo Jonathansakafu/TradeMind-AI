@@ -258,6 +258,35 @@ Respond ONLY in JSON with no markdown: {"summary": ""}`;
   }
 };
 
+// Read-aloud in the user's own language: translates app text (signals, AI
+// answers, plans) for speech while keeping trading terms in English, so
+// their meaning doesn't drift. User-triggered (non-background); cached.
+const SPEECH_LANGS = { sw: "Swahili (Kiswahili)", fr: "French", ar: "Arabic" };
+const KEEP_IN_ENGLISH = "BUY, SELL, WAIT, entry, stop loss, take profit, risk to reward, pips, lot, break of structure (BOS), change of character (CHoCH), liquidity, liquidity sweep, support, resistance, swing high, swing low, trend, 4H / 1H / 15m, ATR, RSI, EMA, CPI, NFP, FOMC, GDP, PPI, forecast, previous, currency pair names (EURUSD, GBPUSD, gold / XAUUSD), MT5, TradingView, Quick Trade, News Impact";
+const speechCache = new Map();
+exports.translateForSpeech = async (text, lang) => {
+  const target = SPEECH_LANGS[lang];
+  if (!target) return text;
+  const clean = String(text || "").slice(0, 4000);
+  const key = `${lang}|${clean}`;
+  if (speechCache.has(key)) return speechCache.get(key);
+  const prompt = `Translate the trading text below into simple, clear ${target} for reading aloud to a trader. Keep these technical terms EXACTLY in English (do not translate them): ${KEEP_IN_ENGLISH}. Keep every number, price, percentage and time exactly as written. Keep the meaning precise; don't add or drop information.
+
+Text:
+${clean}
+
+Respond ONLY in JSON with no markdown: {"text": ""}`;
+  const out = await askGroq(prompt);
+  let translated = null;
+  try {
+    translated = JSON.parse(out.replace(/```json|```/g, "").trim()).text || null;
+  } catch { /* not JSON */ }
+  if (!translated) throw new Error("Translation failed");
+  if (speechCache.size > 300) speechCache.clear();
+  speechCache.set(key, translated);
+  return translated;
+};
+
 exports.probeGroq = async () => {
   try {
     const { data, response } = await getGroqClient().chat.completions.create({

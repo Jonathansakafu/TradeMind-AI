@@ -3,7 +3,7 @@ const {
   analyzeTrade, detectPatterns, getTradeSuggestion,
   analyzeDocument, analyzeScreenshot, getBooks, deleteBook,
   askQuestion, askQuestionStream, detectStrategy,
-  listConversations, getConversation, deleteConversation,
+  listConversations, getConversation, deleteConversation, translateForSpeech,
 } = require("../controllers/aiController");
 const { protect } = require("../middleware/authMiddleware");
 const multer = require("multer");
@@ -34,6 +34,7 @@ router.delete("/books/:id", deleteBook);
 router.post("/ask", askQuestion);
 router.post("/ask/stream", askQuestionStream);
 router.get("/conversations", listConversations);
+router.post("/speech-translate", translateForSpeech);
 router.get("/conversations/:id", getConversation);
 router.delete("/conversations/:id", deleteConversation);
 
