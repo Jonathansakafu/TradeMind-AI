@@ -6,6 +6,7 @@ const pipelineStats = require("./pipelineStats");
 const signalOutcomes = require("./signalOutcomes");
 const morningBrief = require("./morningBrief");
 const newsWarnings = require("./newsWarnings");
+const newsCountdown = require("./newsCountdown");
 
 // Checked on every cycle (see below) but only actually fires about once a
 // week per user -- same self-throttling pattern as autoGenerate's own
@@ -107,6 +108,14 @@ async function runCycle() {
     if (sent) console.log(`⚠️ Sent ${sent} pre-news warning(s)`);
   } catch (err) {
     console.error("Pre-news warnings failed:", err.message);
+  }
+
+  // Hourly countdown alerts for upcoming high-impact news (6h before -> release).
+  try {
+    const { sent, marks } = await newsCountdown.sendCountdowns();
+    if (sent) console.log(`⏰ News countdown sent: ${marks.join(", ")}`);
+  } catch (err) {
+    console.error("News countdown failed:", err.message);
   }
 
   pipelineStats.inc("cycles.completed");

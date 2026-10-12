@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import axios from "axios";
-import { BellRing, Mail, Send, Smartphone } from "lucide-react";
+import { BellRing, Clock, Mail, Send, Smartphone } from "lucide-react";
 import { API_URL } from "../config/api";
 import { useAuth } from "../hooks/useAuth";
 import { disablePush, enablePush, getPushState } from "../utils/pushNotifications";
@@ -165,6 +165,25 @@ function AlertSettings() {
             </div>
           )}
         </div>
+
+        {/* News countdown */}
+        <label className="flex items-center justify-between gap-3 cursor-pointer">
+          <span className="min-w-0">
+            <span className="font-semibold flex items-center gap-2 text-slate-900 dark:text-white">
+              <Clock size={16} /> News countdown alerts
+            </span>
+            <span className="text-sm text-slate-500 dark:text-slate-400">
+              Every hour from 6h before big USD / EUR / GBP news (NFP, CPI, rate decisions…) until release
+            </span>
+          </span>
+          <input
+            type="checkbox"
+            className="h-5 w-5 accent-green-500 shrink-0"
+            checked={status?.prefs.newsCountdown !== false}
+            disabled={!status || busy}
+            onChange={(e) => updatePrefs({ newsCountdown: e.target.checked })}
+          />
+        </label>
 
         {/* Test */}
         <div>

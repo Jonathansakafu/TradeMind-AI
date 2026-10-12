@@ -273,17 +273,21 @@ async function dispatchNotification(notification, options = {}) {
 // A non-signal message (e.g. the morning brief) to one user's devices and,
 // if they've switched email alerts on, their inbox. Same channels and
 // prefs as signals; no confidence floor (it isn't a signal).
-async function dispatchMessage(userId, { title, body, text, url = "/dashboard", id }) {
+// options: email (default true) -- false sends push only; pref -- name of
+// a notificationPrefs switch that must not be off (e.g. "newsCountdown");
+// ttlSeconds -- how long a push may wait for an offline phone.
+async function dispatchMessage(userId, { title, body, text, url = "/dashboard", id, email = true, pref, ttlSeconds = 6 * 60 * 60 }) {
   const user = await User.findById(userId).select("email notificationPrefs +pushSubscriptions +fcmTokens");
   if (!user) return null;
   const prefs = user.notificationPrefs || {};
-  const msg = { title, body, url, id: id || `msg-${Date.now()}`, ttlSeconds: 6 * 60 * 60 };
+  if (pref && prefs[pref] === false) return { skipped: `${pref} off` };
+  const msg = { title, body, url, id: id || `msg-${Date.now()}`, ttlSeconds };
   const results = {};
   if (prefs.push !== false) {
     results.browser = await sendWebPush(user, msg).catch((err) => ({ error: err.message }));
     results.android = await sendFcm(user, msg).catch((err) => ({ error: err.message }));
   }
-  if (prefs.email) {
+  if (prefs.email && email) {
     results.email = await sendEmail(user, { signal: "wait", reasoning: text || body }, { ...msg, body: "" })
       .catch((err) => ({ error: err.message }));
   }

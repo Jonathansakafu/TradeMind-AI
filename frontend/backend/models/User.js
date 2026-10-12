@@ -71,6 +71,8 @@ const userSchema = new mongoose.Schema(
       // Only signals at or above this confidence go out by email --
       // push has no such floor since it has no daily quota.
       emailMinConfidence: { type: Number, default: 70 },
+      // Hourly countdown before high-impact news (services/newsCountdown.js).
+      newsCountdown: { type: Boolean, default: true },
     },
 
     // Per-user daily email counter backing EMAIL_DAILY_CAP in
