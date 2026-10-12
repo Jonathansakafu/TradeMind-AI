@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import axios from "axios";
 import { Browser } from "@capacitor/browser";
 import MainLayout from "../layouts/MainLayout";
+import { Link } from "react-router-dom";
+import { CalendarDays } from "lucide-react";
 import {
   Newspaper, TrendingUp, TrendingDown,
   RefreshCw, ExternalLink, AlertTriangle,
@@ -128,6 +130,13 @@ function News() {
           <RefreshCw size={14} /> Refresh
         </button>
       </div>
+
+      {/* Scheduled releases (NFP, CPI, rate decisions) and their impact */}
+      <Link to="/calendar"
+        className="mb-6 flex items-center justify-between gap-3 rounded-2xl border border-green-500/30 bg-green-500/10 px-4 py-3 text-sm text-green-700 dark:text-green-300 hover:bg-green-500/15 transition">
+        <span className="flex items-center gap-2 font-semibold"><CalendarDays size={16} /> Economic calendar — check the impact of NFP, CPI & rate decisions</span>
+        <span aria-hidden="true">→</span>
+      </Link>
 
       {/* Search */}
       <div className="relative mb-6">

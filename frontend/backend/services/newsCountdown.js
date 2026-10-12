@@ -84,7 +84,7 @@ exports.sendCountdowns = async (now = new Date()) => {
     for (const u of users) {
       await dispatchMessage(u._id, {
         ...msg,
-        url: "/dashboard",
+        url: "/calendar",
         id: `countdown-${group.time.getTime()}`, // replaces the previous countdown alert on the phone
         email: EMAIL_MARKS.has(mark),
         pref: "newsCountdown",

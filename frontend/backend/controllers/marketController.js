@@ -98,6 +98,26 @@ exports.getNews = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+// Economic Calendar page: this week's high-impact releases, and the
+// impact check for one of them (services/newsImpact.js).
+exports.getCalendar = async (req, res) => {
+  try {
+    res.json({ events: await require("../services/newsImpact").listEvents() });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+exports.checkNewsImpact = async (req, res) => {
+  try {
+    const result = await require("../services/newsImpact").checkImpact(String(req.query.id || ""));
+    if (result.error) return res.status(404).json({ message: result.error });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
 exports.analyzeNews = async (req, res) => {
   try {
     const { article } = req.body;

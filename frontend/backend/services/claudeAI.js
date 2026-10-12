@@ -240,6 +240,24 @@ Respond ONLY in JSON with no markdown: {"plan": "line 1\nline 2\n..."}`;
   }
 };
 
+// Economic Calendar page "Check impact": a short plain-language read of a
+// release's expected (before) or actual (after) impact on the trader's
+// pairs, from computed facts only. User-triggered -> normal (non-
+// background) call; falls back to Gemini like every askGroq call.
+exports.explainNewsImpact = async (facts, released) => {
+  const prompt = `You are TradeMind AI. ${released ? "This economic release is out. Explain in plain words what the market's reaction shows for each pair and what a trader should watch next (continuation or fade)." : "This economic release is coming. Explain in plain words what it is, why it matters, and what a higher or lower than forecast result would likely do to each pair. Remind the trader to protect open trades."} Use ONLY the facts below -- no invented numbers. Under 90 words.
+
+${facts}
+
+Respond ONLY in JSON with no markdown: {"summary": ""}`;
+  const text = await askGroq(prompt);
+  try {
+    return JSON.parse(text.replace(/```json|```/g, "").trim()).summary || null;
+  } catch {
+    return null;
+  }
+};
+
 exports.probeGroq = async () => {
   try {
     const { data, response } = await getGroqClient().chat.completions.create({

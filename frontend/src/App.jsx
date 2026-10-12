@@ -15,6 +15,7 @@ import AddTrade from "./pages/addtrade";
 import TradeHistory from "./pages/TradeHistory";
 import Analytics from "./pages/Analytics";
 import Performance from "./pages/Performance";
+import Calendar from "./pages/Calendar";
 import Charts from "./pages/Charts";
 import Settings from "./pages/Settings";
 import Home from "./pages/Home";
@@ -106,6 +107,7 @@ function App() {
           <Route path="/performance" element={<ProtectedRoute><Performance /></ProtectedRoute>} />
           <Route path="/live" element={<ProtectedRoute><LiveAnalysis /></ProtectedRoute>} />
           <Route path="/news" element={<ProtectedRoute><News /></ProtectedRoute>} />
+          <Route path="/calendar" element={<ProtectedRoute><Calendar /></ProtectedRoute>} />
           <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
           <Route path="/charts" element={<ProtectedRoute><Charts /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
