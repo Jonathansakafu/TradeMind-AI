@@ -1,0 +1,69 @@
+{
+  "title": "설정",
+  "subtitle": "계정 관리",
+  "appearance": "화면",
+  "language": "언어",
+  "profile": {
+    "title": "프로필",
+    "name": "이름",
+    "email": "이메일",
+    "saveProfile": "프로필 저장",
+    "updated": "프로필이 업데이트되었습니다!",
+    "failed": "실패"
+  },
+  "password": {
+    "title": "비밀번호 변경",
+    "current": "현재 비밀번호",
+    "new": "새 비밀번호",
+    "confirm": "새 비밀번호 확인",
+    "update": "비밀번호 변경",
+    "noMatch": "비밀번호가 일치하지 않습니다",
+    "tooShort": "비밀번호는 6자 이상이어야 합니다",
+    "updated": "비밀번호가 변경되었습니다!",
+    "failed": "실패"
+  },
+  "account": {
+    "title": "계정",
+    "logout": "로그아웃"
+  },
+  "alerts": {
+    "title": "앱 밖 알림",
+    "subtitle": "TradeMind를 열지 않아도 새 신호를 받습니다.",
+    "pushTitle": "이 기기의 푸시 알림",
+    "turnOn": "켜기",
+    "turnOff": "끄기",
+    "pushEnabled": "이 기기의 푸시 알림이 켜졌습니다.",
+    "pushDisabled": "이 기기의 푸시 알림이 꺼졌습니다.",
+    "otherDevices": "다른 기기 {{count}}대에서도 켜짐",
+    "emailTitle": "이메일 알림",
+    "emailTo": "{{email}}(으)로 발송",
+    "emailMinConfidence": "다음 신뢰도 이상 신호만 이메일 발송",
+    "sendTest": "테스트 알림 보내기",
+    "failed": "실패",
+    "state": {
+      "on": "켜짐 — 알림이 여기에 표시됩니다",
+      "off": "꺼짐",
+      "denied": "차단됨 — 브라우저/휴대폰 설정에서 TradeMind 알림을 허용하세요",
+      "unsupported": "이 브라우저/기기에서는 지원되지 않습니다(iPhone은 먼저 홈 화면에 추가하세요)",
+      "needsUpdate": "푸시 알림을 사용하려면 앱을 업데이트하세요"
+    },
+    "result": {
+      "skipped": "보내지 않음",
+      "noDevices": "등록된 기기가 없습니다",
+      "sent": "보냄",
+      "sentTo": "기기 {{count}}대에 보냄"
+    },
+    "channel": {
+      "browser": "브라우저",
+      "android": "안드로이드 앱",
+      "email": "이메일"
+    }
+  },
+  "theme": {
+    "title": "테마",
+    "dark": "다크",
+    "light": "라이트",
+    "auto": "자동",
+    "autoNote": "낮에는 라이트, 오후 7시부터 오전 7시까지는 다크."
+  }
+}

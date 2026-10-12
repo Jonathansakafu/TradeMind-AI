@@ -1,0 +1,28 @@
+{
+  "title": "交易仪表盘",
+  "subtitle": "用 AI 管理您的外汇交易",
+  "openMT5": "打开 MT5",
+  "addTrade": "添加交易",
+  "stats": {
+    "totalTrades": "总交易数",
+    "wins": "盈利",
+    "losses": "亏损",
+    "winRate": "胜率"
+  },
+  "totalPL": "总盈亏",
+  "hidePL": "隐藏盈亏",
+  "showPL": "显示盈亏",
+  "recentTrades": "最近交易",
+  "viewAll": "查看全部 →",
+  "noTradesYet": "暂无交易",
+  "addFirstTrade": "添加您的第一笔交易 →",
+  "table": {
+    "pair": "货币对",
+    "direction": "方向",
+    "entry": "Entry",
+    "exit": "平仓价",
+    "result": "结果",
+    "pl": "盈亏",
+    "open": "持仓中"
+  }
+}

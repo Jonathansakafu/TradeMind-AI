@@ -91,7 +91,8 @@ function ChatWidget() {
                   )}
                   <div className="max-w-[82%]">
                     <div
-                      className={`rounded-2xl px-3 py-2 text-xs leading-relaxed whitespace-pre-wrap ${
+                      dir="auto"
+                      className={`rounded-2xl px-3 py-2 text-xs leading-relaxed whitespace-pre-wrap text-start ${
                         m.role === "user"
                           ? "bg-green-500 text-slate-950 font-medium"
                           : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200"
@@ -140,7 +141,8 @@ function ChatWidget() {
 
           <form onSubmit={ask} className="border-t border-slate-200 dark:border-slate-800 p-3 flex gap-2 flex-shrink-0">
             <input
-              type="text"
+              dir="auto"
+            type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Ask a question..."

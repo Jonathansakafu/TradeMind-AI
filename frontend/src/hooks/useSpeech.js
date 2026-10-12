@@ -19,7 +19,7 @@ import { useAuth } from "./useAuth";
 //   language's voice; if the device has no such voice, English is read
 //   and the user is told why.
 const isNative = Capacitor.isNativePlatform();
-const LOCALES = { en: "en-US", sw: "sw-KE", fr: "fr-FR", ar: "ar-SA" };
+const LOCALES = { en: "en-US", sw: "sw-KE", fr: "fr-FR", ar: "ar-SA", zh: "zh-CN", ko: "ko-KR", ja: "ja-JP" };
 
 function useSpeech() {
   const { i18n, t } = useTranslation();

@@ -1,0 +1,28 @@
+{
+  "title": "トレーディングダッシュボード",
+  "subtitle": "AI で FX 取引を管理",
+  "openMT5": "MT5 を開く",
+  "addTrade": "取引を追加",
+  "stats": {
+    "totalTrades": "総取引数",
+    "wins": "勝ち",
+    "losses": "負け",
+    "winRate": "勝率"
+  },
+  "totalPL": "総損益",
+  "hidePL": "損益を隠す",
+  "showPL": "損益を表示",
+  "recentTrades": "最近の取引",
+  "viewAll": "すべて表示 →",
+  "noTradesYet": "まだ取引がありません",
+  "addFirstTrade": "最初の取引を追加 →",
+  "table": {
+    "pair": "通貨ペア",
+    "direction": "方向",
+    "entry": "Entry",
+    "exit": "決済",
+    "result": "結果",
+    "pl": "損益",
+    "open": "保有中"
+  }
+}

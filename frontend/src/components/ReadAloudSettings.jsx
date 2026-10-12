@@ -45,6 +45,14 @@ function ReadAloudSettings() {
               {seg("ask", langChoice, () => { const lc = { ...prefs.langChoice }; delete lc[appLang]; setSpeechPrefs({ langChoice: lc }); }, "Ask me")}
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Trading terms and numbers always stay in English so their meaning doesn't change.</p>
+            {voices.length > 0 && (() => {
+              const v = pickVoice(voices, appLang, prefs.voice[appLang]);
+              return v ? (
+                <p className="text-xs text-green-700 dark:text-green-400 mt-1">✓ {LANG_NAMES[appLang]} voice on this device: {v.name}{v.local ? "" : " (online — needs internet)"}</p>
+              ) : (
+                <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">✗ This device has no {LANG_NAMES[appLang]} voice, so it reads in English. Add one: phone Settings → Accessibility → Text-to-speech → Preferred engine (Google) → ⚙ → Install voice data → {LANG_NAMES[appLang]}. Then reopen TradeMind.</p>
+              );
+            })()}
           </div>
         )}
         {english.length > 0 && (

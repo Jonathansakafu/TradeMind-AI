@@ -1,0 +1,28 @@
+{
+  "title": "트레이딩 대시보드",
+  "subtitle": "AI로 외환 거래를 관리하세요",
+  "openMT5": "MT5 열기",
+  "addTrade": "거래 추가",
+  "stats": {
+    "totalTrades": "총 거래",
+    "wins": "수익",
+    "losses": "손실",
+    "winRate": "승률"
+  },
+  "totalPL": "총 손익",
+  "hidePL": "손익 숨기기",
+  "showPL": "손익 보기",
+  "recentTrades": "최근 거래",
+  "viewAll": "전체 보기 →",
+  "noTradesYet": "아직 거래가 없습니다",
+  "addFirstTrade": "첫 거래 추가하기 →",
+  "table": {
+    "pair": "통화쌍",
+    "direction": "방향",
+    "entry": "Entry",
+    "exit": "청산가",
+    "result": "결과",
+    "pl": "손익",
+    "open": "보유 중"
+  }
+}

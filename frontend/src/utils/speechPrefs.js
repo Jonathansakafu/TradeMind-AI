@@ -4,7 +4,7 @@ const KEY = "speech.prefs";
 const listeners = new Set();
 
 export const SPEEDS = { slow: 0.8, normal: 0.95 };
-export const LANG_NAMES = { sw: "Kiswahili", fr: "Français", ar: "العربية", en: "English" };
+export const LANG_NAMES = { sw: "Kiswahili", fr: "Français", ar: "العربية", zh: "中文", ko: "한국어", ja: "日本語", en: "English" };
 
 export function getSpeechPrefs() {
   try {

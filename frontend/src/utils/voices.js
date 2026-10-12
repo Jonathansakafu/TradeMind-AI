@@ -67,7 +67,10 @@ export function pickVoice(voices, langPrefix, savedId) {
   if (saved) return saved;
   const local = same.filter((v) => v.local);
   return local.find((v) => v.male) || (isNative ? null : same.find((v) => v.male))
-    || local.find((v) => /en-gb|en-us/i.test(v.lang)) || local[0] || null;
+    || local.find((v) => /en-gb|en-us/i.test(v.lang)) || local[0]
+    // No offline voice for this language (common for Arabic / Kiswahili):
+    // an online one is slower to start but better than falling back to English.
+    || same.find((v) => v.male) || same[0] || null;
 }
 
 export function voicesFor(voices, langPrefix) {

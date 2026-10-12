@@ -144,7 +144,8 @@ function AskAI() {
                 )}
                 <div className={`max-w-[80%] ${m.role === "user" ? "order-1" : ""}`}>
                   <div
-                    className={`rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap ${
+                    dir="auto"
+                    className={`rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap text-start ${
                       m.role === "user"
                         ? "bg-green-500 text-slate-950 font-medium"
                         : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200"
@@ -201,6 +202,7 @@ function AskAI() {
 
         <form onSubmit={askQuestion} className="border-t border-slate-200 dark:border-slate-800 p-4 flex gap-3">
           <input
+            dir="auto"
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}

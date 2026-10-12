@@ -261,7 +261,7 @@ Respond ONLY in JSON with no markdown: {"summary": ""}`;
 // Read-aloud in the user's own language: translates app text (signals, AI
 // answers, plans) for speech while keeping trading terms in English, so
 // their meaning doesn't drift. User-triggered (non-background); cached.
-const SPEECH_LANGS = { sw: "Swahili (Kiswahili)", fr: "French", ar: "Arabic" };
+const SPEECH_LANGS = { sw: "Swahili (Kiswahili)", fr: "French", ar: "Arabic", zh: "Chinese (Simplified)", ko: "Korean", ja: "Japanese" };
 const KEEP_IN_ENGLISH = "BUY, SELL, WAIT, entry, stop loss, take profit, risk to reward, pips, lot, break of structure (BOS), change of character (CHoCH), liquidity, liquidity sweep, support, resistance, swing high, swing low, trend, 4H / 1H / 15m, ATR, RSI, EMA, CPI, NFP, FOMC, GDP, PPI, forecast, previous, currency pair names (EURUSD, GBPUSD, gold / XAUUSD), MT5, TradingView, Quick Trade, News Impact";
 const speechCache = new Map();
 exports.translateForSpeech = async (text, lang) => {
@@ -1092,12 +1092,14 @@ ${ragCtx}`
 
   const toolInstruction = "\n\nYou have a get_market_snapshot tool for live price/momentum data — use it whenever the question needs current market conditions instead of describing how the trader could check themselves.";
 
+  const languageInstruction = "\n\nReply in the same language the trader writes their latest message in (English, Kiswahili, French, Arabic, Chinese, Korean, Japanese or any other). Keep trading terms (BUY, SELL, stop loss, take profit, entry, pips, lot, R:R, BOS, CHoCH, CPI, NFP, pair names) and all numbers in English so their meaning doesn't change.";
+
   const formatInstruction = jsonMode
     ? '\n\nAlways give your final reply as a single JSON object with no markdown: {"answer": ""} — this applies even after using a tool; your last message must still be in this format.'
     : "\n\nRespond with plain prose only — no JSON, no markdown code fences. This applies even after using a tool.";
 
   return [
-    { role: "system", content: persona + toolInstruction + formatInstruction },
+    { role: "system", content: persona + toolInstruction + languageInstruction + formatInstruction },
     ...trimHistory(history),
     { role: "user", content: question },
   ];

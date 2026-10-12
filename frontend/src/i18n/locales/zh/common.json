@@ -1,0 +1,70 @@
+{
+  "nav": {
+    "dashboard": "仪表盘",
+    "addTrade": "添加交易",
+    "tradeHistory": "交易记录",
+    "performance": "业绩表现",
+    "aiAnalytics": "AI 分析",
+    "askAI": "问 AI",
+    "liveAnalysis": "实时分析",
+    "mt5AutoTrade": "MT5 自动交易",
+    "tradingView": "TradingView 提醒",
+    "tradingRobot": "交易机器人",
+    "forexNews": "外汇新闻",
+    "calendar": "经济日历",
+    "notifications": "通知",
+    "liveCharts": "实时图表",
+    "userGuide": "用户指南",
+    "settings": "设置",
+    "logout": "退出登录",
+    "live": "实时",
+    "auto": "自动"
+  },
+  "buttons": {
+    "save": "保存",
+    "cancel": "取消",
+    "login": "登录",
+    "register": "注册",
+    "logout": "退出登录",
+    "confirm": "确认",
+    "delete": "删除",
+    "edit": "编辑",
+    "close": "关闭",
+    "search": "搜索",
+    "refresh": "刷新"
+  },
+  "fields": {
+    "email": "邮箱",
+    "password": "密码",
+    "name": "姓名",
+    "confidence": "置信度",
+    "reasoning": "理由"
+  },
+  "errors": {
+    "somethingWrong": "出了点问题"
+  },
+  "status": {
+    "loading": "加载中...",
+    "win": "盈利",
+    "loss": "亏损",
+    "buy": "买入",
+    "sell": "卖出",
+    "wait": "观望",
+    "entry": "Entry",
+    "stopLoss": "Stop Loss",
+    "takeProfit": "Take Profit",
+    "demo": "模拟",
+    "real": "真实"
+  },
+  "appName": "TradeMind AI",
+  "speech": {
+    "question": "用哪种语言收听？",
+    "note": "交易术语（BUY、SELL、stop loss、take profit、pips、CPI、NFP…）和所有数字保留英文，以免改变含义。",
+    "remember": "下次会记住。如需更改，请点击 🔊 旁边的 EN / ZH 标签（或 设置 → Read aloud）。",
+    "noVoice": "此设备没有{{lang}}语音——将用英语朗读。您可以在手机的文字转语音设置中添加。",
+    "noTranslate": "暂时无法翻译——将用英语朗读。",
+    "read": "朗读",
+    "stop": "停止朗读",
+    "change": "更改收听语言"
+  }
+}

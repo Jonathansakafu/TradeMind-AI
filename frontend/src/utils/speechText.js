@@ -44,7 +44,7 @@ export function cleanForSpeech(text) {
 
 // Sentence-ish chunks of at most ~200 characters.
 export function speechChunks(text, max = 200) {
-  const sentences = cleanForSpeech(text).match(/[^.!?]+[.!?]*/g) || [];
+  const sentences = cleanForSpeech(text).match(/[^.!?。！？؟]+[.!?。！？؟]*/g) || [];
   const chunks = [];
   let cur = "";
   for (const s of sentences) {
@@ -58,6 +58,7 @@ export function speechChunks(text, max = 200) {
     }
   }
   if (cur) chunks.push(cur);
-  // A single very long sentence still gets split on commas / spaces.
-  return chunks.flatMap((c) => (c.length <= max * 1.5 ? [c] : c.match(new RegExp(`.{1,${max}}(\\s|$)`, "g")) || [c]));
+  // A single very long sentence still gets split on spaces (or hard-cut
+  // for Chinese / Japanese, which have none).
+  return chunks.flatMap((c) => (c.length <= max * 1.5 ? [c] : c.match(new RegExp(`.{1,${max}}(\\s|$)|.{1,${max}}`, "g")) || [c]));
 }

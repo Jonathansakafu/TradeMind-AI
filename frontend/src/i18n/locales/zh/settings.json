@@ -1,0 +1,69 @@
+{
+  "title": "设置",
+  "subtitle": "管理您的账户",
+  "appearance": "外观",
+  "language": "语言",
+  "profile": {
+    "title": "个人资料",
+    "name": "姓名",
+    "email": "邮箱",
+    "saveProfile": "保存资料",
+    "updated": "资料已更新！",
+    "failed": "失败"
+  },
+  "password": {
+    "title": "修改密码",
+    "current": "当前密码",
+    "new": "新密码",
+    "confirm": "确认新密码",
+    "update": "更新密码",
+    "noMatch": "两次输入的密码不一致",
+    "tooShort": "密码至少需要 6 个字符",
+    "updated": "密码已更新！",
+    "failed": "失败"
+  },
+  "account": {
+    "title": "账户",
+    "logout": "退出登录"
+  },
+  "alerts": {
+    "title": "应用外提醒",
+    "subtitle": "即使未打开 TradeMind 也能收到新信号。",
+    "pushTitle": "本设备推送通知",
+    "turnOn": "开启",
+    "turnOff": "关闭",
+    "pushEnabled": "本设备已开启推送通知。",
+    "pushDisabled": "本设备已关闭推送通知。",
+    "otherDevices": "另有 {{count}} 台设备已开启",
+    "emailTitle": "邮件提醒",
+    "emailTo": "发送至 {{email}}",
+    "emailMinConfidence": "仅邮件发送置信度不低于",
+    "sendTest": "发送测试提醒",
+    "failed": "失败",
+    "state": {
+      "on": "已开启——提醒会在这里弹出",
+      "off": "已关闭",
+      "denied": "已阻止——请在浏览器/手机设置中允许 TradeMind 通知",
+      "unsupported": "此浏览器/设备不支持（iPhone 请先将网站添加到主屏幕）",
+      "needsUpdate": "请更新应用以开启推送提醒"
+    },
+    "result": {
+      "skipped": "未发送",
+      "noDevices": "没有已注册的设备",
+      "sent": "已发送",
+      "sentTo": "已发送到 {{count}} 台设备"
+    },
+    "channel": {
+      "browser": "浏览器",
+      "android": "安卓应用",
+      "email": "邮件"
+    }
+  },
+  "theme": {
+    "title": "主题",
+    "dark": "深色",
+    "light": "浅色",
+    "auto": "自动",
+    "autoNote": "白天浅色，晚上 7 点到早上 7 点为深色。"
+  }
+}

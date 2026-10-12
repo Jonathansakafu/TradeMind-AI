@@ -6,6 +6,9 @@ const LANGUAGES = [
   { code: "sw", label: "Kiswahili" },
   { code: "fr", label: "Français" },
   { code: "ar", label: "العربية" },
+  { code: "zh", label: "中文" },
+  { code: "ko", label: "한국어" },
+  { code: "ja", label: "日本語" },
 ];
 
 // variant="inline" renders a labeled row (matches ThemeToggle's inline

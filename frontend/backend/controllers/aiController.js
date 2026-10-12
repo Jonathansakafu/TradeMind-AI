@@ -396,7 +396,7 @@ exports.askQuestionStream = async (req, res) => {
 exports.translateForSpeech = async (req, res) => {
   try {
     const { text, lang } = req.body || {};
-    if (!text || !["sw", "fr", "ar"].includes(lang)) return res.status(400).json({ message: "text and lang (sw|fr|ar) required" });
+    if (!text || !["sw", "fr", "ar", "zh", "ko", "ja"].includes(lang)) return res.status(400).json({ message: "text and lang (sw|fr|ar|zh|ko|ja) required" });
     res.json({ text: await claudeAI.translateForSpeech(text, lang) });
   } catch (err) {
     console.error("Speech translation failed:", err.message);

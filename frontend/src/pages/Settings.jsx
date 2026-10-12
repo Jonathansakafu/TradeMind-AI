@@ -17,6 +17,9 @@ const LANGUAGES = [
   { code: "sw", label: "Kiswahili" },
   { code: "fr", label: "Français" },
   { code: "ar", label: "العربية" },
+  { code: "zh", label: "中文" },
+  { code: "ko", label: "한국어" },
+  { code: "ja", label: "日本語" },
 ];
 import RiskSettings from "../components/RiskSettings";
 import ReadAloudSettings from "../components/ReadAloudSettings";

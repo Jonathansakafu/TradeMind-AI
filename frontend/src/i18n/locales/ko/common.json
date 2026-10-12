@@ -1,0 +1,70 @@
+{
+  "nav": {
+    "dashboard": "대시보드",
+    "addTrade": "거래 추가",
+    "tradeHistory": "거래 내역",
+    "performance": "성과",
+    "aiAnalytics": "AI 분석",
+    "askAI": "AI에게 묻기",
+    "liveAnalysis": "실시간 분석",
+    "mt5AutoTrade": "MT5 자동 거래",
+    "tradingView": "TradingView 알림",
+    "tradingRobot": "트레이딩 로봇",
+    "forexNews": "외환 뉴스",
+    "calendar": "경제 캘린더",
+    "notifications": "알림",
+    "liveCharts": "실시간 차트",
+    "userGuide": "사용 가이드",
+    "settings": "설정",
+    "logout": "로그아웃",
+    "live": "실시간",
+    "auto": "자동"
+  },
+  "buttons": {
+    "save": "저장",
+    "cancel": "취소",
+    "login": "로그인",
+    "register": "회원가입",
+    "logout": "로그아웃",
+    "confirm": "확인",
+    "delete": "삭제",
+    "edit": "편집",
+    "close": "닫기",
+    "search": "검색",
+    "refresh": "새로고침"
+  },
+  "fields": {
+    "email": "이메일",
+    "password": "비밀번호",
+    "name": "이름",
+    "confidence": "신뢰도",
+    "reasoning": "근거"
+  },
+  "errors": {
+    "somethingWrong": "문제가 발생했습니다"
+  },
+  "status": {
+    "loading": "불러오는 중...",
+    "win": "수익",
+    "loss": "손실",
+    "buy": "매수",
+    "sell": "매도",
+    "wait": "대기",
+    "entry": "Entry",
+    "stopLoss": "Stop Loss",
+    "takeProfit": "Take Profit",
+    "demo": "데모",
+    "real": "실계좌"
+  },
+  "appName": "TradeMind AI",
+  "speech": {
+    "question": "어떤 언어로 들으시겠어요?",
+    "note": "거래 용어(BUY, SELL, stop loss, take profit, pips, CPI, NFP…)와 모든 숫자는 의미가 바뀌지 않도록 영어로 유지됩니다.",
+    "remember": "다음에도 기억됩니다. 바꾸려면 🔊 옆의 EN / KO 표시를 누르세요(또는 설정 → Read aloud).",
+    "noVoice": "이 기기에는 {{lang}} 음성이 없어 영어로 읽습니다. 휴대폰의 텍스트 음성 변환 설정에서 추가할 수 있습니다.",
+    "noTranslate": "지금은 번역할 수 없어 영어로 읽습니다.",
+    "read": "소리 내어 읽기",
+    "stop": "읽기 중지",
+    "change": "듣기 언어 변경"
+  }
+}

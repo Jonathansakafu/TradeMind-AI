@@ -1,0 +1,69 @@
+{
+  "title": "設定",
+  "subtitle": "アカウントを管理",
+  "appearance": "表示",
+  "language": "言語",
+  "profile": {
+    "title": "プロフィール",
+    "name": "名前",
+    "email": "メール",
+    "saveProfile": "プロフィールを保存",
+    "updated": "プロフィールを更新しました！",
+    "failed": "失敗"
+  },
+  "password": {
+    "title": "パスワード変更",
+    "current": "現在のパスワード",
+    "new": "新しいパスワード",
+    "confirm": "新しいパスワード（確認）",
+    "update": "パスワードを更新",
+    "noMatch": "パスワードが一致しません",
+    "tooShort": "パスワードは 6 文字以上にしてください",
+    "updated": "パスワードを更新しました！",
+    "failed": "失敗"
+  },
+  "account": {
+    "title": "アカウント",
+    "logout": "ログアウト"
+  },
+  "alerts": {
+    "title": "アプリ外の通知",
+    "subtitle": "TradeMind を開いていなくても新しいシグナルを受け取れます。",
+    "pushTitle": "この端末のプッシュ通知",
+    "turnOn": "オン",
+    "turnOff": "オフ",
+    "pushEnabled": "この端末のプッシュ通知をオンにしました。",
+    "pushDisabled": "この端末のプッシュ通知をオフにしました。",
+    "otherDevices": "他の {{count}} 台の端末でもオン",
+    "emailTitle": "メール通知",
+    "emailTo": "{{email}} に送信",
+    "emailMinConfidence": "次の信頼度以上のシグナルのみメール送信",
+    "sendTest": "テスト通知を送信",
+    "failed": "失敗",
+    "state": {
+      "on": "オン — 通知がここに表示されます",
+      "off": "オフ",
+      "denied": "ブロック中 — ブラウザ/スマホの設定で TradeMind の通知を許可してください",
+      "unsupported": "このブラウザ/端末では使えません（iPhone はまずホーム画面に追加してください）",
+      "needsUpdate": "プッシュ通知を使うにはアプリを更新してください"
+    },
+    "result": {
+      "skipped": "送信なし",
+      "noDevices": "登録された端末がありません",
+      "sent": "送信済み",
+      "sentTo": "{{count}} 台の端末に送信"
+    },
+    "channel": {
+      "browser": "ブラウザ",
+      "android": "Android アプリ",
+      "email": "メール"
+    }
+  },
+  "theme": {
+    "title": "テーマ",
+    "dark": "ダーク",
+    "light": "ライト",
+    "auto": "自動",
+    "autoNote": "昼はライト、午後 7 時から午前 7 時まではダーク。"
+  }
+}

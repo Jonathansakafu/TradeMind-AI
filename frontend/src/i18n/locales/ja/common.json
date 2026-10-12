@@ -1,0 +1,70 @@
+{
+  "nav": {
+    "dashboard": "ダッシュボード",
+    "addTrade": "取引を追加",
+    "tradeHistory": "取引履歴",
+    "performance": "パフォーマンス",
+    "aiAnalytics": "AI 分析",
+    "askAI": "AI に質問",
+    "liveAnalysis": "リアルタイム分析",
+    "mt5AutoTrade": "MT5 自動売買",
+    "tradingView": "TradingView アラート",
+    "tradingRobot": "トレーディングロボット",
+    "forexNews": "FX ニュース",
+    "calendar": "経済カレンダー",
+    "notifications": "通知",
+    "liveCharts": "ライブチャート",
+    "userGuide": "ユーザーガイド",
+    "settings": "設定",
+    "logout": "ログアウト",
+    "live": "ライブ",
+    "auto": "自動"
+  },
+  "buttons": {
+    "save": "保存",
+    "cancel": "キャンセル",
+    "login": "ログイン",
+    "register": "登録",
+    "logout": "ログアウト",
+    "confirm": "確認",
+    "delete": "削除",
+    "edit": "編集",
+    "close": "閉じる",
+    "search": "検索",
+    "refresh": "更新"
+  },
+  "fields": {
+    "email": "メール",
+    "password": "パスワード",
+    "name": "名前",
+    "confidence": "信頼度",
+    "reasoning": "根拠"
+  },
+  "errors": {
+    "somethingWrong": "問題が発生しました"
+  },
+  "status": {
+    "loading": "読み込み中...",
+    "win": "勝ち",
+    "loss": "負け",
+    "buy": "買い",
+    "sell": "売り",
+    "wait": "様子見",
+    "entry": "Entry",
+    "stopLoss": "Stop Loss",
+    "takeProfit": "Take Profit",
+    "demo": "デモ",
+    "real": "リアル"
+  },
+  "appName": "TradeMind AI",
+  "speech": {
+    "question": "どの言語で聞きますか？",
+    "note": "取引用語（BUY、SELL、stop loss、take profit、pips、CPI、NFP…）とすべての数字は、意味が変わらないよう英語のままです。",
+    "remember": "次回も記憶されます。変更するには 🔊 の横の EN / JA ラベルをタップしてください（または 設定 → Read aloud）。",
+    "noVoice": "この端末には{{lang}}の音声がないため英語で読み上げます。スマートフォンの音声合成設定で追加できます。",
+    "noTranslate": "今は翻訳できないため英語で読み上げます。",
+    "read": "読み上げ",
+    "stop": "読み上げを停止",
+    "change": "聞く言語を変更"
+  }
+}
