@@ -1,4 +1,5 @@
 const Groq = require("groq-sdk");
+const economicCalendar = require("./economicCalendar");
 const pipelineStats = require("./pipelineStats");
 const geminiText = require("./geminiText");
 const ragService = require("./ragService");
@@ -289,9 +290,48 @@ const MARKET_TOOLS = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "get_economic_calendar",
+      description: "This week's high-impact economic releases (NFP / non-farm payrolls, CPI, FOMC / Fed and other central-bank rate decisions, GDP, unemployment...) with date and time in UTC, currency, forecast and previous value. Call this for ANY question about economic news, the calendar, NFP, CPI, the Fed, or when a release is. Only the current week is available.",
+      parameters: {
+        type: "object",
+        properties: {
+          currency: { type: "string", description: "Optional filter, e.g. USD, EUR, GBP. Omit for all." },
+        },
+      },
+    },
+  },
 ];
 
+// This week's high-impact events as plain data for the AI.
+async function calendarData(currency) {
+  const events = await economicCalendar.getHighImpactEvents();
+  if (!events) return { error: "The economic calendar is unavailable right now." };
+  const ccy = currency ? String(currency).toUpperCase().slice(0, 3) : null;
+  return {
+    note: "Times are UTC. Only this week's high-impact events are available.",
+    events: events
+      .filter((e) => !ccy || e.currency === ccy)
+      .map((e) => ({
+        timeUTC: e.time.toISOString().replace(".000Z", "Z"),
+        currency: e.currency,
+        event: e.title,
+        forecast: e.forecast || null,
+        previous: e.previous || null,
+        topTier: economicCalendar.isTopTier(e),
+        status: e.time < new Date() ? "released" : "upcoming",
+      })),
+  };
+}
+
 async function executeMarketTool(name, rawArgs) {
+  if (name === "get_economic_calendar") {
+    let args = {};
+    try { args = JSON.parse(rawArgs || "{}"); } catch { /* no args */ }
+    return calendarData(args.currency);
+  }
   if (name !== "get_market_snapshot") {
     return { error: `Unknown tool "${name}"` };
   }
@@ -371,6 +411,25 @@ async function askGroqWithTools(messages) {
 // only `tool_calls` deltas (no content), which are accumulated by index
 // per the OpenAI-compatible streaming shape, executed once the turn ends,
 // then a second streamed completion carries the actual answer.
+// gpt-oss was trained with built-in browser/search tools and sometimes calls
+// them (typically for news / calendar questions). Groq rejects a call to a
+// tool that wasn't offered (400 "tool_use_failed"), which used to fail the
+// whole Ask AI answer. Detect that so the caller can retry without tools.
+function isToolCallRejection(err) {
+  const msg = `${err?.error?.error?.code || ""} ${err?.message || ""}`;
+  return err?.status === 400 && /tool_use_failed|tool call|not in request\.tools|tool choice/i.test(msg);
+}
+
+async function* streamGroqPlain(messages) {
+  const stream = await getGroqClient().chat.completions.create({
+    model: GROQ_MODEL_CHAT, messages, temperature: 0.3, max_tokens: 1500, reasoning_effort: "low", stream: true,
+  });
+  for await (const chunk of stream) {
+    const delta = chunk.choices?.[0]?.delta?.content;
+    if (delta) yield delta;
+  }
+}
+
 async function* streamGroqWithTools(messages) {
   let stream;
   try {
@@ -385,6 +444,13 @@ async function* streamGroqWithTools(messages) {
       stream: true,
     });
   } catch (err) {
+    pipelineStats.inc("chat.groqError");
+    pipelineStats.recordError("chat", err.message);
+    if (isToolCallRejection(err)) {
+      pipelineStats.inc("chat.toolRetry");
+      yield* streamGroqPlain(messages);
+      return;
+    }
     if (isRateLimitError(err)) throw new Error(rateLimitMessage(err), { cause: err });
     throw err;
   }
@@ -1020,9 +1086,28 @@ exports.answerQuestion = async (question, retrievedChunks = [], extra = {}) => {
 // generated, for the streaming (SSE) chat endpoint. No JSON wrapper here
 // -- partial JSON can't be rendered progressively, so this asks for and
 // streams plain prose directly.
+// News / calendar questions get this week's real calendar in the context
+// up front, so the answer has real dates even on the backup AI (which has
+// no tools) or if the model skips the tool.
+const NEWS_QUESTION = /\b(cpi|nfp|non-?farm|payroll|calendar|fomc|fed|interest rate|rate decision|ecb|boe|gdp|inflation|unemployment|jobs report|economic news|news (today|this week|tomorrow)|release)\b/i;
+
+async function calendarContext(question) {
+  if (!NEWS_QUESTION.test(question || "")) return "";
+  try {
+    const data = await calendarData();
+    if (!data.events) return "";
+    return `\n\nEconomic calendar (real data, this week, times in UTC — use it to answer; the trader is in East Africa Time, UTC+3):\n${data.events.map((e) => `- ${e.timeUTC} ${e.currency} ${e.event}${e.forecast ? `, forecast ${e.forecast}` : ""}${e.previous ? `, previous ${e.previous}` : ""}${e.topTier ? " (top-tier)" : ""} [${e.status}]`).join("\n")}`;
+  } catch {
+    return "";
+  }
+}
+
+const BUSY_MESSAGE = "The AI is busy right now (both AI services are at their limit). Please try again in a few minutes.";
+
 exports.streamAnswer = async function* (question, retrievedChunks = [], extra = {}) {
   const ragCtx = ragService.buildPromptContext({ retrievedChunks, bookSummary: extra.bookSummary });
   const messages = buildAnswerMessages(question, ragCtx, { jsonMode: false, history: extra.history });
+  messages[0].content += await calendarContext(question);
 
   // Falls back to Gemini only if Groq fails before sending any text --
   // switching models halfway through an answer would garble it.
@@ -1034,7 +1119,12 @@ exports.streamAnswer = async function* (question, retrievedChunks = [], extra = 
     }
   } catch (err) {
     if (started) throw err;
-    yield* geminiText.streamChat(messages);
+    try {
+      yield* geminiText.streamChat(messages);
+    } catch (gErr) {
+      pipelineStats.recordError("chat", `backup failed: ${gErr.message}`);
+      throw new Error(BUSY_MESSAGE, { cause: gErr });
+    }
   }
 };
 
