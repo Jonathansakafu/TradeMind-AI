@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Volume2 } from "lucide-react";
 import { getSpeechPrefs, setSpeechPrefs, onSpeechPrefsChange, LANG_NAMES } from "../utils/speechPrefs";
 import { loadVoices, voicesFor, pickVoice } from "../utils/voices";
 import SpeakButton from "./SpeakButton";
@@ -20,7 +19,7 @@ function ReadAloudSettings() {
 
   const seg = (value, current, onClick, label) => (
     <button key={value} onClick={onClick} aria-pressed={current === value}
-      className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${current === value ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow" : "text-slate-500 dark:text-slate-400"}`}>
+      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${current === value ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow" : "text-slate-500 dark:text-slate-400"}`}>
       {label}
     </button>
   );
@@ -28,11 +27,7 @@ function ReadAloudSettings() {
   const langChoice = prefs.langChoice[appLang] || "ask";
 
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6">
-      <h3 className="text-xl font-bold flex items-center gap-2 mb-2 text-slate-900 dark:text-white">
-        <Volume2 size={20} className="text-green-600 dark:text-green-400" /> Read aloud
-      </h3>
-      <p className="text-sm text-slate-500 dark:text-slate-400 mb-5">For the 🔊 button. A male voice is used when your device has one.</p>
+    <div>
       <div className="space-y-4">
         <div>
           <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">Speed</p>
@@ -56,7 +51,7 @@ function ReadAloudSettings() {
           <div>
             <label className="text-sm text-slate-500 dark:text-slate-400 mb-1 block" htmlFor="tm-voice">Voice</label>
             <select id="tm-voice" value={prefs.voice.en || ""} onChange={(e) => setVoice(e.target.value)}
-              className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-xl text-slate-900 dark:text-white text-sm">
+              className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3 py-2 rounded-xl text-slate-900 dark:text-white text-sm">
               <option value="">Automatic — {current ? `${current.male ? "male" : "default"} voice (${current.name})` : "device default"}</option>
               {english.map((v) => (
                 <option key={v.id} value={v.id}>{v.male ? "♂ Male · " : ""}{v.name} · {v.lang}{v.local ? "" : " · online (slower to start)"}</option>

@@ -1,20 +1,35 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import axios from "axios";
 import MainLayout from "../layouts/MainLayout";
-import { Save, User, Lock, CheckCircle, Palette, LogOut } from "lucide-react";
+import { Save, User, Lock, CheckCircle, Palette, LogOut, BellRing, Wallet, Volume2, Moon, Sun, SunMoon } from "lucide-react";
 import { API_URL } from "../config/api";
-import ThemeToggle from "../components/ThemeToggle";
-import LanguageToggle from "../components/LanguageToggle";
 import SpeakButton from "../components/SpeakButton";
 import AlertSettings from "../components/AlertSettings";
+import SettingsSection from "../components/SettingsSection";
+import { useTheme } from "../hooks/useTheme";
+import { useRiskSettings } from "../hooks/useRiskSettings";
+import { getSpeechPrefs, onSpeechPrefsChange } from "../utils/speechPrefs";
+
+const LANGUAGES = [
+  { code: "en", label: "English" },
+  { code: "sw", label: "Kiswahili" },
+  { code: "fr", label: "Français" },
+  { code: "ar", label: "العربية" },
+];
 import RiskSettings from "../components/RiskSettings";
 import ReadAloudSettings from "../components/ReadAloudSettings";
 import { useAuth } from "../hooks/useAuth";
 
 function Settings() {
-  const { t } = useTranslation(["settings", "common"]);
+  const { t, i18n } = useTranslation(["settings", "common"]);
+  const { mode, setMode } = useTheme();
+  const { settings: riskSettings } = useRiskSettings();
+  const [openSection, setOpenSection] = useState(null);
+  const [speech, setSpeech] = useState(getSpeechPrefs);
+  useEffect(() => onSpeechPrefsChange(setSpeech), []);
+  const readAloudSummary = `${speech.speed === "slow" ? "Slow & clear" : "Normal speed"} · ${speech.voice.en ? "your chosen voice" : "male voice when available"}`;
   const navigate = useNavigate();
   const { user, headers, logout, updateUser } = useAuth();
 
@@ -78,119 +93,102 @@ function Settings() {
 
   return (
     <MainLayout>
-      <div className="mb-8 flex items-start justify-between gap-4">
+      <div className="mb-5 flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-4xl font-bold text-slate-900 dark:text-white">{t("title", { ns: "settings" })}</h2>
-          <p className="text-slate-500 dark:text-slate-400 mt-2">{t("subtitle", { ns: "settings" })}</p>
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-slate-900 dark:text-white">{t("title", { ns: "settings" })}</h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{t("subtitle", { ns: "settings" })}</p>
         </div>
         <SpeakButton text={`${t("title", { ns: "settings" })}. ${t("subtitle", { ns: "settings" })}`} />
       </div>
 
-      <div className="max-w-xl space-y-6">
+      <div className="max-w-xl space-y-3">
 
-        {/* Appearance */}
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6">
-          <h3 className="text-xl font-bold flex items-center gap-2 mb-6 text-slate-900 dark:text-white">
-            <Palette size={20} className="text-green-600 dark:text-green-400" /> {t("appearance", { ns: "settings" })}
-          </h3>
-          <ThemeToggle variant="inline" />
-          <div className="mt-4">
-            <label className="text-sm text-slate-500 dark:text-slate-400 mb-1 block">{t("language", { ns: "settings" })}</label>
-            <LanguageToggle />
+        <SettingsSection id="appearance" icon={Palette} open={openSection === "appearance"} onToggle={setOpenSection}
+          title={t("appearance", { ns: "settings" })}
+          summary={`${t(`theme.${mode}`, { ns: "settings" })} · ${LANGUAGES.find((l) => l.code === i18n.resolvedLanguage)?.label || "English"}`}>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">{t("theme.title", { ns: "settings" })}</p>
+          <div className="grid grid-cols-3 gap-2 mb-4">
+            {[["dark", Moon], ["light", Sun], ["auto", SunMoon]].map(([m, Icon]) => (
+              <button key={m} onClick={() => setMode(m)} aria-pressed={mode === m}
+                className={`min-w-0 flex items-center justify-center gap-1 rounded-xl border px-1.5 py-2 text-xs sm:text-sm font-semibold transition ${mode === m ? "border-green-500 bg-green-500/10 text-green-700 dark:text-green-400" : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"}`}>
+                <Icon size={14} className="flex-shrink-0" /> <span className="truncate">{t(`theme.${m}`, { ns: "settings" })}</span>
+              </button>
+            ))}
           </div>
-        </div>
+          {mode === "auto" && <p className="text-xs text-slate-500 dark:text-slate-400 -mt-2 mb-4">{t("theme.autoNote", { ns: "settings" })}</p>}
+          <p className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">{t("language", { ns: "settings" })}</p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {LANGUAGES.map((l) => (
+              <button key={l.code} onClick={() => i18n.changeLanguage(l.code)} aria-pressed={i18n.resolvedLanguage === l.code}
+                className={`rounded-xl border px-2 py-2 text-sm font-semibold transition ${i18n.resolvedLanguage === l.code ? "border-green-500 bg-green-500/10 text-green-700 dark:text-green-400" : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"}`}>
+                {l.label}
+              </button>
+            ))}
+          </div>
+        </SettingsSection>
 
-        <AlertSettings />
+        <SettingsSection id="alerts" icon={BellRing} open={openSection === "alerts"} onToggle={setOpenSection}
+          title={t("alerts.title", { ns: "settings" })} summary={t("alerts.subtitle", { ns: "settings" })}>
+          <AlertSettings />
+        </SettingsSection>
 
-        <RiskSettings />
+        <SettingsSection id="risk" icon={Wallet} open={openSection === "risk"} onToggle={setOpenSection}
+          title="Risk"
+          summary={riskSettings?.balance ? `${riskSettings.currency} ${Number(riskSettings.balance).toLocaleString()} · ${riskSettings.riskPercent}% per trade · ${riskSettings.dailyLossLimitPercent}% daily limit` : "Set your balance to see lot sizes on signals"}>
+          <RiskSettings />
+        </SettingsSection>
 
-        <ReadAloudSettings />
+        <SettingsSection id="read" icon={Volume2} open={openSection === "read"} onToggle={setOpenSection}
+          title="Read aloud" summary={readAloudSummary}>
+          <ReadAloudSettings />
+        </SettingsSection>
 
-        {/* Profile */}
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6">
-          <h3 className="text-xl font-bold flex items-center gap-2 mb-6 text-slate-900 dark:text-white">
-            <User size={20} className="text-green-600 dark:text-green-400" /> {t("profile.title", { ns: "settings" })}
-          </h3>
-          <div className="space-y-4">
+        <SettingsSection id="profile" icon={User} open={openSection === "profile"} onToggle={setOpenSection}
+          title={t("profile.title", { ns: "settings" })} summary={[user.name, user.email].filter(Boolean).join(" · ")}>
+          <div className="space-y-3">
             <div>
-              <label className="text-sm text-slate-500 dark:text-slate-400 mb-1 block">{t("profile.name", { ns: "settings" })}</label>
-              <input
-                type="text"
-                value={profile.name}
-                onChange={(e) => setProfile({ ...profile, name: e.target.value })}
-                className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-xl outline-none focus:border-green-500 transition text-slate-900 dark:text-white"
-              />
+              <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">{t("profile.name", { ns: "settings" })}</label>
+              <input type="text" value={profile.name} onChange={(e) => setProfile({ ...profile, name: e.target.value })} className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm rounded-xl outline-none focus:border-green-500 transition text-slate-900 dark:text-white" />
             </div>
             <div>
-              <label className="text-sm text-slate-500 dark:text-slate-400 mb-1 block">{t("profile.email", { ns: "settings" })}</label>
-              <input
-                type="email"
-                value={profile.email}
-                disabled
-                className="w-full bg-slate-100/50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 p-3 rounded-xl text-slate-400 dark:text-slate-500 cursor-not-allowed"
-              />
+              <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">{t("profile.email", { ns: "settings" })}</label>
+              <input type="email" value={profile.email} disabled className="w-full bg-slate-100/50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm rounded-xl text-slate-400 dark:text-slate-500 cursor-not-allowed" />
             </div>
             {profileMsg && (
-              <p className={`text-sm ${profileMsg.type === "success" ? "text-green-600 dark:text-green-400" : "text-red-500 dark:text-red-400"}`}>
-                {profileMsg.text}
-              </p>
+              <p className={`text-sm ${profileMsg.type === "success" ? "text-green-600 dark:text-green-400" : "text-red-500 dark:text-red-400"}`}>{profileMsg.text}</p>
             )}
-            <button
-              onClick={updateProfile} disabled={loading}
-              className="flex items-center gap-2 bg-green-500 hover:bg-green-600 disabled:opacity-50 text-slate-950 font-bold px-6 py-3 rounded-xl transition"
-            >
-              <Save size={16} /> {t("profile.saveProfile", { ns: "settings" })}
+            <button onClick={updateProfile} disabled={loading} className="flex items-center gap-2 bg-green-500 hover:bg-green-600 disabled:opacity-50 text-slate-950 font-semibold text-sm px-4 py-2 rounded-xl transition">
+              <Save size={15} /> {t("profile.saveProfile", { ns: "settings" })}
             </button>
           </div>
-        </div>
+        </SettingsSection>
 
-        {/* Password */}
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6">
-          <h3 className="text-xl font-bold flex items-center gap-2 mb-6 text-slate-900 dark:text-white">
-            <Lock size={20} className="text-green-600 dark:text-green-400" /> {t("password.title", { ns: "settings" })}
-          </h3>
-          <div className="space-y-4">
+        <SettingsSection id="password" icon={Lock} open={openSection === "password"} onToggle={setOpenSection}
+          title={t("password.title", { ns: "settings" })}>
+          <div className="space-y-3">
             {["current", "newPass", "confirm"].map((field) => (
               <div key={field}>
-                <label className="text-sm text-slate-500 dark:text-slate-400 mb-1 block capitalize">
+                <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">
                   {field === "current" ? t("password.current", { ns: "settings" })
                     : field === "newPass" ? t("password.new", { ns: "settings" })
                     : t("password.confirm", { ns: "settings" })}
                 </label>
-                <input
-                  type="password"
-                  value={password[field]}
-                  onChange={(e) => setPassword({ ...password, [field]: e.target.value })}
-                  className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-xl outline-none focus:border-green-500 transition text-slate-900 dark:text-white"
-                />
+                <input type="password" value={password[field]} onChange={(e) => setPassword({ ...password, [field]: e.target.value })} className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm rounded-xl outline-none focus:border-green-500 transition text-slate-900 dark:text-white" />
               </div>
             ))}
             {passMsg && (
-              <p className={`text-sm ${passMsg.type === "success" ? "text-green-600 dark:text-green-400" : "text-red-500 dark:text-red-400"}`}>
-                {passMsg.text}
-              </p>
+              <p className={`text-sm ${passMsg.type === "success" ? "text-green-600 dark:text-green-400" : "text-red-500 dark:text-red-400"}`}>{passMsg.text}</p>
             )}
-            <button
-              onClick={updatePassword} disabled={loading}
-              className="flex items-center gap-2 bg-green-500 hover:bg-green-600 disabled:opacity-50 text-slate-950 font-bold px-6 py-3 rounded-xl transition"
-            >
-              <CheckCircle size={16} /> {t("password.update", { ns: "settings" })}
+            <button onClick={updatePassword} disabled={loading} className="flex items-center gap-2 bg-green-500 hover:bg-green-600 disabled:opacity-50 text-slate-950 font-semibold text-sm px-4 py-2 rounded-xl transition">
+              <CheckCircle size={15} /> {t("password.update", { ns: "settings" })}
             </button>
           </div>
-        </div>
+        </SettingsSection>
 
-        {/* Account */}
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6">
-          <h3 className="text-xl font-bold flex items-center gap-2 mb-6 text-slate-900 dark:text-white">
-            <LogOut size={20} className="text-red-500 dark:text-red-400" /> {t("account.title", { ns: "settings" })}
-          </h3>
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-500 dark:text-red-400 font-bold px-6 py-3 rounded-xl transition"
-          >
-            <LogOut size={16} /> {t("account.logout", { ns: "settings" })}
-          </button>
-        </div>
+        <button onClick={handleLogout}
+          className="w-full flex items-center justify-center gap-2 rounded-2xl border border-red-500/20 bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 font-semibold text-sm px-4 py-3 transition">
+          <LogOut size={16} /> {t("account.logout", { ns: "settings" })}
+        </button>
 
       </div>
     </MainLayout>

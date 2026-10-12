@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Wallet } from "lucide-react";
 import { useRiskSettings } from "../hooks/useRiskSettings";
 
 // Settings card: account balance, risk % per trade (drives the suggested
@@ -38,7 +37,7 @@ function RiskForm({ settings, save }) {
     }
   };
 
-  const input = "w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-xl outline-none focus:border-green-500 text-slate-900 dark:text-white";
+  const input = "w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm rounded-xl outline-none focus:border-green-500 text-slate-900 dark:text-white";
   const label = "text-sm text-slate-500 dark:text-slate-400 mb-1 block";
   const field = (key, text, props = {}) => (
     <div className="min-w-0">
@@ -48,11 +47,7 @@ function RiskForm({ settings, save }) {
   );
 
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6">
-      <h3 className="text-xl font-bold flex items-center gap-2 mb-2 text-slate-900 dark:text-white">
-        <Wallet size={20} className="text-green-600 dark:text-green-400" /> Risk
-      </h3>
-      <p className="text-sm text-slate-500 dark:text-slate-400 mb-5">Used to suggest a lot size on every signal and to warn you when today's losses reach your limit.</p>
+    <div>
       <div className="grid grid-cols-2 gap-3">
         {field("balance", "Account balance", { type: "number", min: 1, inputMode: "decimal", placeholder: "e.g. 1000" })}
         {field("currency", "Currency", { maxLength: 3 })}
@@ -67,7 +62,7 @@ function RiskForm({ settings, save }) {
       )}
       {msg && <p className={`text-sm mt-3 ${msg.type === "success" ? "text-green-600 dark:text-green-400" : "text-red-500"}`}>{msg.text}</p>}
       <button onClick={submit} disabled={busy}
-        className="mt-4 bg-green-500 hover:bg-green-600 disabled:opacity-50 text-slate-950 font-bold px-6 py-3 rounded-xl transition">
+        className="mt-4 bg-green-500 hover:bg-green-600 disabled:opacity-50 text-slate-950 font-semibold text-sm px-4 py-2 rounded-xl transition">
         Save risk settings
       </button>
     </div>

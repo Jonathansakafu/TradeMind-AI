@@ -58,5 +58,12 @@
       "android": "Android app",
       "email": "Email"
     }
+  },
+  "theme": {
+    "title": "Theme",
+    "dark": "Dark",
+    "light": "Light",
+    "auto": "Auto",
+    "autoNote": "Light by day, dark from 7 pm to 7 am."
   }
 }

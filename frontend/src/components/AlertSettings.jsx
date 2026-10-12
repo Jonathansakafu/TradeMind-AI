@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import axios from "axios";
-import { BellRing, Clock, Mail, Send, Smartphone } from "lucide-react";
+import { Clock, Mail, Send, Smartphone } from "lucide-react";
 import { API_URL } from "../config/api";
 import { useAuth } from "../hooks/useAuth";
 import { disablePush, enablePush, getPushState } from "../utils/pushNotifications";
@@ -95,17 +95,11 @@ function AlertSettings() {
     return `❌ ${t("alerts.failed")}`;
   };
 
-  const card = "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6";
-  const btn = "flex items-center gap-2 font-bold px-5 py-2.5 rounded-xl transition disabled:opacity-50";
+  const btn = "flex items-center gap-2 font-semibold text-sm px-4 py-2 rounded-xl transition disabled:opacity-50";
 
   return (
-    <div className={card}>
-      <h3 className="text-xl font-bold flex items-center gap-2 mb-2 text-slate-900 dark:text-white">
-        <BellRing size={20} className="text-green-600 dark:text-green-400" /> {t("alerts.title")}
-      </h3>
-      <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">{t("alerts.subtitle")}</p>
-
-      <div className="space-y-6">
+    <div>
+      <div className="space-y-5">
         {/* Push on this device */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
@@ -146,16 +140,16 @@ function AlertSettings() {
             <input
               type="checkbox"
               className="h-5 w-5 accent-green-500 shrink-0"
-              checked={!!status?.prefs.email}
+              checked={!!status?.prefs?.email}
               disabled={!status || busy}
               onChange={(e) => updatePrefs({ email: e.target.checked })}
             />
           </label>
-          {status?.prefs.email && (
+          {status?.prefs?.email && (
             <div className="flex flex-wrap items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
               <span>{t("alerts.emailMinConfidence")}</span>
               <select
-                value={status.prefs.emailMinConfidence}
+                value={status?.prefs?.emailMinConfidence ?? 70}
                 disabled={busy}
                 onChange={(e) => updatePrefs({ emailMinConfidence: Number(e.target.value) })}
                 className="bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2 py-1 rounded-lg text-slate-900 dark:text-white"
@@ -179,7 +173,7 @@ function AlertSettings() {
           <input
             type="checkbox"
             className="h-5 w-5 accent-green-500 shrink-0"
-            checked={status?.prefs.newsCountdown !== false}
+            checked={status?.prefs?.newsCountdown !== false}
             disabled={!status || busy}
             onChange={(e) => updatePrefs({ newsCountdown: e.target.checked })}
           />

@@ -58,5 +58,12 @@
       "android": "Programu ya Android",
       "email": "Barua pepe"
     }
+  },
+  "theme": {
+    "title": "Mandhari",
+    "dark": "Giza",
+    "light": "Mwanga",
+    "auto": "Otomatiki",
+    "autoNote": "Mwanga mchana, giza kuanzia saa 1 usiku hadi saa 1 asubuhi."
   }
 }

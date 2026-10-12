@@ -58,5 +58,12 @@
       "android": "Application Android",
       "email": "E-mail"
     }
+  },
+  "theme": {
+    "title": "Thème",
+    "dark": "Sombre",
+    "light": "Clair",
+    "auto": "Auto",
+    "autoNote": "Clair le jour, sombre de 19 h à 7 h."
   }
 }
