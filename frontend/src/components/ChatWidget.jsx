@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Sparkles, X, Send, Bot, User, BookOpen, History, HelpCircle, Image, MessageSquarePlus } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
+import MicButton from "./MicButton";
 import { useChatConversation } from "../hooks/useChatConversation";
 
 const SOURCE_ICONS = {
@@ -142,12 +143,13 @@ function ChatWidget() {
           <form onSubmit={ask} className="border-t border-slate-200 dark:border-slate-800 p-3 flex gap-2 flex-shrink-0">
             <input
               dir="auto"
-            type="text"
+              type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Ask a question..."
-              className="flex-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:border-green-500"
+              className="flex-1 min-w-0 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:border-green-500"
             />
+            <MicButton value={input} onChange={setInput} disabled={loading} compact />
             <button
               type="submit"
               disabled={loading || !input.trim()}

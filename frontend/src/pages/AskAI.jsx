@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import MainLayout from "../layouts/MainLayout";
 import { Sparkles, Send, BookOpen, History, HelpCircle, Image, User, Bot, MessageSquarePlus, MessagesSquare, Trash2 } from "lucide-react";
 import SpeakButton from "../components/SpeakButton";
+import MicButton from "../components/MicButton";
 import { useAuth } from "../hooks/useAuth";
 import { useChatConversation, fetchConversations, deleteConversation } from "../hooks/useChatConversation";
 
@@ -200,20 +201,21 @@ function AskAI() {
           <div ref={bottomRef} />
         </div>
 
-        <form onSubmit={askQuestion} className="border-t border-slate-200 dark:border-slate-800 p-4 flex gap-3">
+        <form onSubmit={askQuestion} className="border-t border-slate-200 dark:border-slate-800 p-3 sm:p-4 flex gap-2 sm:gap-3">
           <input
             dir="auto"
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Ask about your books or trade history..."
-            className="flex-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-green-500"
+            className="flex-1 min-w-0 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 sm:px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-green-500"
           />
+          <MicButton value={input} onChange={setInput} disabled={loading} />
           <button
             type="submit"
             disabled={loading || !input.trim()}
             aria-label="Send message"
-            className="flex items-center gap-2 bg-green-500 hover:bg-green-600 disabled:opacity-50 text-slate-950 font-semibold px-5 py-3 rounded-xl text-sm transition"
+            className="flex items-center gap-2 bg-green-500 hover:bg-green-600 disabled:opacity-50 text-slate-950 font-semibold px-4 sm:px-5 py-3 rounded-xl text-sm transition"
           >
             <Send size={16} />
           </button>
