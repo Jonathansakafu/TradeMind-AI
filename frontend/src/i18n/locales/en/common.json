@@ -60,10 +60,11 @@
   "speech": {
     "question": "Listen in which language?",
     "note": "Trading terms (BUY, SELL, stop loss, take profit, pips, CPI, NFP…) and all numbers stay in English so their meaning doesn't change.",
-    "remember": "Remembered for next time. Change it in Settings → Read aloud.",
+    "remember": "Remembered for next time. To change it, tap the EN / SW label next to 🔊 (or Settings → Read aloud).",
     "noVoice": "This device has no {{lang}} voice — reading in English. You can add one in your phone's text-to-speech settings.",
     "noTranslate": "Couldn't translate right now — reading in English.",
     "read": "Read aloud",
-    "stop": "Stop reading aloud"
+    "stop": "Stop reading aloud",
+    "change": "Change listening language"
   }
 }

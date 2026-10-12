@@ -60,10 +60,11 @@
   "speech": {
     "question": "Écouter dans quelle langue ?",
     "note": "Les termes de trading (BUY, SELL, stop loss, take profit, pips, CPI, NFP…) et tous les chiffres restent en anglais pour ne pas en changer le sens.",
-    "remember": "Mémorisé pour la prochaine fois. Modifiable dans Paramètres → Read aloud.",
+    "remember": "Mémorisé pour la prochaine fois. Pour changer, touchez l'étiquette EN / FR à côté de 🔊 (ou Paramètres → Read aloud).",
     "noVoice": "Cet appareil n'a pas de voix {{lang}} — lecture en anglais. Vous pouvez en ajouter une dans les réglages de synthèse vocale du téléphone.",
     "noTranslate": "Traduction impossible pour le moment — lecture en anglais.",
     "read": "Lire à voix haute",
-    "stop": "Arrêter la lecture"
+    "stop": "Arrêter la lecture",
+    "change": "Changer la langue d'écoute"
   }
 }

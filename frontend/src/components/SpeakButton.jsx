@@ -21,13 +21,13 @@ function SpeakButton({ text, className = "", size = 16 }) {
   }, [notice, clearNotice]);
 
   if (!isSupported || !text) return null;
+  const choice = appLang === "en" ? null : getSpeechPrefs().langChoice[appLang];
 
   const start = (mode) => speak(text, mode);
   const onClick = (e) => {
     e.stopPropagation();
     if (speaking) return stop();
     if (appLang === "en") return start("en");
-    const choice = getSpeechPrefs().langChoice[appLang];
     if (!choice) return setAsking(true);
     start(choice);
   };
@@ -48,6 +48,19 @@ function SpeakButton({ text, className = "", size = 16 }) {
       >
         {preparing ? <Loader2 size={size} className="animate-spin" /> : speaking ? <VolumeX size={size} /> : <Volume2 size={size} />}
       </button>
+
+      {/* Current listening language, tap to change it any time (the choice
+          used to be changeable only from Settings). */}
+      {choice && (
+        <button
+          onClick={(e) => { e.stopPropagation(); if (speaking) stop(); setAsking(true); }}
+          aria-label={t("speech.change")}
+          title={t("speech.change")}
+          className="ml-2 self-center rounded-md border border-slate-300 dark:border-slate-600 px-1.5 py-0.5 text-[10px] font-bold leading-none tracking-normal text-slate-500 dark:text-slate-400 hover:text-green-600 hover:border-green-500/60 transition"
+        >
+          {choice === "en" ? "EN" : appLang.toUpperCase()}
+        </button>
+      )}
 
       {notice && (
         <span role="status" className="absolute z-50 top-full mt-2 right-0 w-60 rounded-xl bg-slate-900 text-white dark:bg-slate-700 text-xs p-2.5 shadow-xl font-normal leading-snug tracking-normal">
