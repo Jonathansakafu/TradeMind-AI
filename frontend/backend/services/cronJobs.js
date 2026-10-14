@@ -97,8 +97,10 @@ async function runCycle() {
 
   // Ongoing group-recorded trades: close at TP / SL once their signal hit one.
   try {
-    const { closed, reminded } = await require("./ongoingTrades").settle();
-    if (closed || reminded) console.log(`🔒 Closed ${closed} ongoing trade(s), ${reminded} expiry reminder(s)`);
+    const r = await require("./ongoingTrades").settle();
+    pipelineStats.inc("trades.autoClosed", r.closed);
+    pipelineStats.inc("trades.autoRecorded", r.recorded);
+    if (r.closed || r.recorded || r.reminded) console.log(`🔒 Closed ${r.closed} trade(s), recorded ${r.recorded} taken signal(s), ${r.reminded} expiry reminder(s)`);
   } catch (err) {
     console.error("Ongoing trades settle failed:", err.message);
   }

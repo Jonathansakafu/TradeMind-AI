@@ -75,6 +75,12 @@ const tradeSchema = new mongoose.Schema({
   expiryReminded: { type: Boolean },
   // The trader's own screenshot (upload / screen capture) -- never replaced by a chart.
   screenshotIsUpload: { type: Boolean },
+  // Chart at the close (how price hit TP / SL), when the trade was closed
+  // automatically from its signal (services/ongoingTrades.js).
+  resultScreenshot: {
+    url: { type: String },
+    publicId: { type: String },
+  },
 }, { timestamps: true });
 
 tradeSchema.index({ user: 1, createdAt: -1 });

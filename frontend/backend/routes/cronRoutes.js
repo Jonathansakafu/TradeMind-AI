@@ -113,6 +113,17 @@ router.get("/health", async (req, res) => {
       },
       users,
       usersWithPushDevices: pushUsers,
+      // Should both be 0 a cycle after a signal hits TP / SL (services/ongoingTrades.js).
+      tradesFollowingSignals: await (async () => {
+        const Trade = require("../models/Trade");
+        const open = await Trade.find({ status: "open", notificationId: { $exists: true, $ne: null } }).select("notificationId locked").populate("notificationId", "simOutcome").lean();
+        const takenNotRecorded = await Notification.countDocuments({ taken: true, $or: [{ tradeId: { $exists: false } }, { tradeId: null }], simOutcome: { $in: ["win", "loss"] }, createdAt: { $gte: new Date(now - 7 * 864e5) } });
+        return {
+          open: open.length,
+          openWithSignalAtTpSl: open.filter((t) => ["win", "loss"].includes(t.notificationId?.simOutcome)).length,
+          takenNotRecorded,
+        };
+      })().catch((err) => ({ error: err.message })),
       emailAlerts: {
         byMinConfidence: Object.fromEntries(emailPrefs.map((r) => [`${r._id}%+`, { users: r.users, emailsCountedToday: r.sentToday }])),
         signalConfidence24h: Object.fromEntries(confidence24h.map((r) => [r._id === "other" ? "other" : `${r._id}+`, r.n])),

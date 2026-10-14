@@ -4,7 +4,7 @@ import axios from "axios";
 import MainLayout from "../layouts/MainLayout";
 import {
   TrendingUp, TrendingDown, Search, Download,
-  X, CheckCircle, RefreshCw, LineChart, Pencil, FileText, Lock, CandlestickChart
+  X, CheckCircle, RefreshCw, LineChart, Pencil, FileText, Lock, CandlestickChart, ImageIcon
 } from "lucide-react";
 import { API_URL } from "../config/api";
 import { downloadFile } from "../utils/nativeDownload";
@@ -20,6 +20,7 @@ import { calculatePL, PIP_VALUES, PIP_DECIMALS } from "../utils/tradePL";
 import LivePositions, { LiveDuration } from "../components/LivePositions";
 import DaySummary from "../components/DaySummary";
 import ChartModal from "../components/ChartModal";
+import ScreenshotViewer from "../components/ScreenshotViewer";
 import { useRiskSettings } from "../hooks/useRiskSettings";
 import { fmtDuration, tradeDuration } from "../utils/livePL";
 
@@ -61,6 +62,7 @@ function TradeHistory() {
   const [editEntry, setEditEntry] = useState("");
   const [editExit, setEditExit] = useState("");
   const [chartTrade, setChartTrade] = useState(null); // trade whose analysis chart is open
+  const [shotTrade, setShotTrade] = useState(null); // trade whose screenshots are open
   const [editLoading, setEditLoading] = useState(false);
   const { headers } = useAuth();
   // Full table only from 1280px: at 1024 the sidebar leaves ~640px, too
@@ -459,6 +461,12 @@ function TradeHistory() {
                     >
                       <CandlestickChart size={14} />
                     </button>
+                    {(trade.screenshot?.url || trade.resultScreenshot?.url) && (
+                      <button onClick={() => setShotTrade(trade)} aria-label="Screenshots"
+                        className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-300">
+                        <ImageIcon size={14} />
+                      </button>
+                    )}
                     <button
                       onClick={() => navigate("/charts", {
                         state: { symbol: TRADINGVIEW_SYMBOLS[trade.pair] }
@@ -646,6 +654,12 @@ function TradeHistory() {
                       {/* Actions */}
                       <td className="px-4 py-3.5">
                         <div className="flex items-center gap-2">
+                          {(trade.screenshot?.url || trade.resultScreenshot?.url) && (
+                            <button onClick={() => setShotTrade(trade)} title="Screenshots" aria-label="Screenshots"
+                              className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-300 transition">
+                              <ImageIcon size={13} />
+                            </button>
+                          )}
                           <button
                             onClick={() => setChartTrade(trade)}
                             title="Trade chart with analysis"
@@ -1010,6 +1024,7 @@ function TradeHistory() {
         </div>
       )}
 
+      {shotTrade && <ScreenshotViewer trade={shotTrade} onClose={() => setShotTrade(null)} />}
       {chartTrade && (
         <ChartModal
           tradeId={chartTrade._id}
