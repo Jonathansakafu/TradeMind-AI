@@ -5,9 +5,11 @@ import MainLayout from "../layouts/MainLayout";
 import { Upload, X, CheckCircle, Calculator, Camera, Sparkles, LineChart } from "lucide-react";
 import { API_URL } from "../config/api";
 import SnapshotCaptureModal from "../components/SnapshotCaptureModal";
+import ConfirmTradeModal from "../components/ConfirmTradeModal";
 import { useAuth } from "../hooks/useAuth";
 import { RiskRewardText } from "../components/RiskReward";
 import { riskReward, breakevenWinRate } from "../utils/riskReward";
+import { calculatePL } from "../utils/tradePL";
 
 const PAIRS = [
   "EURUSD","GBPUSD","USDJPY","USDCHF","AUDUSD",
@@ -22,20 +24,6 @@ const SETUPS = [
   "Breakout","ICT Concept","Supply & Demand","Other"
 ];
 
-const PIP_VALUES = {
-  EURUSD: 10, GBPUSD: 10, AUDUSD: 10, NZDUSD: 10,
-  USDCAD: 10, USDCHF: 10, EURGBP: 10, AUDCAD: 10,
-  AUDCHF: 10, USDJPY: 9.1, GBPJPY: 9.1, EURJPY: 9.1,
-  AUDJPY: 9.1, CADJPY: 9.1, XAUUSD: 10,
-  BTCUSD: 1, ETHUSD: 1, XRPUSD: 1, BNBUSD: 1, SOLUSD: 1,
-};
-
-const PIP_DECIMALS = {
-  USDJPY: 100, GBPJPY: 100, EURJPY: 100,
-  AUDJPY: 100, CADJPY: 100, XAUUSD: 100,
-  BTCUSD: 1, ETHUSD: 1, XRPUSD: 1, BNBUSD: 1, SOLUSD: 1,
-};
-
 const detectSession = () => {
   const utcHour = new Date().getUTCHours();
   if (utcHour >= 22 || utcHour < 7) return "sydney";
@@ -45,22 +33,11 @@ const detectSession = () => {
   return "new_york";
 };
 
-const calculatePL = (pair, direction, entryPrice, exitPrice, lotSize) => {
-  if (!pair || !entryPrice || !exitPrice || !lotSize) return null;
-  const entry = parseFloat(entryPrice);
-  const exit = parseFloat(exitPrice);
-  const lots = parseFloat(lotSize);
-  if (isNaN(entry) || isNaN(exit) || isNaN(lots)) return null;
-  const pipDecimal = PIP_DECIMALS[pair] || 10000;
-  const pipValue = PIP_VALUES[pair] || 10;
-  const priceDiff = direction === "buy" ? exit - entry : entry - exit;
-  const pips = priceDiff * pipDecimal;
-  const pl = pips * pipValue * lots;
-  return {
-    pips: pips.toFixed(1),
-    pl: pl.toFixed(2),
-    outcome: pl > 0 ? "win" : pl < 0 ? "loss" : "breakeven",
-  };
+// "YYYY-MM-DDTHH:mm" in the phone's own time zone, for datetime-local inputs.
+const localInput = (d) => {
+  const t = new Date(d);
+  if (isNaN(t)) return "";
+  return new Date(t.getTime() - t.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 };
 
 function FormField({ label, name, value, onChange, type = "text", placeholder, step, required }) {
@@ -129,14 +106,22 @@ function AddTrade() {
     return null;
   };
 
-  const signalData = getSignalData();
+  // Read once: the sessionStorage copy is removed on reading, so reading it
+  // again on the next render lost the signal (banner, link to the signal).
+  const [signalData] = useState(getSignalData);
+  // TradeMind scored the signal against real prices: it hit the take profit
+  // (win) or the stop loss (loss) -- so the exit is known, like the entry.
+  const exitFrom = signalData?.simOutcome === "win" && signalData?.takeProfit ? "tp"
+    : signalData?.simOutcome === "loss" && signalData?.stopLoss ? "sl" : null;
+  const [confirming, setConfirming] = useState(false);
 
   const [form, setForm] = useState({
     pair: signalData?.pair || "",
     direction: signalData?.signal === "buy" ? "buy"
       : signalData?.signal === "sell" ? "sell" : "",
     entryPrice: signalData?.entry ? String(signalData.entry) : "",
-    exitPrice: "",
+    exitPrice: exitFrom === "tp" ? String(signalData.takeProfit) : exitFrom === "sl" ? String(signalData.stopLoss) : "",
+    exitFilledFrom: exitFrom, // shown in the confirmation; cleared when the trader edits the exit
     stopLoss: signalData?.stopLoss ? String(signalData.stopLoss) : "",
     takeProfit: signalData?.takeProfit ? String(signalData.takeProfit) : "",
     lotSize: "",
@@ -144,7 +129,8 @@ function AddTrade() {
     notes: signalData
       ? `AI Signal — ${signalData.sourceLabel || "AI Auto"}\n${signalData.reasoning || ""}`
       : "",
-    openedAt: new Date().toISOString().slice(0, 16),
+    openedAt: signalData?.createdAt ? localInput(signalData.createdAt) : localInput(new Date()),
+    closedAt: exitFrom && signalData?.simResolvedAt ? signalData.simResolvedAt : "",
     session: detectSession(),
   });
 
@@ -154,7 +140,18 @@ function AddTrade() {
   );
 
   const handleChange = (e) =>
-    setForm({ ...form, [e.target.name]: e.target.value });
+    setForm({
+      ...form,
+      [e.target.name]: e.target.value,
+      ...(e.target.name === "exitPrice" ? { exitFilledFrom: null, closedAt: "" } : {}),
+    });
+
+  // Edits made in the confirmation window.
+  const changePrices = (patch) => setForm((f) => ({
+    ...f,
+    ...patch,
+    ...("exitPrice" in patch ? { exitFilledFrom: null, closedAt: "" } : {}),
+  }));
 
   // Sends the screenshot to Gemini to identify which setup it shows, and
   // pre-fills the Setup field with the result -- the trader can still
@@ -244,24 +241,41 @@ function AddTrade() {
     }
   };
 
-  const handleSubmit = async () => {
+  // Save Trade opens the confirmation (entry, exit, result, screenshot);
+  // the trade is saved from there.
+  const handleSubmit = () => {
     if (!form.pair || !form.direction || !form.entryPrice || !form.lotSize) {
       alert("Please fill required fields: Pair, Direction, Entry Price, Lot Size");
       return;
     }
-    if (!screenshot) {
-      alert("Please attach a chart screenshot — capture your screen or upload one, so this trade has entry/SL/TP/result visible for future review.");
+    setConfirming(true);
+  };
+
+  // generatedShot: the chart snapshot made in the confirmation when the
+  // trader attached no screenshot of their own.
+  const saveTrade = async (generatedShot) => {
+    const shot = screenshot || generatedShot;
+    if (!shot) {
+      alert("Please attach a chart screenshot — capture your screen or upload one.");
       return;
     }
     setLoading(true);
     try {
       const formData = new FormData();
-      Object.entries(form).forEach(([k, v]) => { if (v) formData.append(k, v); });
+      const { closedAt } = form;
+      Object.entries(form).forEach(([k, v]) => {
+        if (v && k !== "exitFilledFrom" && k !== "closedAt") formData.append(k, v);
+      });
+      // A trade with an exit price is a closed trade.
+      if (form.exitPrice) {
+        formData.append("status", "closed");
+        formData.append("closedAt", closedAt || new Date().toISOString());
+      }
       if (calculated) {
         formData.append("profitLoss", calculated.pl);
         formData.append("outcome", calculated.outcome);
       }
-      formData.append("screenshot", screenshot);
+      formData.append("screenshot", shot);
       // Links the trade to the signal it came from (marks that signal as
       // taken and shows this trade's result on it later).
       if (signalData?.notificationId) formData.append("notificationId", signalData.notificationId);
@@ -271,6 +285,7 @@ function AddTrade() {
           "Content-Type": "multipart/form-data",
         },
       });
+      setConfirming(false);
       navigate("/history");
     } catch (err) {
       alert(err.response?.data?.message || "Failed to save trade");
@@ -298,6 +313,13 @@ function AddTrade() {
             <p className="text-slate-500 dark:text-slate-400 text-xs mt-1">
               Review and adjust if needed before saving
             </p>
+            {exitFrom && (
+              <p className={`text-xs font-semibold mt-1.5 ${exitFrom === "tp" ? "text-green-600 dark:text-green-400" : "text-red-500"}`}>
+                {exitFrom === "tp" ? "🎯 This signal hit its take profit" : "🛑 This signal hit its stop loss"}
+                {signalData.simResolvedAt ? ` on ${new Date(signalData.simResolvedAt).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}` : ""}
+                {" "}— exit price filled with {exitFrom === "tp" ? "TP" : "SL"}.
+              </p>
+            )}
           </div>
         )}
 
@@ -413,9 +435,9 @@ function AddTrade() {
               Attaching one auto-triggers AI strategy detection below. */}
           <div>
             <label className="text-sm text-slate-500 dark:text-slate-400 mb-2 block">
-              Chart Screenshot <span className="text-red-400">*</span>
+              Chart Screenshot
               <span className="text-slate-400 dark:text-slate-600 ml-1 font-normal">
-                (entry, SL, TP, and result should be visible)
+                (optional — one is generated from entry, SL, TP and exit when you save)
               </span>
             </label>
             {preview ? (
@@ -477,6 +499,17 @@ function AddTrade() {
               </div>
             )}
           </div>
+
+          {confirming && (
+            <ConfirmTradeModal
+              form={form}
+              screenshotPreview={preview}
+              onChangePrices={changePrices}
+              onConfirm={saveTrade}
+              onClose={() => setConfirming(false)}
+              saving={loading}
+            />
+          )}
 
           <SnapshotCaptureModal
             open={showSnapshotModal}

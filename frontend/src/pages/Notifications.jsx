@@ -132,6 +132,11 @@ function Notifications() {
           reasoning: n.reasoning,
           sourceLabel: n.sourceLabel,
           notificationId: n._id,
+          // TradeMind's own scoring of the signal (hit TP / hit SL), so
+          // Add Trade can fill the exit price and times.
+          simOutcome: n.simOutcome,
+          simResolvedAt: n.simResolvedAt,
+          createdAt: n.createdAt,
         }
       }
     });

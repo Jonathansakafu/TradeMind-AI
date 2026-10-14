@@ -16,17 +16,8 @@ import { useResource } from "../hooks/useResource";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { fetchMarketPrices } from "../api/resources";
 import { RiskRewardText } from "../components/RiskReward";
+import { calculatePL, PIP_VALUES, PIP_DECIMALS } from "../utils/tradePL";
 
-const PIP_DECIMALS = {
-  USDJPY: 100, GBPJPY: 100, EURJPY: 100,
-  AUDJPY: 100, CADJPY: 100, XAUUSD: 100,
-  BTCUSD: 1, ETHUSD: 1, XRPUSD: 1,
-};
-const PIP_VALUES = {
-  EURUSD: 10, GBPUSD: 10, AUDUSD: 10, NZDUSD: 10,
-  USDCAD: 10, USDCHF: 10, USDJPY: 9.1, GBPJPY: 9.1,
-  EURJPY: 9.1, XAUUSD: 10, BTCUSD: 1, ETHUSD: 1, XRPUSD: 1,
-};
 
 const TRADINGVIEW_SYMBOLS = {
   EURUSD: "FX:EURUSD", GBPUSD: "FX:GBPUSD", USDJPY: "FX:USDJPY",
@@ -62,6 +53,8 @@ function TradeHistory() {
   const [editingTrade, setEditingTrade] = useState(null);
   const [editOutcome, setEditOutcome] = useState("win");
   const [editProfitLoss, setEditProfitLoss] = useState("");
+  const [editEntry, setEditEntry] = useState("");
+  const [editExit, setEditExit] = useState("");
   const [editLoading, setEditLoading] = useState(false);
   const { headers } = useAuth();
   // Full table only from 1280px: at 1024 the sidebar leaves ~640px, too
@@ -190,6 +183,20 @@ function TradeHistory() {
     setEditingTrade(trade);
     setEditOutcome(trade.outcome || "win");
     setEditProfitLoss(String(trade.profitLoss ?? ""));
+    setEditEntry(trade.entryPrice != null ? String(trade.entryPrice) : "");
+    setEditExit(trade.exitPrice != null ? String(trade.exitPrice) : "");
+  };
+
+  // Changing entry / exit recalculates P/L and the outcome (both can still
+  // be overridden below, e.g. for commissions or partial closes).
+  const changeEditPrices = (entry, exit) => {
+    setEditEntry(entry);
+    setEditExit(exit);
+    const pl = editingTrade && calculatePL(editingTrade.pair, editingTrade.direction, entry, exit, editingTrade.lotSize);
+    if (pl) {
+      setEditProfitLoss(pl.pl);
+      setEditOutcome(pl.outcome);
+    }
   };
 
   const saveEditTrade = async () => {
@@ -198,7 +205,12 @@ function TradeHistory() {
     try {
       await axios.put(
         `${API_URL}/api/trades/${editingTrade._id}`,
-        { outcome: editOutcome, profitLoss: Number(editProfitLoss) },
+        {
+          outcome: editOutcome,
+          profitLoss: Number(editProfitLoss),
+          ...(editEntry ? { entryPrice: Number(editEntry) } : {}),
+          ...(editExit ? { exitPrice: Number(editExit), status: "closed", ...(editingTrade.closedAt ? {} : { closedAt: new Date().toISOString() }) } : {}),
+        },
         { headers }
       );
       setEditingTrade(null);
@@ -429,7 +441,7 @@ function TradeHistory() {
                     ) : (
                       <button
                         onClick={() => openEditTrade(trade)}
-                        aria-label="Correct this trade's result"
+                        aria-label="Edit this trade (prices, result)"
                         className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400"
                       >
                         <Pencil size={14} />
@@ -612,8 +624,8 @@ function TradeHistory() {
                           ) : (
                             <button
                               onClick={() => openEditTrade(trade)}
-                              title="Correct this trade's result"
-                              aria-label="Correct this trade's result"
+                              title="Edit this trade (prices, result)"
+                              aria-label="Edit this trade (prices, result)"
                               className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition"
                             >
                               <Pencil size={13} />
@@ -853,7 +865,7 @@ function TradeHistory() {
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl w-full max-w-sm shadow-2xl">
             <div className="flex items-center justify-between px-6 py-5 border-b border-slate-200 dark:border-slate-800">
               <div>
-                <h3 className="text-lg font-bold text-slate-900 dark:text-white">Correct Result</h3>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white">Edit Trade</h3>
                 <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
                   {editingTrade.pair} — {editingTrade.direction?.toUpperCase()}
                 </p>
@@ -868,6 +880,25 @@ function TradeHistory() {
             </div>
 
             <div className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-sm text-slate-500 dark:text-slate-400 mb-2 block font-medium" htmlFor="edit-entry">Entry price</label>
+                  <input id="edit-entry" type="number" step="any" inputMode="decimal" value={editEntry}
+                    onChange={(e) => changeEditPrices(e.target.value, editExit)}
+                    className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:border-green-500 p-3 rounded-xl outline-none transition text-slate-900 dark:text-white font-mono text-sm" />
+                </div>
+                <div>
+                  <label className="text-sm text-slate-500 dark:text-slate-400 mb-2 block font-medium" htmlFor="edit-exit">Exit price</label>
+                  <input id="edit-exit" type="number" step="any" inputMode="decimal" value={editExit}
+                    onChange={(e) => changeEditPrices(editEntry, e.target.value)}
+                    className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:border-green-500 p-3 rounded-xl outline-none transition text-slate-900 dark:text-white font-mono text-sm" />
+                </div>
+              </div>
+              {(editingTrade.stopLoss || editingTrade.takeProfit) && (
+                <p className="text-xs text-slate-500 dark:text-slate-400 -mt-2">
+                  SL <span className="font-mono text-red-500">{editingTrade.stopLoss ?? "—"}</span> · TP <span className="font-mono text-green-600 dark:text-green-400">{editingTrade.takeProfit ?? "—"}</span>
+                </p>
+              )}
               <div>
                 <label className="text-sm text-slate-500 dark:text-slate-400 mb-2 block font-medium">Outcome</label>
                 <div className="grid grid-cols-3 gap-2">
