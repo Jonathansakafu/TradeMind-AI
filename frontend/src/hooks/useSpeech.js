@@ -120,6 +120,21 @@ function useSpeech() {
     }
   }, [appLang, headers, run, t]);
 
+  // Reads text that is already in the right language (e.g. an answer to a
+  // voice question, which comes back in the language spoken).
+  const speakAs = useCallback(async (text, locale) => {
+    if (!text) return;
+    cancelled.current = false;
+    setNotice(null);
+    setSpeaking(true);
+    try {
+      const ok = await run(speechChunks(text), locale, SPEEDS[getSpeechPrefs().speed]);
+      if (!ok) setNotice(t("speech.noVoice", { lang: LANG_NAMES[locale.slice(0, 2)] || locale }));
+    } finally {
+      setSpeaking(false);
+    }
+  }, [run, t]);
+
   const stop = useCallback(() => {
     cancelled.current = true;
     if (isNative) {
@@ -135,7 +150,7 @@ function useSpeech() {
 
   const clearNotice = useCallback(() => setNotice(null), []);
 
-  return { speak, stop, speaking, preparing, notice, clearNotice, isSupported, appLang };
+  return { speak, speakAs, stop, speaking, preparing, notice, clearNotice, isSupported, appLang };
 }
 
 export default useSpeech;

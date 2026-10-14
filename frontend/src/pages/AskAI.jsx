@@ -4,6 +4,8 @@ import MainLayout from "../layouts/MainLayout";
 import { Sparkles, Send, BookOpen, History, HelpCircle, Image, User, Bot, MessageSquarePlus, MessagesSquare, Trash2 } from "lucide-react";
 import SpeakButton from "../components/SpeakButton";
 import MicButton from "../components/MicButton";
+import useSpeech from "../hooks/useSpeech";
+import { savedMicLang, micLocale } from "../utils/micLangs";
 import { useAuth } from "../hooks/useAuth";
 import { useChatConversation, fetchConversations, deleteConversation } from "../hooks/useChatConversation";
 
@@ -22,6 +24,9 @@ function AskAI() {
   // Opened by "Hey TradeMind": start voice typing and send what's said.
   const [params] = useSearchParams();
   const listenKey = params.get("listen");
+  const openConversation = params.get("conversation");
+  const { speakAs } = useSpeech();
+  const speakNext = useRef(false);
   const { headers } = useAuth();
   const { conversationId, messages, loading, restoring, ask, newChat, selectConversation } =
     useChatConversation("askAI.conversationId");
@@ -29,6 +34,23 @@ function AskAI() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
+
+  // From the floating "Hey TradeMind" card: show that conversation.
+  useEffect(() => {
+    if (!openConversation) return undefined;
+    const id = setTimeout(() => selectConversation(openConversation), 0);
+    return () => clearTimeout(id);
+  }, [openConversation, selectConversation]);
+
+  // A question asked hands-free gets its (short) answer read aloud, in the
+  // language it was asked in.
+  useEffect(() => {
+    if (loading || !speakNext.current) return;
+    const last = messages[messages.length - 1];
+    if (last?.role !== "ai" || !last.text) return;
+    speakNext.current = false;
+    speakAs(last.text, micLocale(savedMicLang()));
+  }, [loading, messages, speakAs]);
 
   const loadConversations = useCallback(() => {
     fetchConversations(headers).then(setConversations).catch(() => {});
@@ -215,7 +237,7 @@ function AskAI() {
             className="flex-1 min-w-0 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 sm:px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-green-500"
           />
           <MicButton value={input} onChange={setInput} disabled={loading} autoStart={listenKey}
-            onAutoResult={(text) => { setInput(""); ask(text); }} />
+            onAutoResult={(text) => { setInput(""); speakNext.current = true; ask(text, { voice: true }); }} />
           <button
             type="submit"
             disabled={loading || !input.trim()}

@@ -70,12 +70,12 @@ export function useChatConversation(storageKey) {
     return next;
   });
 
-  const ask = useCallback(async (question) => {
+  const ask = useCallback(async (question, opts = {}) => {
     if (!question || loading) return;
     setMessages((prev) => [...prev, { role: "user", text: question }, { role: "ai", text: "", sources: [] }]);
     setLoading(true);
     try {
-      for await (const { event, data } of streamAsk(question, token, conversationId)) {
+      for await (const { event, data } of streamAsk(question, token, conversationId, opts)) {
         if (event === "conversation") {
           if (data.id !== conversationId) {
             createdHere.current = data.id;

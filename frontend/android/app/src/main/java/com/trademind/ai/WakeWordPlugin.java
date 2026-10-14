@@ -53,7 +53,17 @@ public class WakeWordPlugin extends Plugin {
   // Opened by the wake word: tell the web app (kept until a listener takes it,
   // so a cold start still gets it).
   private void handleWakeIntent(Intent intent) {
-    if (intent == null || !intent.getBooleanExtra(WakeWordService.EXTRA_WAKE, false)) return;
+    if (intent == null) return;
+    // Tapped the floating answer card: continue that conversation in Ask AI.
+    if (intent.hasExtra(WakeWordService.EXTRA_OPEN_CONVERSATION)) {
+      String id = intent.getStringExtra(WakeWordService.EXTRA_OPEN_CONVERSATION);
+      intent.removeExtra(WakeWordService.EXTRA_OPEN_CONVERSATION);
+      JSObject data = new JSObject();
+      data.put("id", id != null ? id : "");
+      notifyListeners("openConversation", data, true);
+      return;
+    }
+    if (!intent.getBooleanExtra(WakeWordService.EXTRA_WAKE, false)) return;
     intent.removeExtra(WakeWordService.EXTRA_WAKE);
     NotificationManagerCompat.from(getContext()).cancel(WakeWordService.HIT_ID);
     notifyListeners("wake", new JSObject(), true);
@@ -105,6 +115,24 @@ public class WakeWordPlugin extends Plugin {
     } catch (Exception e) {
       call.reject("Couldn't start listening: " + e.getMessage());
     }
+  }
+
+  // Login token, server address and voice settings for the floating
+  // assistant, which talks to the server without the app open. Kept in the
+  // app's private storage; a null token (logged out) removes it.
+  @PluginMethod
+  public void setConfig(PluginCall call) {
+    android.content.SharedPreferences.Editor e = getContext().getSharedPreferences(WakeWordService.PREFS, Context.MODE_PRIVATE).edit();
+    if (call.getData().has("token")) {
+      String token = call.getString("token");
+      if (token == null || token.isEmpty()) e.remove("token"); else e.putString("token", token);
+    }
+    for (String key : new String[] {"apiUrl", "response", "position", "micLocale", "speed"}) {
+      String v = call.getString(key);
+      if (v != null) e.putString(key, v);
+    }
+    e.apply();
+    call.resolve();
   }
 
   @PluginMethod

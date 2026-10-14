@@ -1,4 +1,5 @@
 const Trade = require("../models/Trade");
+const userDataContext = require("../services/userDataContext");
 const Analysis = require("../models/Analysis");
 const BookConcept = require("../models/BookConcept");
 const ChatConversation = require("../models/ChatConversation");
@@ -294,7 +295,8 @@ exports.askQuestion = async (req, res) => {
       }),
       ragService.getBookConceptSummary(req.user._id),
     ]);
-    const result = await claudeAI.answerQuestion(question, retrievedChunks, { bookSummary });
+    const userData = await userDataContext.build(req.user._id).catch(() => "");
+    const result = await claudeAI.answerQuestion(question, retrievedChunks, { bookSummary, userData, voice: !!req.body.voice });
 
     res.json(result);
   } catch (err) {
@@ -358,19 +360,20 @@ exports.askQuestionStream = async (req, res) => {
   try {
     send("conversation", { id: conversation._id, title: conversation.title });
 
-    const [retrievedChunks, bookSummary] = await Promise.all([
+    const [retrievedChunks, bookSummary, userData] = await Promise.all([
       ragService.retrieve(req.user._id, question, {
         topK: 8,
         sources: ["book", "trade", "guide", "screenshot"],
       }),
       ragService.getBookConceptSummary(req.user._id),
+      userDataContext.build(req.user._id).catch((err) => { console.error("userDataContext:", err.message); return ""; }),
     ]);
     if (closed) return res.end();
 
     sources = claudeAI.answerSourcesFor(retrievedChunks);
     send("sources", { sources });
 
-    for await (const delta of claudeAI.streamAnswer(question, retrievedChunks, { bookSummary, history })) {
+    for await (const delta of claudeAI.streamAnswer(question, retrievedChunks, { bookSummary, history, userData, voice: !!req.body.voice })) {
       answer += delta;
       if (closed) {
         await saveAnswer();

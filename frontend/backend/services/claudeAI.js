@@ -1083,7 +1083,7 @@ function trimHistory(history = []) {
   return out;
 }
 
-const buildAnswerMessages = (question, ragCtx, { jsonMode, history = [] } = {}) => {
+const buildAnswerMessages = (question, ragCtx, { jsonMode, history = [], userData = "", voice = false } = {}) => {
   const persona = ragCtx
     ? `You are TradeMind AI, an assistant embedded in a forex/crypto trading journal app. Answer the trader's question. Prefer the retrieved context below when it's relevant (cite sources by label) — it may include their own trades, their uploaded books, or the app's own user guide. If the context isn't relevant to the question, ignore it and answer from your own general trading/market knowledge instead. Never claim something is in their data if it isn't.
 
@@ -1094,12 +1094,22 @@ ${ragCtx}`
 
   const languageInstruction = "\n\nReply in the same language the trader writes their latest message in (English, Kiswahili, French, Arabic, Chinese, Korean, Japanese or any other). Keep trading terms (BUY, SELL, stop loss, take profit, entry, pips, lot, R:R, BOS, CHoCH, CPI, NFP, pair names) and all numbers in English so their meaning doesn't change.";
 
+  // The trader's own numbers (services/userDataContext.js) and where every
+  // answer's facts come from.
+  const dataInstruction = userData
+    ? `\n\n${userData}\n\nWhen the trader asks about their own performance, results, win rate, profit/loss, trades or TradeMind's signals (in any language, e.g. "how was last month?"), answer straight from "Your trading data" above with the actual numbers for the period they mean — never tell them to go and look at a page in the app instead. If that period has no trades, say so. Start such answers by saying where the numbers come from and for which period, e.g. "From your TradeMind trade journal, September 2026: …".`
+    : "";
+  const sourceInstruction = "\n\nAlways make clear where the information comes from: their trade journal, their uploaded books, live market prices (say they are live, from the internet), the economic calendar, or your own general trading knowledge.";
+  const voiceInstruction = voice
+    ? "\n\nThis answer will be SPOKEN aloud by a phone voice assistant: reply in 2–4 short, natural sentences (about 60 words at most), no lists, headings, markdown, tables, emoji or links. Say numbers plainly (e.g. \"58 percent\", \"plus 34 dollars\"). Still say where the information comes from in a few words."
+    : "";
+
   const formatInstruction = jsonMode
     ? '\n\nAlways give your final reply as a single JSON object with no markdown: {"answer": ""} — this applies even after using a tool; your last message must still be in this format.'
     : "\n\nRespond with plain prose only — no JSON, no markdown code fences. This applies even after using a tool.";
 
   return [
-    { role: "system", content: persona + toolInstruction + languageInstruction + formatInstruction },
+    { role: "system", content: persona + toolInstruction + dataInstruction + sourceInstruction + languageInstruction + voiceInstruction + formatInstruction },
     ...trimHistory(history),
     { role: "user", content: question },
   ];
@@ -1118,7 +1128,7 @@ const chunksToSources = (retrievedChunks) => retrievedChunks.map((c) => ({
 // forex/trading knowledge otherwise.
 exports.answerQuestion = async (question, retrievedChunks = [], extra = {}) => {
   const ragCtx = ragService.buildPromptContext({ retrievedChunks, bookSummary: extra.bookSummary });
-  const messages = buildAnswerMessages(question, ragCtx, { jsonMode: true });
+  const messages = buildAnswerMessages(question, ragCtx, { jsonMode: true, userData: extra.userData, voice: extra.voice });
 
   const text = await askGroqWithTools(messages);
   const sources = chunksToSources(retrievedChunks);
@@ -1155,7 +1165,7 @@ const BUSY_MESSAGE = "The AI is busy right now (both AI services are at their li
 
 exports.streamAnswer = async function* (question, retrievedChunks = [], extra = {}) {
   const ragCtx = ragService.buildPromptContext({ retrievedChunks, bookSummary: extra.bookSummary });
-  const messages = buildAnswerMessages(question, ragCtx, { jsonMode: false, history: extra.history });
+  const messages = buildAnswerMessages(question, ragCtx, { jsonMode: false, history: extra.history, userData: extra.userData, voice: extra.voice });
   messages[0].content += await calendarContext(question);
 
   // Falls back to Gemini only if Groq fails before sending any text --

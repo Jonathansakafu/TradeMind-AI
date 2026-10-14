@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
-import { wakeWordSupported, wakeStatus, startWake, stopWake, openOverlaySettings, openBatterySettings } from "../utils/wakeWord";
+import { wakeWordSupported, wakeStatus, startWake, stopWake, openOverlaySettings, openBatterySettings, getWakePrefs, setWakePrefs } from "../utils/wakeWord";
 
 // Settings card for the "Hey TradeMind" wake word (Android app only).
 const STATE_TEXT = {
@@ -14,6 +14,8 @@ function WakeWordSettings() {
   const [s, setS] = useState(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
+  const [prefs, setPrefs] = useState(getWakePrefs);
+  const choose = (patch) => setPrefs(setWakePrefs(patch));
 
   const refresh = useCallback(() => { wakeStatus().then(setS).catch(() => {}); }, []);
 
@@ -56,8 +58,8 @@ function WakeWordSettings() {
   return (
     <div className="space-y-3">
       <p className="text-sm text-slate-600 dark:text-slate-300">
-        Say <b>"Hey TradeMind"</b> — even with the app closed or the screen off — and Ask AI opens ready to hear your question.
-        Listening happens on your phone (offline); nothing is recorded or sent until you ask.
+        Say <b>"Hey TradeMind"</b> — even with the app closed or the screen off — then ask your question, e.g. "How was my performance last month?".
+        It answers from your own trades and says where the information comes from. Listening for the name happens on your phone (offline); your question needs internet.
       </p>
 
       <div className="flex items-center justify-between gap-3">
@@ -78,9 +80,39 @@ function WakeWordSettings() {
 
       {on && (
         <div className="space-y-2">
+          <div>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">When I call TradeMind</p>
+            <div className="space-y-1.5">
+              {[
+                ["voice", "Speak the answer", "Orb and answer in a small card over any app — the app doesn't open"],
+                ["text", "Show the answer only", "Same card, silent (for meetings, public places)"],
+                ["app", "Open Ask AI", "Opens the app and listens there"],
+              ].map(([value, label, hint]) => (
+                <button key={value} onClick={() => choose({ response: value })} aria-pressed={prefs.response === value}
+                  className={`w-full text-left rounded-xl border px-3 py-2 transition ${prefs.response === value ? "border-green-500 bg-green-500/10" : "border-slate-200 dark:border-slate-700"}`}>
+                  <span className="block text-sm font-semibold text-slate-900 dark:text-white">{prefs.response === value ? "● " : "○ "}{label}</span>
+                  <span className="block text-xs text-slate-500 dark:text-slate-400">{hint}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+          {prefs.response !== "app" && (
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs text-slate-500 dark:text-slate-400">Card position</p>
+              <div className="inline-flex rounded-xl border border-slate-200 dark:border-slate-700 p-0.5 bg-slate-100 dark:bg-slate-800">
+                {[["bottom", "Bottom"], ["top", "Top"]].map(([v, label]) => (
+                  <button key={v} onClick={() => choose({ position: v })} aria-pressed={prefs.position === v}
+                    className={`px-3 py-1 rounded-lg text-xs font-semibold ${prefs.position === v ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow" : "text-slate-500 dark:text-slate-400"}`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          <p className="text-xs text-slate-500 dark:text-slate-400">It listens and answers in the language picked on Ask AI's 🎤 chip.</p>
           {!s.canOpenOverApps && (
             <div className={row}>
-              <p className="text-xs text-slate-700 dark:text-slate-300"><b>Open by itself:</b> allow "Display over other apps" so TradeMind can pop up when you call it. Without it you'll get a notification to tap.</p>
+              <p className="text-xs text-slate-700 dark:text-slate-300"><b>{prefs.response === "app" ? "Open by itself" : "Needed for the answer card"}:</b> allow "Display over other apps". {prefs.response === "app" ? "Without it you'll get a notification to tap." : "Until then TradeMind opens the app instead."}</p>
               <button onClick={openOverlaySettings} className={fixBtn}>Allow</button>
             </div>
           )}

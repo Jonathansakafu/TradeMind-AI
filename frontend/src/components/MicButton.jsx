@@ -4,7 +4,8 @@ import { useTranslation } from "react-i18next";
 import { Capacitor } from "@capacitor/core";
 import { SpeechRecognition as NativeRecognition } from "@capacitor-community/speech-recognition";
 import { Mic, X } from "lucide-react";
-import { pauseWake, resumeWake } from "../utils/wakeWord";
+import { pauseWake, resumeWake, syncWakeConfig } from "../utils/wakeWord";
+import { MIC_LANGS, MIC_LANG_KEY as KEY, savedMicLang as savedLang } from "../utils/micLangs";
 
 // 🎤 voice typing for Ask AI / the chat widget: speak in any of the app's
 // languages and the words land in the text box (not sent -- the trader
@@ -16,25 +17,6 @@ import { pauseWake, resumeWake } from "../utils/wakeWord";
 
 const isNative = Capacitor.isNativePlatform();
 const WebRecognition = typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition);
-
-const MIC_LANGS = [
-  { code: "en", locale: "en-US", label: "English" },
-  { code: "sw", locale: "sw-TZ", label: "Kiswahili" },
-  { code: "fr", locale: "fr-FR", label: "Français" },
-  { code: "ar", locale: "ar-SA", label: "العربية" },
-  { code: "zh", locale: "zh-CN", label: "中文" },
-  { code: "ko", locale: "ko-KR", label: "한국어" },
-  { code: "ja", locale: "ja-JP", label: "日本語" },
-];
-const KEY = "tm.micLang";
-
-function savedLang(appLang) {
-  try {
-    const s = localStorage.getItem(KEY);
-    if (MIC_LANGS.some((l) => l.code === s)) return s;
-  } catch { /* storage blocked */ }
-  return MIC_LANGS.some((l) => l.code === appLang) ? appLang : "en";
-}
 
 const join = (base, add) => [base.trim(), add.trim()].filter(Boolean).join(" ");
 
@@ -65,6 +47,7 @@ function MicButton({ value, onChange, disabled, compact = false, autoStart = nul
     setLang(code);
     setMenu(null);
     try { localStorage.setItem(KEY, code); } catch { /* ignore */ }
+    syncWakeConfig(); // the floating assistant listens in this language too
   };
 
   // Shared ending for both engines: deliver what was heard (unless

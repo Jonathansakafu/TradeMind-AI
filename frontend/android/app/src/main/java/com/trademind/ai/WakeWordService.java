@@ -44,8 +44,9 @@ public class WakeWordService extends Service implements RecognitionListener {
   static final String ACTION_PAUSE = "com.trademind.ai.wake.PAUSE";
   static final String ACTION_RESUME = "com.trademind.ai.wake.RESUME";
   static final String EXTRA_WAKE = "tm_wake";
+  static final String EXTRA_OPEN_CONVERSATION = "tm_open_conversation";
   static final int HIT_ID = 4712;
-  private static final String PREFS = "tm_wakeword";
+  static final String PREFS = "tm_wakeword";
   private static final String CH_LISTEN = "wakeword";
   private static final String CH_HIT = "wakeword_hit";
   private static final int NOTIF_ID = 4711;
@@ -53,6 +54,7 @@ public class WakeWordService extends Service implements RecognitionListener {
   // Only these phrases can be recognised; everything else becomes [unk].
   private static final String GRAMMAR = "[\"hey trade mind\", \"trade mind\", \"[unk]\"]";
   private static final long PAUSE_AFTER_HIT_MS = 45_000;
+  private static final long ASSISTANT_MAX_MS = 5 * 60_000;
   private static final long RETRY_MS = 30_000;
 
   static volatile boolean running = false;
@@ -65,6 +67,7 @@ public class WakeWordService extends Service implements RecognitionListener {
   private SpeechService speech;
   private boolean loading = false;
   private long lastHit = 0;
+  private VoiceAssistant assistant; // floating answer card, while open
   private final Handler main = new Handler(Looper.getMainLooper());
   private final Runnable autoResume = this::resumeListening;
 
@@ -146,7 +149,7 @@ public class WakeWordService extends Service implements RecognitionListener {
 
   private void resumeListening() {
     main.removeCallbacks(autoResume);
-    if (!running || model == null || speech != null) return;
+    if (!running || model == null || speech != null || assistant != null) return;
     try {
       recognizer = new Recognizer(model, RATE, GRAMMAR);
       speech = new SpeechService(recognizer, RATE);
@@ -229,7 +232,7 @@ public class WakeWordService extends Service implements RecognitionListener {
       text = new JSONObject(hypothesis).optString("text", "");
     } catch (Exception ignored) {
     }
-    if (!text.contains("trade mind")) return;
+    if (!text.contains("trade mind") || assistant != null) return;
     long now = SystemClock.elapsedRealtime();
     if (now - lastHit < 4000) return;
     lastHit = now;
@@ -237,8 +240,35 @@ public class WakeWordService extends Service implements RecognitionListener {
   }
 
   private void onWake() {
-    pauseListening(PAUSE_AFTER_HIT_MS);
     beep();
+    // Settings > Hey TradeMind > "When I call": answer in a floating card
+    // (spoken or text only) or open Ask AI. The card needs "display over
+    // other apps"; without it, open the app as before.
+    String mode = getSharedPreferences(PREFS, MODE_PRIVATE).getString("response", "voice");
+    boolean canOverlay = Build.VERSION.SDK_INT < 23 || Settings.canDrawOverlays(this);
+    if (!"app".equals(mode) && canOverlay) {
+      pauseListening(ASSISTANT_MAX_MS); // keep the mic free (and don't hear ourselves) until the card closes
+      try {
+        assistant = new VoiceAssistant(this, getSharedPreferences(PREFS, MODE_PRIVATE), new VoiceAssistant.Host() {
+          @Override
+          public void onAssistantFinished() {
+            assistant = null;
+            main.postDelayed(autoResume, 800);
+          }
+
+          @Override
+          public void openApp(Intent intent) {
+            openAppOrNotify(intent);
+          }
+        });
+        assistant.start();
+        return;
+      } catch (Exception e) {
+        Log.w(TAG, "Floating assistant failed", e);
+        assistant = null;
+      }
+    }
+    pauseListening(PAUSE_AFTER_HIT_MS);
     Intent open = new Intent(this, MainActivity.class)
         .putExtra(EXTRA_WAKE, true)
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
@@ -246,6 +276,20 @@ public class WakeWordService extends Service implements RecognitionListener {
     boolean locked = km != null && km.isKeyguardLocked();
     boolean canOpen = appVisible || Build.VERSION.SDK_INT < 29 || Settings.canDrawOverlays(this);
     if (!locked && canOpen) {
+      try {
+        startActivity(open);
+        return;
+      } catch (Exception e) {
+        Log.w(TAG, "Couldn't open the app", e);
+      }
+    }
+    showHitNotification(open);
+  }
+
+  private void openAppOrNotify(Intent open) {
+    KeyguardManager km = (KeyguardManager) getSystemService(KEYGUARD_SERVICE);
+    boolean locked = km != null && km.isKeyguardLocked();
+    if (!locked) {
       try {
         startActivity(open);
         return;
@@ -336,6 +380,7 @@ public class WakeWordService extends Service implements RecognitionListener {
   @Override
   public void onDestroy() {
     running = false;
+    if (assistant != null) assistant.finish();
     state = "off";
     main.removeCallbacks(autoResume);
     releaseMic();

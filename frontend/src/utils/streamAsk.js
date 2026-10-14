@@ -5,14 +5,15 @@ import { API_URL } from "../config/api";
 // Authorization header or a POST body.
 // conversationId (optional) continues a saved conversation; the server
 // replies with a "conversation" event carrying the id either way.
-export async function* streamAsk(question, token, conversationId) {
+// voice: short answer meant to be spoken (Hey TradeMind / voice questions).
+export async function* streamAsk(question, token, conversationId, { voice = false } = {}) {
   const res = await fetch(`${API_URL}/api/ai/ask/stream`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ question, conversationId: conversationId || undefined }),
+    body: JSON.stringify({ question, conversationId: conversationId || undefined, voice: voice || undefined }),
   });
 
   if (!res.ok || !res.body) {

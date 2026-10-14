@@ -28,7 +28,8 @@ import AskAI from "./pages/AskAI";
 import Guide from "./pages/Guide";
 import TradingSession from "./pages/TradingSession";
 import UpdateBanner from "./components/UpdateBanner";
-import { wakeWordSupported, wakeStatus, startWake, onWake } from "./utils/wakeWord";
+import { wakeWordSupported, wakeStatus, startWake, onWake, onOpenConversation, syncWakeConfig } from "./utils/wakeWord";
+import { onSpeechPrefsChange } from "./utils/speechPrefs";
 import { refreshPushRegistration, autoSetupAndroidPush, initAndroidAlertDisplay } from "./utils/pushNotifications";
 
 // Welcome and login pages for someone already logged in: go straight to
@@ -92,6 +93,12 @@ function PushSync() {
 // Ask AI with voice typing when the phrase is heard.
 function WakeWordSync() {
   const navigate = useNavigate();
+  const { token } = useAuth();
+
+  // Keep the floating assistant's login and voice settings current.
+  useEffect(() => { syncWakeConfig(); }, [token]);
+  useEffect(() => onSpeechPrefsChange(() => syncWakeConfig()), []);
+  useEffect(() => onOpenConversation((id) => navigate(id ? `/ask-ai?conversation=${id}` : "/ask-ai")), [navigate]);
 
   useEffect(() => {
     if (!wakeWordSupported) return;
