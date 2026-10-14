@@ -247,12 +247,12 @@ public class WakeWordService extends Service implements RecognitionListener {
   }
 
   private void onWake() {
-    beep();
     // Settings > Hey TradeMind > "When I call": answer hands-free (spoken
     // or text only) or open Ask AI. The floating card needs "display over
     // other apps"; without it the answer is spoken and shown as a
     // notification -- the app is only opened when the trader chose that.
     String mode = getSharedPreferences(PREFS, MODE_PRIVATE).getString("response", "voice");
+    if (!"voice".equals(mode)) beep(); // the spoken mode greets instead ("Yes, Jonathan?")
     boolean canOverlay = Build.VERSION.SDK_INT < 23 || Settings.canDrawOverlays(this);
     if (!"app".equals(mode)) {
       pauseListening(ASSISTANT_MAX_MS); // keep the mic free (and don't hear ourselves) until the card closes

@@ -43,15 +43,23 @@ export function setWakePrefs(patch) {
 }
 
 // Hands the floating assistant what it needs to answer without the app
-// open: login token, server, answer style, listening language, voice speed.
+// open: login token, server, answer style, listening language, voice speed,
+// and the first name and app language for its greeting.
 export function syncWakeConfig() {
   if (!WakeWord) return;
   let token = "";
-  try { token = localStorage.getItem("token") || ""; } catch { /* ignore */ }
+  let userName = "";
+  try {
+    token = localStorage.getItem("token") || "";
+    const u = JSON.parse(localStorage.getItem("user") || "null");
+    userName = String(u?.name || u?.username || "").trim().split(/\s+/)[0] || "";
+  } catch { /* ignore */ }
+  const appLang = (document.documentElement.lang || "en").slice(0, 2);
   const { response, position } = getWakePrefs();
   WakeWord.setConfig({
     token, apiUrl: API_URL, response, position,
-    micLocale: micLocale(savedMicLang((document.documentElement.lang || "en").slice(0, 2))),
+    userName, appLang, // the greeting: "Yes, Jonathan?" / "Naam, Jonathan?"
+    micLocale: micLocale(savedMicLang(appLang)),
     speed: getSpeechPrefs().speed,
   }).catch(() => {});
 }

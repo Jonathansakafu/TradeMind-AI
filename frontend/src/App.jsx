@@ -30,6 +30,7 @@ import TradingSession from "./pages/TradingSession";
 import UpdateBanner from "./components/UpdateBanner";
 import { wakeWordSupported, wakeStatus, startWake, onWake, onOpenConversation, syncWakeConfig } from "./utils/wakeWord";
 import { onSpeechPrefsChange } from "./utils/speechPrefs";
+import i18n from "./i18n";
 import { refreshPushRegistration, autoSetupAndroidPush, initAndroidAlertDisplay } from "./utils/pushNotifications";
 
 // Welcome and login pages for someone already logged in: go straight to
@@ -93,10 +94,15 @@ function PushSync() {
 // Ask AI with voice typing when the phrase is heard.
 function WakeWordSync() {
   const navigate = useNavigate();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
 
-  // Keep the floating assistant's login and voice settings current.
-  useEffect(() => { syncWakeConfig(); }, [token]);
+  // Keep the floating assistant's login, name and voice settings current.
+  useEffect(() => { syncWakeConfig(); }, [token, user]);
+  useEffect(() => {
+    const onLang = () => setTimeout(syncWakeConfig, 0); // after <html lang> updates
+    i18n.on("languageChanged", onLang);
+    return () => i18n.off("languageChanged", onLang);
+  }, []);
   useEffect(() => onSpeechPrefsChange(() => syncWakeConfig()), []);
   useEffect(() => onOpenConversation((id) => navigate(id ? `/ask-ai?conversation=${id}` : "/ask-ai")), [navigate]);
 

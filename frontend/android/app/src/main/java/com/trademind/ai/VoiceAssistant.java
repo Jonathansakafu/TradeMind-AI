@@ -87,6 +87,8 @@ class VoiceAssistant {
   private String asked = null;
   private TextToSpeech tts;
   private boolean ttsReady = false;
+  private boolean answerVoice = false;
+  private boolean greeting = false;
   private String pendingSpeech = null;
   private String conversationId = null;
   private boolean finished = false;
@@ -118,7 +120,13 @@ class VoiceAssistant {
       fail(msg("loginTitle"), msg("login"));
       return;
     }
-    listen();
+    if (speakAnswers && tts != null) {
+      greeting = true; // greet() runs when the voice is ready
+      main.postDelayed(greetTimeout, 3000);
+    } else {
+      setStatus(greetingText(prefs.getString("appLang", lang)));
+      listen();
+    }
   }
 
   void finish() {
@@ -267,7 +275,6 @@ class VoiceAssistant {
   // ---------- listening ----------
 
   private void listen() {
-    setStatus(msg("listening"));
     recording = true;
     io.execute(() -> {
       byte[] wav = record();
@@ -548,22 +555,53 @@ class VoiceAssistant {
 
   private static final Pattern MALE = Pattern.compile("-x-(iol|iom|tpd|gbb|gbd|rjs|aub|aud|enc|end|frb|frd|ard|arz)\\b|smtm\\d|(^|[^e])male", Pattern.CASE_INSENSITIVE);
 
+  // Speech engine ready: answers use the 🎤 language; the greeting uses the
+  // app language first (greet()).
   private void onTtsReady(int status) {
     if (tts == null) return;
     if (status != TextToSpeech.SUCCESS) {
       tts = null;
+      if (greeting) finishGreeting();
       if (pendingSpeech != null) closeIn(20000);
       return;
     }
-    Locale loc = Locale.forLanguageTag(locale);
-    int res = tts.setLanguage(loc);
-    if (res == TextToSpeech.LANG_MISSING_DATA || res == TextToSpeech.LANG_NOT_SUPPORTED) {
-      setFooter(msg("noVoice"));
-      tts.shutdown();
-      tts = null;
-      if (pendingSpeech != null) closeIn(25000);
-      return;
+    tts.setSpeechRate("normal".equals(prefs.getString("speed", "slow")) ? 0.95f : 0.8f);
+    tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
+      @Override public void onStart(String id) {
+        main.post(() -> level(0.6f));
+      }
+      @Override public void onDone(String id) {
+        if ("greet".equals(id)) main.post(VoiceAssistant.this::finishGreeting);
+        else if (id.startsWith("last")) main.post(() -> closeIn(9000));
+      }
+      @Override public void onError(String id) {
+        if ("greet".equals(id)) main.post(VoiceAssistant.this::finishGreeting);
+        else if (id.startsWith("last")) main.post(() -> closeIn(15000));
+      }
+      @Override public void onRangeStart(String id, int start, int end, int frame) {
+        main.post(() -> level(0.45f + (float) Math.random() * 0.5f));
+      }
+    });
+    ttsReady = true;
+    answerVoice = useLanguage(locale);
+    if (!answerVoice) setFooter(msg("noVoice"));
+    if (greeting) {
+      greet();
+    } else if (pendingSpeech != null) {
+      String s = pendingSpeech;
+      pendingSpeech = null;
+      say(s);
     }
+  }
+
+  // Switches the engine to a language with a male on-device voice when
+  // there is one (pitch lowered otherwise). False if the phone has no voice
+  // for it.
+  private boolean useLanguage(String tag) {
+    if (tts == null) return false;
+    Locale loc = Locale.forLanguageTag(tag);
+    int res = tts.setLanguage(loc);
+    if (res == TextToSpeech.LANG_MISSING_DATA || res == TextToSpeech.LANG_NOT_SUPPORTED) return false;
     Voice pick = null;
     try {
       for (Voice v : tts.getVoices()) {
@@ -577,27 +615,64 @@ class VoiceAssistant {
     }
     if (pick != null) tts.setVoice(pick);
     tts.setPitch(pick != null ? 1.0f : 0.85f);
-    tts.setSpeechRate("normal".equals(prefs.getString("speed", "slow")) ? 0.95f : 0.8f);
-    tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
-      @Override public void onStart(String id) {
-        main.post(() -> level(0.6f));
-      }
-      @Override public void onDone(String id) {
-        if (id.startsWith("last")) main.post(() -> closeIn(9000));
-      }
-      @Override public void onError(String id) {
-        if (id.startsWith("last")) main.post(() -> closeIn(15000));
-      }
-      @Override public void onRangeStart(String id, int start, int end, int frame) {
-        main.post(() -> level(0.45f + (float) Math.random() * 0.5f));
-      }
-    });
-    ttsReady = true;
-    if (pendingSpeech != null) {
-      String s = pendingSpeech;
-      pendingSpeech = null;
-      say(s);
+    return true;
+  }
+
+  // ---------- greeting ("Yes, Jonathan?" in the app language) ----------
+
+  private static final Map<String, String[]> GREETINGS = new HashMap<>();
+  private static final Map<String, String> APP_LOCALES = new HashMap<>();
+
+  static {
+    // [ ... ] holds the part with the name, dropped when there's no name.
+    GREETINGS.put("en", new String[] {"Yes[, {name}]?", "What's up[, {name}]?", "I'm here[, {name}].", "Go ahead[, {name}]."});
+    GREETINGS.put("sw", new String[] {"Naam[, {name}]?", "Nipo[, {name}].", "Ndiyo[, {name}]?", "Sema[, {name}]."});
+    GREETINGS.put("fr", new String[] {"Oui[, {name}] ?", "Je t'écoute[, {name}].", "Je suis là[, {name}].", "Vas-y[, {name}]."});
+    GREETINGS.put("ar", new String[] {"نعم[ يا {name}]؟", "تفضل[ يا {name}].", "أنا هنا[ يا {name}].", "أسمعك[ يا {name}]."});
+    GREETINGS.put("zh", new String[] {"在呢[，{name}]。", "我在[，{name}]。", "请说[，{name}]。"});
+    GREETINGS.put("ko", new String[] {"네[, {name}님]?", "말씀하세요[, {name}님].", "듣고 있어요[, {name}님]."});
+    GREETINGS.put("ja", new String[] {"はい[、{name}さん]？", "どうぞ[、{name}さん]。", "聞いていますよ[、{name}さん]。"});
+    APP_LOCALES.put("en", "en-US");
+    APP_LOCALES.put("sw", "sw-KE");
+    APP_LOCALES.put("fr", "fr-FR");
+    APP_LOCALES.put("ar", "ar-SA");
+    APP_LOCALES.put("zh", "zh-CN");
+    APP_LOCALES.put("ko", "ko-KR");
+    APP_LOCALES.put("ja", "ja-JP");
+  }
+
+  private String greetingText(String language) {
+    String[] list = GREETINGS.containsKey(language) ? GREETINGS.get(language) : GREETINGS.get("en");
+    String t = list[(int) (Math.random() * list.length)];
+    String name = prefs.getString("userName", "").trim();
+    if (name.contains(" ")) name = name.substring(0, name.indexOf(' '));
+    if (name.isEmpty()) return t.replaceAll("\\[[^\\]]*\\]", "");
+    return t.replace("{name}", name).replace("[", "").replace("]", "");
+  }
+
+  private void greet() {
+    String appLang = prefs.getString("appLang", lang);
+    String text = greetingText(appLang);
+    String appLocale = APP_LOCALES.containsKey(appLang) ? APP_LOCALES.get(appLang) : "en-US";
+    if (!useLanguage(appLocale)) { // no voice for the app language on this phone
+      text = greetingText("en");
+      useLanguage("en-US");
     }
+    setStatus(text);
+    if (tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "greet") != TextToSpeech.SUCCESS) finishGreeting();
+  }
+
+  private final Runnable greetTimeout = this::finishGreeting;
+
+  // Greeting spoken (or the voice wasn't ready in time): start listening,
+  // with the engine back on the answer language.
+  private void finishGreeting() {
+    if (!greeting || finished) return;
+    greeting = false;
+    main.removeCallbacks(greetTimeout);
+    if (tts != null && ttsReady) answerVoice = useLanguage(locale);
+    setStatus(msg("listening"));
+    listen();
   }
 
   private void say(String text) {
@@ -608,6 +683,10 @@ class VoiceAssistant {
     }
     if (!ttsReady) {
       pendingSpeech = text;
+      return;
+    }
+    if (!answerVoice) { // no voice for the answer language: text only
+      closeIn(25000);
       return;
     }
     List<String> parts = chunks(clean(text));

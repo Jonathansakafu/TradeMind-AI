@@ -127,7 +127,7 @@ public class WakeWordPlugin extends Plugin {
       String token = call.getString("token");
       if (token == null || token.isEmpty()) e.remove("token"); else e.putString("token", token);
     }
-    for (String key : new String[] {"apiUrl", "response", "position", "micLocale", "speed"}) {
+    for (String key : new String[] {"apiUrl", "response", "position", "micLocale", "speed", "userName", "appLang"}) {
       String v = call.getString(key);
       if (v != null) e.putString(key, v);
     }
