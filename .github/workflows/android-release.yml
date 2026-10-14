@@ -76,6 +76,26 @@ jobs:
       - name: Sync Capacitor Android project
         run: npx cap sync android
 
+      # Offline speech model for the "Hey TradeMind" wake word (Vosk, ~40 MB,
+      # Apache 2.0). Kept out of git; cached between builds. StorageService
+      # on the phone needs a `uuid` file to know when to re-unpack it.
+      - name: Cache wake-word model
+        uses: actions/cache@v4
+        with:
+          path: frontend/android/app/src/main/assets/model-en-us
+          key: vosk-model-small-en-us-0.15
+
+      - name: Add wake-word model
+        working-directory: frontend/android/app/src/main/assets
+        run: |
+          if [ ! -f model-en-us/am/final.mdl ]; then
+            curl -sSfL --retry 3 -o model.zip https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip
+            unzip -q model.zip
+            rm -rf model-en-us && mv vosk-model-small-en-us-0.15 model-en-us && rm model.zip
+          fi
+          echo "small-en-us-0.15" > model-en-us/uuid
+          du -sh model-en-us
+
       - name: Cache Gradle
         uses: actions/cache@v4
         with:

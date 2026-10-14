@@ -36,6 +36,12 @@
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="signals" />
 
+        <!-- "Hey TradeMind" wake word: listens in the background (offline). -->
+        <service
+            android:name=".WakeWordService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -50,4 +56,11 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Android 13+ requires this for push alerts (the push-notifications plugin doesn't declare it). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- "Hey TradeMind" wake word: background microphone service, opening the
+         app when it hears the phrase, and staying alive on battery saver. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 </manifest>

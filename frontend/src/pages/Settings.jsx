@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import axios from "axios";
 import MainLayout from "../layouts/MainLayout";
-import { Save, User, Lock, CheckCircle, Palette, LogOut, BellRing, Wallet, Volume2, Moon, Sun, SunMoon } from "lucide-react";
+import { Save, User, Lock, CheckCircle, Palette, LogOut, BellRing, Wallet, Volume2, Mic, Moon, Sun, SunMoon } from "lucide-react";
 import { API_URL } from "../config/api";
 import SpeakButton from "../components/SpeakButton";
 import AlertSettings from "../components/AlertSettings";
@@ -23,6 +23,7 @@ const LANGUAGES = [
 ];
 import RiskSettings from "../components/RiskSettings";
 import ReadAloudSettings from "../components/ReadAloudSettings";
+import WakeWordSettings from "../components/WakeWordSettings";
 import { useAuth } from "../hooks/useAuth";
 
 function Settings() {
@@ -144,6 +145,11 @@ function Settings() {
         <SettingsSection id="read" icon={Volume2} open={openSection === "read"} onToggle={setOpenSection}
           title="Read aloud" summary={readAloudSummary}>
           <ReadAloudSettings />
+        </SettingsSection>
+
+        <SettingsSection id="wake" icon={Mic} open={openSection === "wake"} onToggle={setOpenSection}
+          title="Hey TradeMind" summary="Call Ask AI by voice, even with the app closed">
+          <WakeWordSettings />
         </SettingsSection>
 
         <SettingsSection id="profile" icon={User} open={openSection === "profile"} onToggle={setOpenSection}

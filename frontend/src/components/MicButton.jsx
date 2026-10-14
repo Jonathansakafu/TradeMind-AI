@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { Capacitor } from "@capacitor/core";
 import { SpeechRecognition as NativeRecognition } from "@capacitor-community/speech-recognition";
 import { Mic, Square, Loader2 } from "lucide-react";
+import { pauseWake, resumeWake } from "../utils/wakeWord";
 
 // 🎤 voice typing for Ask AI / the chat widget: speak in any of the app's
 // languages and the words land in the text box (not sent -- the trader
@@ -35,7 +36,9 @@ function savedLang(appLang) {
 
 const join = (base, add) => [base.trim(), add.trim()].filter(Boolean).join(" ");
 
-function MicButton({ value, onChange, disabled, compact = false }) {
+// autoStart: a changing key starts listening by itself ("Hey TradeMind");
+// what is heard then goes to onAutoResult (sent straight away) if given.
+function MicButton({ value, onChange, disabled, compact = false, autoStart = null, onAutoResult = null }) {
   const { i18n } = useTranslation();
   const [lang, setLang] = useState(() => savedLang((i18n.language || "en").slice(0, 2)));
   const [listening, setListening] = useState(false);
@@ -50,7 +53,7 @@ function MicButton({ value, onChange, disabled, compact = false }) {
   }, [notice]);
   useEffect(() => () => rec.current?.abort?.(), []);
 
-  if (!isNative && !WebRecognition) return null;
+  const supported = isNative || !!WebRecognition;
   const current = MIC_LANGS.find((l) => l.code === lang) || MIC_LANGS[0];
 
   const pickLang = (code) => {
@@ -59,34 +62,42 @@ function MicButton({ value, onChange, disabled, compact = false }) {
     try { localStorage.setItem(KEY, code); } catch { /* ignore */ }
   };
 
-  const startNative = async () => {
+  const deliver = (text, auto) => {
+    if (auto && onAutoResult) onAutoResult(text.trim());
+    else onChange(join(value, text));
+  };
+
+  const startNative = async (auto = false) => {
     const { available } = await NativeRecognition.available().catch(() => ({ available: false }));
     if (!available) return setNotice("Voice typing isn't available on this phone — install or update the Google app.");
     const perm = await NativeRecognition.requestPermissions().catch(() => null);
     if (perm?.speechRecognition !== "granted") return setNotice("Allow the microphone for TradeMind in your phone settings to use voice typing.");
     setListening(true);
+    await pauseWake(); // the "Hey TradeMind" listener lets go of the microphone
     try {
       const res = await NativeRecognition.start({ language: current.locale, maxResults: 1, popup: true, partialResults: false, prompt: current.label });
       const text = res?.matches?.[0];
-      if (text) onChange(join(value, text));
+      if (text) deliver(text, auto);
       else setNotice("Didn't catch that — tap 🎤 and try again.");
     } catch (err) {
       if (!/cancel/i.test(err?.message || "")) setNotice("Didn't catch that — tap 🎤 and try again.");
     } finally {
       setListening(false);
+      resumeWake();
     }
   };
 
-  const startWeb = () => {
+  const startWeb = (auto = false) => {
     const r = new WebRecognition();
     r.lang = current.locale;
     r.interimResults = true;
     r.continuous = false;
     const base = value;
+    let heard = "";
     r.onresult = (e) => {
-      let text = "";
-      for (let i = 0; i < e.results.length; i++) text += e.results[i][0].transcript;
-      onChange(join(base, text));
+      heard = "";
+      for (let i = 0; i < e.results.length; i++) heard += e.results[i][0].transcript;
+      if (!(auto && onAutoResult)) onChange(join(base, heard));
     };
     r.onerror = (e) => {
       const msg = {
@@ -98,7 +109,11 @@ function MicButton({ value, onChange, disabled, compact = false }) {
       }[e.error];
       if (msg) setNotice(msg);
     };
-    r.onend = () => { setListening(false); rec.current = null; };
+    r.onend = () => {
+      setListening(false);
+      rec.current = null;
+      if (auto && heard.trim()) deliver(heard, true);
+    };
     rec.current = r;
     setListening(true);
     try { r.start(); } catch { setListening(false); }
@@ -115,6 +130,15 @@ function MicButton({ value, onChange, disabled, compact = false }) {
     else startWeb();
   };
 
+  useEffect(() => {
+    if (!autoStart || !supported) return undefined;
+    const id = setTimeout(() => (isNative ? startNative(true) : startWeb(true)), 400);
+    return () => clearTimeout(id);
+    // Only when a new wake-up arrives, not on every keystroke.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoStart]);
+
+  if (!supported) return null;
   const size = compact ? 14 : 16;
 
   return (

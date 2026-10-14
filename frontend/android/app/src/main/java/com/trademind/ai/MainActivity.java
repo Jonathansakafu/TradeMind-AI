@@ -8,6 +8,7 @@ public class MainActivity extends BridgeActivity {
   @Override
   public void onCreate(Bundle savedInstanceState) {
     WebView.setWebContentsDebuggingEnabled(true);
+    registerPlugin(WakeWordPlugin.class); // "Hey TradeMind" wake word
     super.onCreate(savedInstanceState);
   }
 }

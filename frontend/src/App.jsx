@@ -28,6 +28,7 @@ import AskAI from "./pages/AskAI";
 import Guide from "./pages/Guide";
 import TradingSession from "./pages/TradingSession";
 import UpdateBanner from "./components/UpdateBanner";
+import { wakeWordSupported, wakeStatus, startWake, onWake } from "./utils/wakeWord";
 import { refreshPushRegistration, autoSetupAndroidPush, initAndroidAlertDisplay } from "./utils/pushNotifications";
 
 // Welcome and login pages for someone already logged in: go straight to
@@ -86,6 +87,22 @@ function PushSync() {
   return null;
 }
 
+// "Hey TradeMind" (Android app): switch the listener back on when the app
+// opens (after a phone restart Android won't start it by itself), and open
+// Ask AI with voice typing when the phrase is heard.
+function WakeWordSync() {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!wakeWordSupported) return;
+    wakeStatus().then((s) => { if (s?.enabled && !s.running) startWake().catch(() => {}); }).catch(() => {});
+  }, []);
+
+  useEffect(() => onWake(() => navigate(`/ask-ai?listen=${Date.now()}`)), [navigate]);
+
+  return null;
+}
+
 function App() {
   return (
     <AuthProvider>
@@ -94,6 +111,7 @@ function App() {
       <UpdateBanner />
       <Router>
         <PushSync />
+        <WakeWordSync />
         <Routes>
           <Route path="/" element={<GuestRoute><Home /></GuestRoute>} />
           <Route path="/login" element={<GuestRoute><Login /></GuestRoute>} />

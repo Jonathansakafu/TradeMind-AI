@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import MainLayout from "../layouts/MainLayout";
 import { Sparkles, Send, BookOpen, History, HelpCircle, Image, User, Bot, MessageSquarePlus, MessagesSquare, Trash2 } from "lucide-react";
 import SpeakButton from "../components/SpeakButton";
@@ -18,6 +19,9 @@ function AskAI() {
   const [showHistory, setShowHistory] = useState(false);
   const [conversations, setConversations] = useState([]);
   const bottomRef = useRef(null);
+  // Opened by "Hey TradeMind": start voice typing and send what's said.
+  const [params] = useSearchParams();
+  const listenKey = params.get("listen");
   const { headers } = useAuth();
   const { conversationId, messages, loading, restoring, ask, newChat, selectConversation } =
     useChatConversation("askAI.conversationId");
@@ -210,7 +214,8 @@ function AskAI() {
             placeholder="Ask about your books or trade history..."
             className="flex-1 min-w-0 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 sm:px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-green-500"
           />
-          <MicButton value={input} onChange={setInput} disabled={loading} />
+          <MicButton value={input} onChange={setInput} disabled={loading} autoStart={listenKey}
+            onAutoResult={(text) => { setInput(""); ask(text); }} />
           <button
             type="submit"
             disabled={loading || !input.trim()}
