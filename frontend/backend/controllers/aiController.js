@@ -1,5 +1,6 @@
 const Trade = require("../models/Trade");
 const userDataContext = require("../services/userDataContext");
+const pipelineStats = require("../services/pipelineStats");
 const Analysis = require("../models/Analysis");
 const BookConcept = require("../models/BookConcept");
 const ChatConversation = require("../models/ChatConversation");
@@ -436,5 +437,18 @@ exports.deleteConversation = async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ message: err.message });
+  }
+};
+
+// Hey TradeMind: WAV audio (body) -> text of the question. Body is raw
+// audio/wav (express.raw on the route), ?lang=en|sw|fr|ar|zh|ko|ja.
+exports.transcribeVoice = async (req, res) => {
+  if (!Buffer.isBuffer(req.body) || req.body.length < 4000) return res.json({ text: "" });
+  try {
+    const text = await claudeAI.transcribeSpeech(req.body, String(req.query.lang || "").slice(0, 2));
+    res.json({ text });
+  } catch (err) {
+    pipelineStats.recordError("chat", `transcribe: ${err.message}`);
+    res.status(502).json({ message: "Couldn't understand the audio right now." });
   }
 };

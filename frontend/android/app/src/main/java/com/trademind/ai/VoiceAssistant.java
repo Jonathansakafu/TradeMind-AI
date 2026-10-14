@@ -4,18 +4,18 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.PixelFormat;
+import android.media.AudioFormat;
+import android.media.AudioRecord;
+import android.media.MediaRecorder;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.os.Build;
-import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
-import android.speech.RecognitionListener;
-import android.speech.RecognizerIntent;
-import android.speech.SpeechRecognizer;
+import android.os.SystemClock;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.UtteranceProgressListener;
 import android.speech.tts.Voice;
@@ -28,6 +28,7 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
@@ -47,11 +48,13 @@ import org.json.JSONObject;
 /**
  * "Hey TradeMind" hands-free assistant (added 2026-10-14): a small floating
  * card over whatever is on screen -- the orb, what you said, the answer --
- * instead of opening the app. Listens with Android's speech recogniser,
- * asks Ask AI in short spoken style (POST /api/ai/ask/stream, voice: true,
+ * instead of opening the app. Records the question itself (Android blocks
+ * Google's recogniser for background apps; this service already holds the
+ * microphone), has the server transcribe it (Groq Whisper), asks Ask AI in short spoken style (POST /api/ai/ask/stream, voice: true,
  * saved in the chat history), shows the answer as it arrives and reads it
  * aloud. Says so when there's no internet. Tap the card to continue in the
- * app. Runs inside WakeWordService, which has paused the wake-word
+ * app. Without "display over other apps" it runs without the card: spoken
+ * answer plus a notification. It never opens the app by itself. Runs inside WakeWordService, which has paused the wake-word
  * listener until finish() is called.
  */
 class VoiceAssistant {
@@ -59,6 +62,8 @@ class VoiceAssistant {
     void onAssistantFinished();
 
     void openApp(Intent intent);
+
+    void showAnswerNotification(String question, String answer);
   }
 
   private static final String TAG = "VoiceAssistant";
@@ -77,7 +82,9 @@ class VoiceAssistant {
   private View card;
   private OrbView orb;
   private TextView status, question, answer, footer;
-  private SpeechRecognizer recognizer;
+  private volatile boolean recording = false;
+  private final boolean withCard;
+  private String asked = null;
   private TextToSpeech tts;
   private boolean ttsReady = false;
   private String pendingSpeech = null;
@@ -86,8 +93,9 @@ class VoiceAssistant {
   private final StringBuilder answerText = new StringBuilder();
   private final Runnable closeLater = this::finish;
 
-  VoiceAssistant(Context ctx, SharedPreferences prefs, Host host) {
+  VoiceAssistant(Context ctx, SharedPreferences prefs, boolean withCard, Host host) {
     this.ctx = ctx;
+    this.withCard = withCard;
     this.prefs = prefs;
     this.host = host;
     this.locale = prefs.getString("micLocale", "en-US");
@@ -98,20 +106,16 @@ class VoiceAssistant {
   // ---------- lifecycle ----------
 
   void start() {
-    showCard();
+    if (withCard) showCard();
     if (speakAnswers) {
       tts = new TextToSpeech(ctx, (s) -> main.post(() -> onTtsReady(s)));
     }
     if (!online()) {
-      setStatus(msg("offlineTitle"));
-      answer.setText(msg("offline"));
-      say(msg("offline"));
+      fail(msg("offlineTitle"), msg("offline"));
       return;
     }
     if (prefs.getString("token", null) == null) {
-      setStatus(msg("loginTitle"));
-      answer.setText(msg("login"));
-      say(msg("login"));
+      fail(msg("loginTitle"), msg("login"));
       return;
     }
     listen();
@@ -121,13 +125,7 @@ class VoiceAssistant {
     if (finished) return;
     finished = true;
     main.removeCallbacksAndMessages(null);
-    if (recognizer != null) {
-      try {
-        recognizer.destroy();
-      } catch (Exception ignored) {
-      }
-      recognizer = null;
-    }
+    recording = false;
     if (tts != null) {
       try {
         tts.stop();
@@ -246,6 +244,18 @@ class VoiceAssistant {
     if (status != null) status.setText(s);
   }
 
+  private void setAnswer(String s) {
+    if (answer != null) answer.setText(s);
+  }
+
+  private void setFooter(String s) {
+    if (footer != null) footer.setText(s);
+  }
+
+  private void level(float v) {
+    if (orb != null) orb.setLevel(v);
+  }
+
   private void openInApp() {
     Intent i = new Intent(ctx, MainActivity.class)
         .putExtra(WakeWordService.EXTRA_OPEN_CONVERSATION, conversationId != null ? conversationId : "")
@@ -257,92 +267,181 @@ class VoiceAssistant {
   // ---------- listening ----------
 
   private void listen() {
-    if (!SpeechRecognizer.isRecognitionAvailable(ctx)) {
-      fallbackToApp();
-      return;
-    }
-    recognizer = SpeechRecognizer.createSpeechRecognizer(ctx);
-    recognizer.setRecognitionListener(new RecognitionListener() {
-      @Override public void onReadyForSpeech(Bundle params) {}
-      @Override public void onBeginningOfSpeech() {}
-      @Override public void onRmsChanged(float rmsdB) {
-        if (orb != null) orb.setLevel((rmsdB + 2f) / 12f);
+    setStatus(msg("listening"));
+    recording = true;
+    io.execute(() -> {
+      byte[] wav = record();
+      if (finished) return;
+      if (wav == null) {
+        main.post(this::noHear);
+        return;
       }
-      @Override public void onBufferReceived(byte[] buffer) {}
-      @Override public void onEndOfSpeech() {
+      main.post(() -> {
         setStatus(msg("thinking"));
-      }
-      @Override public void onError(int error) {
-        onListenError(error);
-      }
-      @Override public void onResults(Bundle results) {
-        String q = first(results);
-        if (q == null || q.trim().isEmpty()) {
-          onListenError(SpeechRecognizer.ERROR_NO_MATCH);
+        main.postDelayed(() -> { if (asked == null && !finished) setStatus(msg("waking")); }, 7000);
+      });
+      final String text = transcribe(wav);
+      main.post(() -> {
+        if (finished) return;
+        if (text == null) {
+          if (httpCode == 401 || httpCode == 403) fail(msg("loginTitle"), msg("login"));
+          else if (!online()) fail(msg("offlineTitle"), msg("offline"));
+          else fail(msg("errorTitle"), msg("error"));
+        } else if (text.trim().isEmpty()) {
+          noHear();
         } else {
-          ask(q.trim());
+          ask(text.trim());
         }
-      }
-      @Override public void onPartialResults(Bundle partial) {
-        String q = first(partial);
-        if (q != null && !q.isEmpty()) showQuestion(q);
-      }
-      @Override public void onEvent(int eventType, Bundle params) {}
+      });
     });
-    Intent i = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
-        .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-        .putExtra(RecognizerIntent.EXTRA_LANGUAGE, locale)
-        .putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-        .putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-        .putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, ctx.getPackageName());
-    try {
-      recognizer.startListening(i);
-    } catch (Exception e) {
-      Log.w(TAG, "startListening failed", e);
-      fallbackToApp();
-    }
   }
 
-  private static String first(Bundle b) {
-    if (b == null) return null;
-    ArrayList<String> m = b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
-    return m != null && !m.isEmpty() ? m.get(0) : null;
+  private void noHear() {
+    if (finished) return;
+    setStatus(msg("noHearTitle"));
+    setAnswer(msg("noHear"));
+    say(msg("noHear"));
+  }
+
+  // Records until the speaker pauses (~1.3 s of quiet after speech), 15 s at
+  // most; null if nothing was said within 7 s. 16 kHz mono 16-bit WAV.
+  private byte[] record() {
+    final int rate = 16000;
+    try {
+      Thread.sleep(350); // let the wake beep finish
+    } catch (InterruptedException e) {
+      return null;
+    }
+    AudioRecord rec;
+    try {
+      int min = AudioRecord.getMinBufferSize(rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
+      rec = new AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION, rate, AudioFormat.CHANNEL_IN_MONO,
+          AudioFormat.ENCODING_PCM_16BIT, Math.max(min, rate));
+      if (rec.getState() != AudioRecord.STATE_INITIALIZED) {
+        rec.release();
+        return null;
+      }
+      rec.startRecording();
+    } catch (Exception e) {
+      Log.w(TAG, "microphone unavailable", e);
+      return null;
+    }
+    ByteArrayOutputStream pcm = new ByteArrayOutputStream();
+    short[] frame = new short[320]; // 20 ms
+    double floor = Double.MAX_VALUE;
+    int frames = 0, loudRun = 0, quietMs = 0;
+    boolean spoke = false;
+    long started = SystemClock.elapsedRealtime();
+    try {
+      while (recording && !finished) {
+        int n = rec.read(frame, 0, frame.length);
+        if (n <= 0) break;
+        double sum = 0;
+        for (int i = 0; i < n; i++) {
+          sum += (double) frame[i] * frame[i];
+          pcm.write(frame[i] & 0xff);
+          pcm.write((frame[i] >> 8) & 0xff);
+        }
+        double rms = Math.sqrt(sum / n);
+        if (++frames <= 15) floor = Math.min(floor, rms); // quietest of the first 300 ms
+        double threshold = Math.max(350, (floor == Double.MAX_VALUE ? 0 : floor) * 3);
+        final float lvl = (float) Math.min(1.0, rms / 3500.0);
+        main.post(() -> level(lvl));
+        if (rms > threshold) {
+          if (++loudRun >= 4) spoke = true;
+          quietMs = 0;
+        } else {
+          loudRun = 0;
+          if (spoke) quietMs += 20;
+        }
+        long elapsed = SystemClock.elapsedRealtime() - started;
+        if (spoke && quietMs >= 1300) break;
+        if (!spoke && elapsed > 7000) break;
+        if (elapsed > 15000) break;
+      }
+    } finally {
+      try {
+        rec.stop();
+      } catch (Exception ignored) {
+      }
+      rec.release();
+    }
+    return spoke ? wav(pcm.toByteArray(), rate) : null;
+  }
+
+  private static byte[] wav(byte[] pcm, int rate) {
+    ByteArrayOutputStream out = new ByteArrayOutputStream(pcm.length + 44);
+    int byteRate = rate * 2;
+    writeAscii(out, "RIFF");
+    writeInt(out, 36 + pcm.length);
+    writeAscii(out, "WAVEfmt ");
+    writeInt(out, 16);
+    writeShort(out, 1); // PCM
+    writeShort(out, 1); // mono
+    writeInt(out, rate);
+    writeInt(out, byteRate);
+    writeShort(out, 2);
+    writeShort(out, 16);
+    writeAscii(out, "data");
+    writeInt(out, pcm.length);
+    out.write(pcm, 0, pcm.length);
+    return out.toByteArray();
+  }
+
+  private static void writeAscii(ByteArrayOutputStream o, String s) {
+    for (int i = 0; i < s.length(); i++) o.write(s.charAt(i));
+  }
+
+  private static void writeInt(ByteArrayOutputStream o, int v) {
+    o.write(v & 0xff);
+    o.write((v >> 8) & 0xff);
+    o.write((v >> 16) & 0xff);
+    o.write((v >> 24) & 0xff);
+  }
+
+  private static void writeShort(ByteArrayOutputStream o, int v) {
+    o.write(v & 0xff);
+    o.write((v >> 8) & 0xff);
+  }
+
+  private volatile int httpCode = 0;
+
+  // Server-side speech-to-text. "" = nothing understood, null = failed.
+  private String transcribe(byte[] wav) {
+    HttpURLConnection c = null;
+    try {
+      String api = prefs.getString("apiUrl", "https://trade-mind-ai-seven.vercel.app");
+      c = (HttpURLConnection) new URL(api + "/api/ai/transcribe?lang=" + lang).openConnection();
+      c.setRequestMethod("POST");
+      c.setConnectTimeout(20000);
+      c.setReadTimeout(90000);
+      c.setDoOutput(true);
+      c.setRequestProperty("Content-Type", "audio/wav");
+      c.setRequestProperty("Authorization", "Bearer " + prefs.getString("token", ""));
+      try (OutputStream os = c.getOutputStream()) {
+        os.write(wav);
+      }
+      httpCode = c.getResponseCode();
+      if (httpCode >= 400) return null;
+      StringBuilder sb = new StringBuilder();
+      try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), StandardCharsets.UTF_8))) {
+        String line;
+        while ((line = r.readLine()) != null) sb.append(line);
+      }
+      return new JSONObject(sb.toString()).optString("text", "");
+    } catch (Exception e) {
+      Log.w(TAG, "transcribe failed", e);
+      return null;
+    } finally {
+      if (c != null) c.disconnect();
+    }
   }
 
   private void showQuestion(String q) {
+    asked = q;
+    if (question == null) return;
     question.setVisibility(View.VISIBLE);
     question.setText("“" + q + "”");
-  }
-
-  private void onListenError(int error) {
-    if (finished) return;
-    switch (error) {
-      case SpeechRecognizer.ERROR_NO_MATCH:
-      case SpeechRecognizer.ERROR_SPEECH_TIMEOUT:
-        setStatus(msg("noHearTitle"));
-        answer.setText(msg("noHear"));
-        say(msg("noHear"));
-        break;
-      case SpeechRecognizer.ERROR_NETWORK:
-      case SpeechRecognizer.ERROR_NETWORK_TIMEOUT:
-        setStatus(msg("offlineTitle"));
-        answer.setText(msg("offline"));
-        say(msg("offline"));
-        break;
-      default:
-        // Background microphone blocked or recogniser busy: fall back to
-        // opening Ask AI, which listens in the foreground.
-        Log.w(TAG, "recogniser error " + error);
-        fallbackToApp();
-    }
-  }
-
-  private void fallbackToApp() {
-    Intent i = new Intent(ctx, MainActivity.class)
-        .putExtra(WakeWordService.EXTRA_WAKE, true)
-        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-    finish();
-    host.openApp(i);
   }
 
   // ---------- asking ----------
@@ -350,10 +449,10 @@ class VoiceAssistant {
   private void ask(String q) {
     showQuestion(q);
     setStatus(msg("thinking"));
-    if (orb != null) orb.setLevel(0.3f);
+    level(0.3f);
     if (!online()) {
       setStatus(msg("offlineTitle"));
-      answer.setText(msg("offline"));
+      setAnswer(msg("offline"));
       say(msg("offline"));
       return;
     }
@@ -418,7 +517,7 @@ class VoiceAssistant {
         break;
       case "chunk":
         answerText.append(data.optString("text", ""));
-        answer.setText(answerText.toString().trim());
+        setAnswer(answerText.toString().trim());
         setStatus(msg("answer"));
         break;
       case "error":
@@ -432,14 +531,16 @@ class VoiceAssistant {
   private void onAnswered() {
     if (finished || answerText.length() == 0) return;
     setStatus(msg("answer"));
+    if (!withCard) host.showAnswerNotification(asked, answerText.toString().trim());
     if (speakAnswers) say(answerText.toString());
     else closeIn(25000);
   }
 
   private void fail(String title, String message) {
     if (finished) return;
+    if (!withCard) host.showAnswerNotification(title, message);
     setStatus(title);
-    answer.setText(message);
+    setAnswer(message);
     say(message);
   }
 
@@ -457,7 +558,7 @@ class VoiceAssistant {
     Locale loc = Locale.forLanguageTag(locale);
     int res = tts.setLanguage(loc);
     if (res == TextToSpeech.LANG_MISSING_DATA || res == TextToSpeech.LANG_NOT_SUPPORTED) {
-      footer.setText(msg("noVoice"));
+      setFooter(msg("noVoice"));
       tts.shutdown();
       tts = null;
       if (pendingSpeech != null) closeIn(25000);
@@ -479,7 +580,7 @@ class VoiceAssistant {
     tts.setSpeechRate("normal".equals(prefs.getString("speed", "slow")) ? 0.95f : 0.8f);
     tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
       @Override public void onStart(String id) {
-        main.post(() -> { if (orb != null) orb.setLevel(0.6f); });
+        main.post(() -> level(0.6f));
       }
       @Override public void onDone(String id) {
         if (id.startsWith("last")) main.post(() -> closeIn(9000));
@@ -488,7 +589,7 @@ class VoiceAssistant {
         if (id.startsWith("last")) main.post(() -> closeIn(15000));
       }
       @Override public void onRangeStart(String id, int start, int end, int frame) {
-        main.post(() -> { if (orb != null) orb.setLevel(0.45f + (float) Math.random() * 0.5f); });
+        main.post(() -> level(0.45f + (float) Math.random() * 0.5f));
       }
     });
     ttsReady = true;

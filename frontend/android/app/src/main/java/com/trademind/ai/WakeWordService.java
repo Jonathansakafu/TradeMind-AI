@@ -204,8 +204,15 @@ public class WakeWordService extends Service implements RecognitionListener {
 
   // ---- recogniser callbacks (main thread) ----
 
+  // React as soon as the whole phrase is heard, so a question said right
+  // after it isn't lost waiting for a pause.
   @Override
-  public void onPartialResult(String hypothesis) {}
+  public void onPartialResult(String hypothesis) {
+    try {
+      if (new JSONObject(hypothesis).optString("partial", "").contains("hey trade mind")) check("{\"text\":\"trade mind\"}");
+    } catch (Exception ignored) {
+    }
+  }
 
   @Override
   public void onResult(String hypothesis) {
@@ -241,15 +248,16 @@ public class WakeWordService extends Service implements RecognitionListener {
 
   private void onWake() {
     beep();
-    // Settings > Hey TradeMind > "When I call": answer in a floating card
-    // (spoken or text only) or open Ask AI. The card needs "display over
-    // other apps"; without it, open the app as before.
+    // Settings > Hey TradeMind > "When I call": answer hands-free (spoken
+    // or text only) or open Ask AI. The floating card needs "display over
+    // other apps"; without it the answer is spoken and shown as a
+    // notification -- the app is only opened when the trader chose that.
     String mode = getSharedPreferences(PREFS, MODE_PRIVATE).getString("response", "voice");
     boolean canOverlay = Build.VERSION.SDK_INT < 23 || Settings.canDrawOverlays(this);
-    if (!"app".equals(mode) && canOverlay) {
+    if (!"app".equals(mode)) {
       pauseListening(ASSISTANT_MAX_MS); // keep the mic free (and don't hear ourselves) until the card closes
       try {
-        assistant = new VoiceAssistant(this, getSharedPreferences(PREFS, MODE_PRIVATE), new VoiceAssistant.Host() {
+        assistant = new VoiceAssistant(this, getSharedPreferences(PREFS, MODE_PRIVATE), canOverlay, new VoiceAssistant.Host() {
           @Override
           public void onAssistantFinished() {
             assistant = null;
@@ -259,6 +267,11 @@ public class WakeWordService extends Service implements RecognitionListener {
           @Override
           public void openApp(Intent intent) {
             openAppOrNotify(intent);
+          }
+
+          @Override
+          public void showAnswerNotification(String question, String answer) {
+            showAnswer(question, answer);
           }
         });
         assistant.start();
@@ -354,6 +367,32 @@ public class WakeWordService extends Service implements RecognitionListener {
     if (!running) return;
     try {
       getSystemService(NotificationManager.class).notify(NOTIF_ID, listeningNotification());
+    } catch (Exception ignored) {
+    }
+  }
+
+  // The answer when there's no floating card (no "display over other apps").
+  private void showAnswer(String question, String answer) {
+    Intent open = new Intent(this, MainActivity.class)
+        .putExtra(EXTRA_OPEN_CONVERSATION, "")
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+    PendingIntent tap = PendingIntent.getActivity(this, 3, open,
+        PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+    String title = question != null && !question.isEmpty() ? "“" + question + "”" : "TradeMind AI";
+    Notification n = new NotificationCompat.Builder(this, CH_HIT)
+        .setSmallIcon(R.drawable.ic_stat_tm)
+        .setContentTitle(title)
+        .setContentText(answer)
+        .setStyle(new NotificationCompat.BigTextStyle().bigText(answer))
+        .setPriority(NotificationCompat.PRIORITY_HIGH)
+        .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+        .setOnlyAlertOnce(true)
+        .setSilent(true)
+        .setAutoCancel(true)
+        .setContentIntent(tap)
+        .build();
+    try {
+      getSystemService(NotificationManager.class).notify(HIT_ID, n);
     } catch (Exception ignored) {
     }
   }

@@ -84,7 +84,7 @@ function WakeWordSettings() {
             <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">When I call TradeMind</p>
             <div className="space-y-1.5">
               {[
-                ["voice", "Speak the answer", "Orb and answer in a small card over any app — the app doesn't open"],
+                ["voice", "Speak the answer", "Orb and answer in a small card over any app — Ask AI never opens"],
                 ["text", "Show the answer only", "Same card, silent (for meetings, public places)"],
                 ["app", "Open Ask AI", "Opens the app and listens there"],
               ].map(([value, label, hint]) => (
@@ -112,7 +112,7 @@ function WakeWordSettings() {
           <p className="text-xs text-slate-500 dark:text-slate-400">It listens and answers in the language picked on Ask AI's 🎤 chip.</p>
           {!s.canOpenOverApps && (
             <div className={row}>
-              <p className="text-xs text-slate-700 dark:text-slate-300"><b>{prefs.response === "app" ? "Open by itself" : "Needed for the answer card"}:</b> allow "Display over other apps". {prefs.response === "app" ? "Without it you'll get a notification to tap." : "Until then TradeMind opens the app instead."}</p>
+              <p className="text-xs text-slate-700 dark:text-slate-300"><b>{prefs.response === "app" ? "Open by itself" : "Needed for the answer card"}:</b> allow "Display over other apps". {prefs.response === "app" ? "Without it you'll get a notification to tap." : "Until then the answer comes as speech and a notification."}</p>
               <button onClick={openOverlaySettings} className={fixBtn}>Allow</button>
             </div>
           )}

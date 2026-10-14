@@ -1188,3 +1188,23 @@ exports.streamAnswer = async function* (question, retrievedChunks = [], extra = 
 };
 
 exports.answerSourcesFor = chunksToSources;
+
+// Speech-to-text for the "Hey TradeMind" floating assistant (added
+// 2026-10-14): the phone records the question itself (Android blocks
+// Google's recogniser for apps in the background) and sends a short WAV.
+// Groq Whisper, with the chosen language as a hint. Whisper invents a
+// stock phrase on near-silence, so those count as "nothing heard".
+const WHISPER_SILENCE = /^(thank you\.?|thanks for watching!?|you|bye\.?|\.|ok\.?|subtitles by .*|ترجمة .*|字幕.*|ご視聴ありがとうございました.*|시청해 주셔서 감사합니다.*)$/i;
+exports.transcribeSpeech = async (wav, lang) => {
+  const file = await Groq.toFile(wav, "question.wav", { type: "audio/wav" });
+  const res = await getGroqClient().audio.transcriptions.create({
+    file,
+    model: "whisper-large-v3-turbo",
+    language: /^[a-z]{2}$/.test(lang || "") ? lang : undefined,
+    prompt: "Trading questions: EURUSD, GBPUSD, XAUUSD, gold, stop loss, take profit, win rate, TradeMind.",
+    response_format: "json",
+    temperature: 0,
+  });
+  const text = String(res.text || "").trim();
+  return WHISPER_SILENCE.test(text) ? "" : text;
+};
