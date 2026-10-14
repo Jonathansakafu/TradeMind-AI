@@ -164,14 +164,17 @@ router.get("/rechart-trades", async (req, res) => {
       if (!dry && out.replaced + out.filled + out.failed >= limit) { todo++; continue; }
       out.checked++;
       let generated = !t.screenshot?.url;
+      let original = t.screenshot?.url ? "?" : "(none)";
       if (!generated && t.screenshot?.publicId) {
         try {
           const info = await cloudinary.api.resource(t.screenshot.publicId);
-          generated = GENERATED.test(String(info.original_filename || ""));
+          original = String(info.original_filename || "");
+          generated = GENERATED.test(original);
         } catch (err) {
           generated = err?.error?.http_code === 404; // old picture already gone
         }
       }
+      if (dry) out.details.push(`${generated ? "REPLACE" : "keep"} ${t.pair} ${original}`);
       if (!generated) {
         out.keptUserUploads++;
         if (!dry) await Trade.updateOne({ _id: t._id }, { screenshotIsUpload: true }); // don't check it again
