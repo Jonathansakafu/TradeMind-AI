@@ -63,4 +63,6 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- "Hey TradeMind" turns the screen on when called while the phone sleeps. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 </manifest>

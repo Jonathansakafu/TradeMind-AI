@@ -1,7 +1,11 @@
 package com.trademind.ai;
 
 import android.content.Context;
+import android.content.BroadcastReceiver;
 import android.content.Intent;
+import android.content.IntentFilter;
+import android.app.KeyguardManager;
+import android.os.PowerManager;
 import android.content.SharedPreferences;
 import android.graphics.PixelFormat;
 import android.media.AudioAttributes;
@@ -96,6 +100,9 @@ class VoiceAssistant {
   private boolean ttsReady = false;
   private boolean answerVoice = false;
   private boolean answered = false;
+  private boolean secondTry = false; // after "Proceed, I'm still listening"
+  private BroadcastReceiver unlockReceiver;
+  private PowerManager.WakeLock screenOn;
   private int spokenUpTo = 0;
   private int partNo = 0;
   private android.media.MediaPlayer player; // pre-recorded greeting
@@ -124,6 +131,7 @@ class VoiceAssistant {
   // ---------- lifecycle ----------
 
   void start() {
+    wakeScreen();
     if (withCard) showCard();
     takeAudioFocus(); // other sound dips while we listen and talk
     if (speakAnswers) {
@@ -173,6 +181,14 @@ class VoiceAssistant {
       player = null;
     }
     releaseAudio();
+    dropUnlockReceiver();
+    if (screenOn != null) {
+      try {
+        if (screenOn.isHeld()) screenOn.release();
+      } catch (Exception ignored) {
+      }
+      screenOn = null;
+    }
     io.shutdownNow();
     if (card != null && wm != null) {
       try {
@@ -305,22 +321,149 @@ class VoiceAssistant {
 
   // ---------- listening ----------
 
+  // Silence: 5 s -> "Proceed, I'm still listening", 3 s more -> close.
   private void listen() {
     recording = true;
+    final long waitMs = secondTry ? 3000 : 5000;
     io.execute(() -> {
-      byte[] wav = record();
+      byte[] wav = record(waitMs);
       if (finished) return;
-      if (wav == null) {
-        main.post(this::noHear);
-        return;
-      }
       main.post(() -> {
-        setStatus(msg("thinking"));
-        level(0.3f);
-        main.postDelayed(() -> { if (answerText.length() == 0 && !finished) setStatus(msg("waking")); }, 6000);
+        if (finished) return;
+        if (wav == null) {
+          if (secondTry) finish(); // still silent: close straight away
+          else stillListening();
+        } else if (isLocked()) {
+          waitForUnlock(wav);
+        } else {
+          send(wav);
+        }
       });
-      voiceAsk(wav);
     });
+  }
+
+  private void send(byte[] wav) {
+    if (tts != null && ttsReady) { // back from the app-language phrases
+      answerVoice = useLanguage(locale);
+      tts.setSpeechRate(answerRate());
+    }
+    setStatus(msg("thinking"));
+    level(0.3f);
+    main.postDelayed(() -> { if (answerText.length() == 0 && !finished) setStatus(msg("waking")); }, 6000);
+    io.execute(() -> voiceAsk(wav));
+  }
+
+  private void stillListening() {
+    secondTry = true;
+    String text = sayInAppLanguage("still", "prompt"); // listen() again when spoken
+    setStatus(text);
+    if (text == null || !speaking) listen();
+  }
+
+  // ---------- locked phone ----------
+
+  private boolean isLocked() {
+    KeyguardManager km = (KeyguardManager) ctx.getSystemService(Context.KEYGUARD_SERVICE);
+    return km != null && km.isKeyguardLocked();
+  }
+
+  // Turns the screen on when called while the phone sleeps.
+  private void wakeScreen() {
+    try {
+      PowerManager pm = (PowerManager) ctx.getSystemService(Context.POWER_SERVICE);
+      if (pm == null || pm.isInteractive()) return;
+      @SuppressWarnings("deprecation")
+      int flags = PowerManager.SCREEN_BRIGHT_WAKE_LOCK | PowerManager.ACQUIRE_CAUSES_WAKEUP | PowerManager.ON_AFTER_RELEASE;
+      screenOn = pm.newWakeLock(flags, "TradeMind:heyTradeMind");
+      screenOn.acquire(60_000);
+    } catch (Exception e) {
+      Log.w(TAG, "couldn't wake the screen", e);
+    }
+  }
+
+  // Asked while locked: "Jonathan, you have to unlock your Android device
+  // first, then I will respond" -- keeps the question and answers as soon
+  // as the phone is unlocked (30 s at most).
+  private void waitForUnlock(final byte[] wav) {
+    String text = sayInAppLanguage("unlock", "unlock");
+    setStatus(text);
+    setAnswer(text);
+    unlockReceiver = new BroadcastReceiver() {
+      @Override
+      public void onReceive(Context c, Intent i) {
+        dropUnlockReceiver();
+        main.removeCallbacks(closeLater);
+        if (!finished) send(wav);
+      }
+    };
+    try {
+      ctx.registerReceiver(unlockReceiver, new IntentFilter(Intent.ACTION_USER_PRESENT));
+    } catch (Exception e) {
+      unlockReceiver = null;
+    }
+    closeIn(30000);
+  }
+
+  private void dropUnlockReceiver() {
+    if (unlockReceiver == null) return;
+    try {
+      ctx.unregisterReceiver(unlockReceiver);
+    } catch (Exception ignored) {
+    }
+    unlockReceiver = null;
+  }
+
+  private boolean speaking = false;
+
+  // Speaks one of PHRASES in the app language (English if the phone has no
+  // voice for it) and returns the text; utterance `id` tells the listener
+  // what to do next. Text only (returns it) in silent mode.
+  private String sayInAppLanguage(String key, String id) {
+    String appLang = prefs.getString("appLang", lang);
+    speaking = false;
+    if (speakAnswers && tts != null && ttsReady) {
+      if (!useLanguage(appLocale(appLang))) {
+        appLang = "en";
+        useLanguage("en-US");
+      }
+      String text = phrase(appLang, key);
+      tts.setSpeechRate(1.0f);
+      louder();
+      speaking = tts.speak(text, TextToSpeech.QUEUE_FLUSH, loud(), id) == TextToSpeech.SUCCESS;
+      return text;
+    }
+    return phrase(appLang, key);
+  }
+
+  private static final Map<String, Map<String, String>> PHRASES = new HashMap<>();
+
+  private static void phrases(String language, String still, String unlock) {
+    Map<String, String> m = new HashMap<>();
+    m.put("still", still);
+    m.put("unlock", unlock);
+    PHRASES.put(language, m);
+  }
+
+  static {
+    phrases("en", "Proceed[, {name}], I'm still listening.", "[{name}, ]you have to unlock your Android device first, then I will respond.");
+    phrases("sw", "Endelea[, {name}], bado nakusikiliza.", "[{name}, ]fungua kwanza simu yako ya Android, kisha nitakujibu.");
+    phrases("fr", "Vas-y[, {name}], je t'écoute toujours.", "[{name}, ]déverrouille d'abord ton appareil Android, ensuite je te répondrai.");
+    phrases("ar", "تفضل[ يا {name}]، ما زلت أستمع.", "[يا {name}، ]افتح قفل جهازك أندرويد أولاً، ثم سأجيبك.");
+    phrases("zh", "请说[，{name}]，我还在听。", "[{name}，]请先解锁你的安卓设备，然后我再回答你。");
+    phrases("ko", "말씀하세요[, {name}님], 아직 듣고 있어요.", "[{name}님, ]먼저 안드로이드 기기의 잠금을 해제해 주세요. 그러면 답해 드릴게요.");
+    phrases("ja", "どうぞ[、{name}さん]、まだ聞いていますよ。", "[{name}さん、]まずAndroid端末のロックを解除してください。そうしたらお答えします。");
+  }
+
+  private String phrase(String language, String key) {
+    Map<String, String> m = PHRASES.containsKey(language) ? PHRASES.get(language) : PHRASES.get("en");
+    return withName(prefs, m.get(key));
+  }
+
+  static String withName(SharedPreferences prefs, String t) {
+    String name = prefs.getString("userName", "").trim();
+    if (name.contains(" ")) name = name.substring(0, name.indexOf(' '));
+    if (name.isEmpty()) return t.replaceAll("\\[[^\\]]*\\]", "");
+    return t.replace("{name}", name).replace("[", "").replace("]", "");
   }
 
   private void noHear() {
@@ -335,7 +478,7 @@ class VoiceAssistant {
   // boosted background noise for speech and never stopped). Sensitivity
   // (Settings) lowers the level that counts as a voice. 12 s at most; null
   // if nothing was said within 6 s. Unboosted audio, levelled as a whole.
-  private byte[] record() {
+  private byte[] record(long waitMs) {
     final int rate = MicInput.RATE;
     MicInput rec;
     try {
@@ -385,7 +528,7 @@ class VoiceAssistant {
         }
         long elapsed = SystemClock.elapsedRealtime() - started;
         if (spoke && quietMs >= 700) break;
-        if (!spoke && elapsed > 6000) break;
+        if (!spoke && elapsed > waitMs) break;
         if (elapsed > 12000) break;
       }
     } finally {
@@ -600,10 +743,12 @@ class VoiceAssistant {
       }
       @Override public void onDone(String id) {
         if ("greet".equals(id)) main.post(VoiceAssistant.this::finishGreeting);
+        else if ("prompt".equals(id)) main.post(() -> { if (!finished) listen(); });
         else if (id.startsWith("last")) main.post(() -> closeIn(9000));
       }
       @Override public void onError(String id) {
         if ("greet".equals(id)) main.post(VoiceAssistant.this::finishGreeting);
+        else if ("prompt".equals(id)) main.post(() -> { if (!finished) listen(); });
         else if (id.startsWith("last")) main.post(() -> closeIn(15000));
       }
       @Override public void onRangeStart(String id, int start, int end, int frame) {
