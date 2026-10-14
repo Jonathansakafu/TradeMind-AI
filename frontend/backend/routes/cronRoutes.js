@@ -124,6 +124,7 @@ router.get("/health", async (req, res) => {
       pricesAvailable,
       config: {
         groqKey: !!process.env.GROQ_API_KEY,
+        cloudinary: !!(process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET),
         resendKey: !!process.env.RESEND_API_KEY,
         firebase: !!process.env.FIREBASE_SERVICE_ACCOUNT,
       },
@@ -131,6 +132,65 @@ router.get("/health", async (req, res) => {
       groq: req.query.probe ? await require("../services/claudeAI").probeGroq() : undefined,
       geminiProbe: req.query.probe ? await require("../services/geminiText").probe() : undefined,
     });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// One-off (2026-10-14): replace old auto-generated trade screenshots with
+// the new signal chart picture. Only pictures the app made itself
+// (Cloudinary original_filename "trade-snapshot-..." or "trade-PAIR-...")
+// and trades with no screenshot; uploads and screen captures are never
+// touched. The old picture is deleted once replaced (no duplicates).
+// ?limit=25 per call (call again until remaining = 0), ?dry=1 to only count.
+router.get("/rechart-trades", async (req, res) => {
+  const configuredSecret = process.env.CRON_SECRET;
+  if (!configuredSecret || req.query.secret !== configuredSecret) {
+    return res.status(401).json({ message: "Invalid cron secret" });
+  }
+  try {
+    const Trade = require("../models/Trade");
+    const cloudinary = require("../config/cloudinary");
+    const signalImage = require("../services/signalImage");
+    const GENERATED = /^(trade-snapshot-\d+|trade-[A-Z]{6}-[0-9a-f]{24})$/;
+    const limit = Math.min(60, Number(req.query.limit) || 25);
+    const dry = req.query.dry === "1";
+    // Skip trades already done (their picture is "chart-<id>").
+    const candidates = await Trade.find({ entryPrice: { $gt: 0 }, screenshotIsUpload: { $ne: true }, "screenshot.publicId": { $not: /\/chart-[0-9a-f]{24}$/ } })
+      .select("user pair entryPrice screenshot").sort({ createdAt: -1 }).lean();
+    const out = { checked: 0, replaced: 0, filled: 0, keptUserUploads: 0, failed: 0, details: [] };
+    let todo = 0;
+    for (const t of candidates) {
+      if (!dry && out.replaced + out.filled + out.failed >= limit) { todo++; continue; }
+      out.checked++;
+      let generated = !t.screenshot?.url;
+      if (!generated && t.screenshot?.publicId) {
+        try {
+          const info = await cloudinary.api.resource(t.screenshot.publicId);
+          generated = GENERATED.test(String(info.original_filename || ""));
+        } catch (err) {
+          generated = err?.error?.http_code === 404; // old picture already gone
+        }
+      }
+      if (!generated) {
+        out.keptUserUploads++;
+        if (!dry) await Trade.updateOne({ _id: t._id }, { screenshotIsUpload: true }); // don't check it again
+        continue;
+      }
+      if (dry) { todo++; continue; }
+      try {
+        const pic = await signalImage.forTrade(t);
+        if (!pic) throw new Error("no chart data");
+        await Trade.updateOne({ _id: t._id }, { screenshot: { url: pic.url, publicId: pic.publicId } });
+        if (t.screenshot?.publicId) await cloudinary.uploader.destroy(t.screenshot.publicId).catch(() => {});
+        if (t.screenshot?.url) out.replaced++; else out.filled++;
+        out.details.push(`${t.pair} ${t._id}`);
+      } catch (err) {
+        out.failed++;
+        out.details.push(`FAILED ${t.pair} ${t._id}: ${err.message}`);
+      }
+    }
+    res.json({ ...out, remaining: todo, dry });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

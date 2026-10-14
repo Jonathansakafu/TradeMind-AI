@@ -23,6 +23,7 @@ exports.getStatus = async (req, res) => {
         email: !!user.notificationPrefs?.email,
         emailMinConfidence: user.notificationPrefs?.emailMinConfidence ?? 70,
         newsCountdown: user.notificationPrefs?.newsCountdown !== false,
+        signalResults: user.notificationPrefs?.signalResults !== false,
       },
       email: user.email,
       browserDevices: user.pushSubscriptions?.length || 0,
@@ -36,11 +37,12 @@ exports.getStatus = async (req, res) => {
 
 exports.updatePrefs = async (req, res) => {
   try {
-    const { push, email, emailMinConfidence, newsCountdown } = req.body;
+    const { push, email, emailMinConfidence, newsCountdown, signalResults } = req.body;
     const set = {};
     if (typeof push === "boolean") set["notificationPrefs.push"] = push;
     if (typeof email === "boolean") set["notificationPrefs.email"] = email;
     if (typeof newsCountdown === "boolean") set["notificationPrefs.newsCountdown"] = newsCountdown;
+    if (typeof signalResults === "boolean") set["notificationPrefs.signalResults"] = signalResults;
     if (emailMinConfidence != null) {
       const n = Number(emailMinConfidence);
       if (!Number.isFinite(n) || n < 0 || n > 100) {

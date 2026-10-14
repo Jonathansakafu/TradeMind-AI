@@ -37,7 +37,7 @@ function lowerBound(arr, t) {
   return ans;
 }
 
-const SignalChart = forwardRef(function SignalChart({ notificationId, tradeId, query, tf = "1h", height = 380, compact = false, onLoaded, onError }, ref) {
+const SignalChart = forwardRef(function SignalChart({ notificationId, tradeId, query, tf = "1h", height = 380, compact = false, onLoaded, onError, hideStepList = false }, ref) {
   const { headers } = useAuth();
   const { theme } = useTheme();
   const dark = theme === "dark";
@@ -163,7 +163,7 @@ const SignalChart = forwardRef(function SignalChart({ notificationId, tradeId, q
         )}
         {!data && <div className="absolute inset-0 flex items-center justify-center"><Loader2 className="animate-spin text-green-500" /></div>}
         {/* Phones: the steps as a numbered list under the chart (numbered badges on it). */}
-        {data && narrow && layers.steps && data.steps.length > 0 && (
+        {data && narrow && !hideStepList && layers.steps && data.steps.length > 0 && (
           <ol className="px-2.5 py-2 space-y-1 text-[11px] leading-snug" style={{ color: palette(dark).text }}>
             {data.steps.map((st, i) => (
               <li key={i} className="flex gap-1.5">

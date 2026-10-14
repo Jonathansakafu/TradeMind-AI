@@ -73,6 +73,8 @@ const userSchema = new mongoose.Schema(
       emailMinConfidence: { type: Number, default: 70 },
       // Hourly countdown before high-impact news (services/newsCountdown.js).
       newsCountdown: { type: Boolean, default: true },
+      // "TP hit / SL hit" alerts with the result chart (signalOutcomes.sendResultAlerts).
+      signalResults: { type: Boolean, default: true },
     },
 
     // Per-user daily email counter backing EMAIL_DAILY_CAP in

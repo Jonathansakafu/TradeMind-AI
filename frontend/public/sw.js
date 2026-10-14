@@ -19,6 +19,7 @@ self.addEventListener("push", (event) => {
       body: data.body || "New trading signal",
       icon: "/favicon.png",
       badge: "/favicon.png",
+      ...(data.image ? { image: data.image } : {}), // signal chart picture
       tag: data.tag,
       renotify: !!data.tag,
       requireInteraction: false,

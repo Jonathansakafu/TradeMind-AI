@@ -45,7 +45,7 @@ exports.evaluateOpenSignals = async () => {
     signal: { $in: ["buy", "sell"] },
     entry: { $gt: 0 }, stopLoss: { $gt: 0 }, takeProfit: { $gt: 0 },
     createdAt: { $gte: new Date(now - LOOKBACK_MS), $lte: new Date(now - MIN_AGE_MS) },
-  }).select("pair signal entry stopLoss takeProfit createdAt").limit(2000);
+  }).select("user pair signal entry stopLoss takeProfit createdAt confidence type").limit(2000);
   if (!open.length) return { checked: 0, resolved: 0 };
 
   const byPair = new Map();
@@ -54,6 +54,7 @@ exports.evaluateOpenSignals = async () => {
     byPair.get(n.pair).push(n);
   }
   let resolved = 0;
+  const justResolved = [];
   for (const [pair, list] of byPair) {
     let candles;
     try {
@@ -68,9 +69,11 @@ exports.evaluateOpenSignals = async () => {
       if (!r) continue;
       await Notification.updateOne({ _id: n._id }, { simOutcome: r.simOutcome, simR: r.simR, simResolvedAt: new Date(r.at) });
       resolved++;
+      if (r.simOutcome !== "expired") justResolved.push({ n, r });
     }
   }
   pipelineStats.inc("outcomes.resolved", resolved);
+  await exports.sendResultAlerts(justResolved, now).catch((err) => console.error("Signal result alerts failed:", err.message));
   return { checked: open.length, resolved };
 };
 
@@ -107,4 +110,35 @@ exports.statsTextByPair = async (userId) => {
     out[pair] = `Track record of your own recent ${pair} signals (last 14 days, checked against real prices): ${parts.join("; ")}. Weigh this: be more selective in a direction that has been losing.`;
   }
   return out;
+};
+
+// "✅ XAUUSD SELL hit TP" with the result chart, when a fresh signal hits
+// its take profit or stop loss (added 2026-10-14). Only signals from the
+// last 24 h that resolved in the last 3 h (no flood after a pause); push
+// only; Settings switch "signalResults" (on unless turned off).
+exports.sendResultAlerts = async (list, now = Date.now()) => {
+  const { dispatchMessage, hasChannels } = require("./notifyDispatcher");
+  const signalImage = require("./signalImage");
+  let sent = 0;
+  for (const { n, r } of list) {
+    if (now - new Date(n.createdAt).getTime() > 24 * 3600e3 || now - new Date(r.at).getTime() > 3 * 3600e3) continue;
+    if (!(await hasChannels(n.user))) continue;
+    const win = r.simOutcome === "win";
+    const fresh = await Notification.findById(n._id).lean();
+    const image = await signalImage.withTimeout(signalImage.forNotification(fresh, { result: true }).catch(() => null), 10000);
+    const exit = win ? n.takeProfit : n.stopLoss;
+    const rr = r.simR != null ? ` (${r.simR >= 0 ? "+" : ""}${r.simR}R)` : "";
+    await dispatchMessage(n.user, {
+      title: `${win ? "✅" : "🛑"} ${n.pair} ${String(n.signal).toUpperCase()} hit ${win ? "TP" : "SL"}${rr}`,
+      body: `Entry ${n.entry} → ${win ? "take profit" : "stop loss"} ${exit}. Tap to see how price got there.`,
+      url: "/notifications",
+      id: `result-${n._id}`,
+      email: false,
+      pref: "signalResults",
+      image,
+    }).catch(() => {});
+    sent++;
+  }
+  if (sent) pipelineStats.inc("outcomes.alerts", sent);
+  return sent;
 };

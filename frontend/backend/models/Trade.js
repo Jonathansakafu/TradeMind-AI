@@ -73,6 +73,8 @@ const tradeSchema = new mongoose.Schema({
   // Who closed it: "signal" = automatically at TP / SL (services/ongoingTrades.js).
   closedBy: { type: String, enum: ["signal", "trader"] },
   expiryReminded: { type: Boolean },
+  // The trader's own screenshot (upload / screen capture) -- never replaced by a chart.
+  screenshotIsUpload: { type: Boolean },
 }, { timestamps: true });
 
 tradeSchema.index({ user: 1, createdAt: -1 });

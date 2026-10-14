@@ -128,7 +128,7 @@ async function sendWebPush(user, msg) {
   if (!subs.length) return { devices: 0, sent: 0 };
   await getVapidKeys();
 
-  const payload = JSON.stringify({ title: msg.title, body: msg.body, url: msg.url, tag: msg.id });
+  const payload = JSON.stringify({ title: msg.title, body: msg.body, url: msg.url, tag: msg.id, image: msg.image || undefined });
   const dead = [];
   let sent = 0;
   let lastError = null;
@@ -161,7 +161,8 @@ async function sendFcm(user, msg) {
 
   const res = await messaging.sendEachForMulticast({
     tokens,
-    notification: { title: msg.title, body: msg.body },
+    // imageUrl: the signal chart, shown as a big picture in the notification.
+    notification: { title: msg.title, body: msg.body, ...(msg.image ? { imageUrl: msg.image } : {}) },
     data: { url: msg.url, notificationId: msg.id },
     android: {
       priority: "high",
@@ -241,6 +242,16 @@ async function dispatchNotification(notification, options = {}) {
 
   const prefs = user.notificationPrefs || {};
   const msg = buildMessage(notification);
+  // The signal's chart picture (services/signalImage.js). Never holds an
+  // alert back: at most 6 s, otherwise it goes out without the picture.
+  const willSend = ((prefs.push !== false) && ((user.fcmTokens || []).length || (user.pushSubscriptions || []).length))
+    || (prefs.email && (notification.confidence ?? 0) >= (prefs.emailMinConfidence ?? 70));
+  if (!options.test && willSend) {
+    msg.image = notification.chartImage || await require("./signalImage").withTimeout(
+      require("./signalImage").forNotification(notification).catch((err) => { console.error("Signal chart picture failed:", err.message); return null; }),
+      6000
+    );
+  }
   const results = {};
 
   const tasks = [];
@@ -276,12 +287,12 @@ async function dispatchNotification(notification, options = {}) {
 // options: email (default true) -- false sends push only; pref -- name of
 // a notificationPrefs switch that must not be off (e.g. "newsCountdown");
 // ttlSeconds -- how long a push may wait for an offline phone.
-async function dispatchMessage(userId, { title, body, text, url = "/dashboard", id, email = true, pref, ttlSeconds = 6 * 60 * 60 }) {
+async function dispatchMessage(userId, { title, body, text, url = "/dashboard", id, email = true, pref, ttlSeconds = 6 * 60 * 60, image }) {
   const user = await User.findById(userId).select("email notificationPrefs +pushSubscriptions +fcmTokens");
   if (!user) return null;
   const prefs = user.notificationPrefs || {};
   if (pref && prefs[pref] === false) return { skipped: `${pref} off` };
-  const msg = { title, body, url, id: id || `msg-${Date.now()}`, ttlSeconds };
+  const msg = { title, body, url, id: id || `msg-${Date.now()}`, ttlSeconds, image };
   const results = {};
   if (prefs.push !== false) {
     results.browser = await sendWebPush(user, msg).catch((err) => ({ error: err.message }));
@@ -294,4 +305,12 @@ async function dispatchMessage(userId, { title, body, text, url = "/dashboard", 
   return results;
 }
 
-module.exports = { dispatchNotification, dispatchMessage, getVapidPublicKey, buildMessage };
+// Can this user get an alert at all (push device or email on)?
+async function hasChannels(userId) {
+  const u = await User.findById(userId).select("notificationPrefs +pushSubscriptions +fcmTokens");
+  if (!u) return false;
+  const prefs = u.notificationPrefs || {};
+  return !!(((prefs.push !== false) && ((u.fcmTokens || []).length || (u.pushSubscriptions || []).length)) || prefs.email);
+}
+
+module.exports = { dispatchNotification, dispatchMessage, getVapidPublicKey, buildMessage, hasChannels };

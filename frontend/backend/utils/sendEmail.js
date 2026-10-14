@@ -50,6 +50,7 @@ async function sendSignalEmail(to, notification, msg) {
       <div style="font-family: sans-serif; max-width: 520px; margin: 0 auto;">
         <h2 style="color: ${color}; margin-bottom: 4px;">${escapeHtml(msg.title)}</h2>
         <p style="color: #334155; font-weight: bold; white-space: pre-line; margin-top: 0;">${escapeHtml(msg.body)}</p>
+        ${msg.image ? `<a href="${appUrl}"><img src="${msg.image}" alt="Signal chart" width="520" style="width: 100%; max-width: 520px; border-radius: 10px; margin: 8px 0;" /></a>` : ""}
         ${reasoning ? `<p style="color: #475569; white-space: pre-line;">${escapeHtml(reasoning)}</p>` : ""}
         <p style="margin: 28px 0;">
           <a href="${appUrl}" style="background: #22c55e; color: #020617; padding: 12px 24px; border-radius: 12px; text-decoration: none; font-weight: bold;">

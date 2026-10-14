@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import axios from "axios";
-import { Clock, Mail, Send, Smartphone } from "lucide-react";
+import { Clock, Mail, Send, Smartphone, CandlestickChart } from "lucide-react";
 import { API_URL } from "../config/api";
 import { useAuth } from "../hooks/useAuth";
 import { disablePush, enablePush, getPushState } from "../utils/pushNotifications";
@@ -176,6 +176,25 @@ function AlertSettings() {
             checked={status?.prefs?.newsCountdown !== false}
             disabled={!status || busy}
             onChange={(e) => updatePrefs({ newsCountdown: e.target.checked })}
+          />
+        </label>
+
+        {/* Result alerts */}
+        <label className="flex items-center justify-between gap-3 cursor-pointer">
+          <span className="min-w-0">
+            <span className="font-semibold flex items-center gap-2 text-slate-900 dark:text-white">
+              <CandlestickChart size={16} /> Result alerts (TP / SL hit)
+            </span>
+            <span className="text-sm text-slate-500 dark:text-slate-400">
+              When a signal hits its take profit or stop loss, with the chart showing how price got there
+            </span>
+          </span>
+          <input
+            type="checkbox"
+            className="h-5 w-5 accent-green-500 shrink-0"
+            checked={status?.prefs?.signalResults !== false}
+            disabled={!status || busy}
+            onChange={(e) => updatePrefs({ signalResults: e.target.checked })}
           />
         </label>
 

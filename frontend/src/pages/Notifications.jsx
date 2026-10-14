@@ -19,6 +19,7 @@ import { SignalResultBadge, LotSuggestion } from "../components/SignalExtras";
 import { useRiskSettings } from "../hooks/useRiskSettings";
 import { GroupRecordBar, GroupRecordFlow } from "../components/GroupRecord";
 import ChartModal from "../components/ChartModal";
+import InlineSignalChart from "../components/InlineSignalChart";
 import { groupIneligibleReason, isTodays } from "../utils/groupRecord";
 
 const SOURCE_ICONS = {
@@ -386,6 +387,11 @@ function Notifications() {
                   </button>
                 </div>
               </div>
+
+              {/* The signal's chart with its drawings (and, once it hit TP / SL, how). */}
+              {n.type !== "quick_trade" && (n.signal === "buy" || n.signal === "sell") && n.entry > 0 && !selecting && (
+                <InlineSignalChart notification={n} onOpen={() => setChartSignal(n)} />
+              )}
 
               {/* Entry SL TP (forex) / Direction + expiry (Quick Trade) */}
               {n.type === "quick_trade" ? (

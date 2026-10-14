@@ -64,6 +64,9 @@ const notificationSchema = new mongoose.Schema({
   simOutcome: { type: String, enum: ["win", "loss", "expired"] },
   simR: { type: Number }, // result in R (risk units): +2.0 = won 2x the risk
   simResolvedAt: { type: Date },
+  // Chart pictures (services/signalImage.js): at the signal, and after TP / SL.
+  chartImage: { type: String },
+  resultChartImage: { type: String },
 }, { timestamps: true });
 
 notificationSchema.index({ user: 1, createdAt: -1 });
