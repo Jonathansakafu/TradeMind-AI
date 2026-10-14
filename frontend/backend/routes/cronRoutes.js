@@ -168,8 +168,9 @@ router.get("/rechart-trades", async (req, res) => {
       if (!generated && t.screenshot?.publicId) {
         try {
           const info = await cloudinary.api.resource(t.screenshot.publicId);
-          original = String(info.original_filename || "");
-          generated = GENERATED.test(original);
+          original = `${info.original_filename || "-"} ${info.format} ${info.width}x${info.height} ${String(info.created_at || "").slice(0, 10)}`;
+          info.original_filename = String(info.original_filename || "");
+          generated = GENERATED.test(info.original_filename);
         } catch (err) {
           generated = err?.error?.http_code === 404; // old picture already gone
         }
