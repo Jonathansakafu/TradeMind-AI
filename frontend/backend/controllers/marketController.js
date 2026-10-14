@@ -23,6 +23,20 @@ exports.getLivePrices = async (req, res) => {
   }
 };
 
+// GET /api/market/live?pairs=XAUUSD,EURUSD -- bid/ask for open positions.
+exports.getLiveQuotes = async (req, res) => {
+  const pairs = String(req.query.pairs || "")
+    .toUpperCase().split(",").map((p) => p.replace(/[^A-Z]/g, ""))
+    .filter((p) => /^[A-Z]{6}$/.test(p)).slice(0, 12);
+  if (!pairs.length) return res.json({ quotes: {} });
+  try {
+    res.set("Cache-Control", "no-store");
+    res.json({ quotes: await marketService.getLiveQuotes([...new Set(pairs)]), at: Date.now() });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
 exports.analyzePair = async (req, res) => {
   try {
     const { pair } = req.params;

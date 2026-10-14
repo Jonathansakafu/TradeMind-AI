@@ -17,6 +17,10 @@ import { useMediaQuery } from "../hooks/useMediaQuery";
 import { fetchMarketPrices } from "../api/resources";
 import { RiskRewardText } from "../components/RiskReward";
 import { calculatePL, PIP_VALUES, PIP_DECIMALS } from "../utils/tradePL";
+import LivePositions, { LiveDuration } from "../components/LivePositions";
+import DaySummary from "../components/DaySummary";
+import { useRiskSettings } from "../hooks/useRiskSettings";
+import { fmtDuration, tradeDuration } from "../utils/livePL";
 
 
 const TRADINGVIEW_SYMBOLS = {
@@ -108,6 +112,25 @@ function TradeHistory() {
     const timer = setTimeout(fetchTrades, 0);
     return () => clearTimeout(timer);
   }, [fetchTrades]);
+
+  // Keep the list live (automatic TP / SL closes, trades added elsewhere):
+  // quiet refresh every 30 s while the page is visible.
+  useEffect(() => {
+    const id = setInterval(async () => {
+      if (document.visibilityState !== "visible") return;
+      try {
+        const res = await axios.get(`${API_URL}/api/trades?limit=200`, { headers });
+        setTrades(res.data.trades || []);
+      } catch { /* keep the current list */ }
+    }, 30000);
+    return () => clearInterval(id);
+  }, [headers]);
+
+  const { settings: riskSettings } = useRiskSettings();
+  const todayKey = new Date().toDateString();
+  const todayClosedPL = trades
+    .filter((t) => t.outcome && new Date(t.closedAt || t.openedAt || t.createdAt).toDateString() === todayKey)
+    .reduce((sum, t) => sum + (Number(t.profitLoss) || 0), 0);
 
   const filtered = trades.filter((t) => {
     const matchSearch = t.pair?.toLowerCase().includes(search.toLowerCase());
@@ -260,6 +283,10 @@ function TradeHistory() {
         </div>
       </div>
 
+      {/* MT5-style live positions, then the day's best / worst / peak / low. */}
+      <LivePositions trades={trades} headers={headers} balance={riskSettings?.balance} todayClosedPL={todayClosedPL} />
+      <DaySummary trades={trades} />
+
       {/* Filters Row */}
       <div className="flex flex-wrap gap-3 mb-5">
         <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 flex-1 min-w-[200px]">
@@ -396,7 +423,12 @@ function TradeHistory() {
 
                 <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-3">
                   <span>{trade.setup || "No strategy"}</span>
-                  <span>{trade.openedAt ? new Date(trade.openedAt).toLocaleDateString() : "—"}</span>
+                  <span className="text-right">
+                    {trade.openedAt ? new Date(trade.openedAt).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—"}
+                    <span className="ml-1.5" title={trade.outcome ? "Time the trade was open" : "Open for"}>
+                      ⏱ {trade.outcome ? fmtDuration(tradeDuration(trade)) : <LiveDuration trade={trade} />}
+                    </span>
+                  </span>
                 </div>
 
                 <div className="flex items-center justify-between">
@@ -592,10 +624,13 @@ function TradeHistory() {
 
                       {/* Date */}
                       <td className="px-4 py-3.5">
-                        <span className="text-slate-500 dark:text-slate-400 text-xs">
+                        <span className="text-slate-500 dark:text-slate-400 text-xs whitespace-nowrap">
                           {trade.openedAt
-                            ? new Date(trade.openedAt).toLocaleDateString()
+                            ? new Date(trade.openedAt).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })
                             : "—"}
+                        </span>
+                        <span className="block text-[11px] text-slate-400 whitespace-nowrap" title={trade.outcome ? "Time the trade was open" : "Open for"}>
+                          ⏱ {trade.outcome ? fmtDuration(tradeDuration(trade)) : <LiveDuration trade={trade} />}
                         </span>
                       </td>
 

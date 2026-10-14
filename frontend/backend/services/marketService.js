@@ -576,3 +576,68 @@ exports.getHistoricalData = async (pair, interval = "1h", outputsize = 20) => {
   }
   return [];
 };
+// ---------- live quotes for open positions (MT5-style floating P/L) ----------
+// Bid / ask from Swissquote's public feed (retail "premium" spread), shared
+// by every user so the Trade History positions panel can refresh every few
+// seconds without touching the rate-limited price APIs. A BUY is valued at
+// the bid, a SELL at the ask, like MT5. Swissquote is sometimes slow, so:
+// answer at once with the last quote (if < 60 s old) and refresh in the
+// background; 2.5 s limit; then Yahoo's live mid (forex) as a fallback.
+const LIVE_TTL_MS = 3000;
+const LIVE_MAX_AGE_MS = 60 * 1000;
+const liveCache = new Map(); // pair -> { quote, cachedAt, pending }
+
+async function fetchSwissquoteQuote(pair) {
+  const res = await axios.get(
+    `https://forex-data-feed.swissquote.com/public-quotes/bboquotes/instrument/${pair.slice(0, 3)}/${pair.slice(3, 6)}`,
+    { timeout: 2500 }
+  );
+  for (const f of Array.isArray(res.data) ? res.data : []) {
+    const p = (f.spreadProfilePrices || []).find((x) => x.spreadProfile === "premium") || f.spreadProfilePrices?.[0];
+    if (p?.bid && p?.ask) return { bid: Number(p.bid), ask: Number(p.ask), at: Date.now(), source: "Swissquote" };
+  }
+  throw new Error(`no Swissquote quote for ${pair}`);
+}
+
+async function fetchLiveQuote(pair) {
+  try {
+    return await fetchSwissquoteQuote(pair);
+  } catch (err) {
+    if (pair === "XAUUSD") {
+      const gold = getFreshGold();
+      if (gold) return { bid: gold, ask: gold, at: Date.now(), source: "TradeMind gold price" };
+      throw err;
+    }
+    const result = await fetchYahooChart(`${pair}=X`, { interval: "1m", range: "1d" });
+    const mid = result?.meta?.regularMarketPrice;
+    if (!mid) throw err;
+    return { bid: mid, ask: mid, at: (result.meta.regularMarketTime || 0) * 1000 || Date.now(), source: "Yahoo" };
+  }
+}
+
+function refreshLive(pair) {
+  const hit = liveCache.get(pair) || {};
+  if (hit.pending) return hit.pending;
+  const pending = fetchLiveQuote(pair)
+    .then((quote) => { liveCache.set(pair, { quote, cachedAt: Date.now() }); return quote; })
+    .catch(() => { liveCache.set(pair, { ...liveCache.get(pair), pending: null }); return null; });
+  liveCache.set(pair, { ...hit, pending });
+  return pending;
+}
+
+exports.getLiveQuotes = async (pairs) => {
+  const out = {};
+  await Promise.all(pairs.map(async (pair) => {
+    const hit = liveCache.get(pair);
+    const age = hit?.quote ? Date.now() - hit.cachedAt : Infinity;
+    if (age < LIVE_TTL_MS) { out[pair] = hit.quote; return; }
+    if (age < LIVE_MAX_AGE_MS) { refreshLive(pair); out[pair] = hit.quote; return; } // stale-while-refresh
+    const quote = await refreshLive(pair);
+    if (quote) out[pair] = quote;
+    else if (priceCache.forex.data[pair]) {
+      const mid = priceCache.forex.data[pair];
+      out[pair] = { bid: mid, ask: mid, at: Date.now(), source: "cached mid", stale: true };
+    }
+  }));
+  return out;
+};
