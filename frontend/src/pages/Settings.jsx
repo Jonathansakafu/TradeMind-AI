@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import axios from "axios";
 import MainLayout from "../layouts/MainLayout";
-import { Save, User, Lock, CheckCircle, Palette, LogOut, BellRing, Wallet, Volume2, Mic, Moon, Sun, SunMoon } from "lucide-react";
+import { Save, User, Lock, CheckCircle, Palette, LogOut, BellRing, Wallet, Volume2, Mic, Smartphone, Moon, Sun, SunMoon } from "lucide-react";
 import { API_URL } from "../config/api";
 import SpeakButton from "../components/SpeakButton";
 import AlertSettings from "../components/AlertSettings";
@@ -24,6 +24,7 @@ const LANGUAGES = [
 import RiskSettings from "../components/RiskSettings";
 import ReadAloudSettings from "../components/ReadAloudSettings";
 import WakeWordSettings from "../components/WakeWordSettings";
+import AppDownloadSettings from "../components/AppDownloadSettings";
 import { useAuth } from "../hooks/useAuth";
 
 function Settings() {
@@ -150,6 +151,11 @@ function Settings() {
         <SettingsSection id="wake" icon={Mic} open={openSection === "wake"} onToggle={setOpenSection}
           title="Hey TradeMind" summary="Call Ask AI by voice, even with the app closed">
           <WakeWordSettings />
+        </SettingsSection>
+
+        <SettingsSection id="app" icon={Smartphone} open={openSection === "app"} onToggle={setOpenSection}
+          title="Android app" summary="Download or update the app">
+          <AppDownloadSettings />
         </SettingsSection>
 
         <SettingsSection id="profile" icon={User} open={openSection === "profile"} onToggle={setOpenSection}

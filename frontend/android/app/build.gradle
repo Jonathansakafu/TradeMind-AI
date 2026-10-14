@@ -19,7 +19,25 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // One permanent signing key for every build (GitHub secret, decoded by
+    // the Android workflow). Without it each CI run made a fresh debug key,
+    // so phones refused to install an update over the old app.
+    signingConfigs {
+        trademind {
+            def ks = System.getenv("TM_KEYSTORE_FILE")
+            if (ks) {
+                storeFile file(ks)
+                storeType "pkcs12"
+                storePassword System.getenv("TM_KEYSTORE_PASSWORD")
+                keyAlias "trademind"
+                keyPassword System.getenv("TM_KEYSTORE_PASSWORD")
+            }
+        }
+    }
     buildTypes {
+        debug {
+            if (System.getenv("TM_KEYSTORE_FILE")) signingConfig signingConfigs.trademind
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'

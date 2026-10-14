@@ -1,4 +1,16 @@
 {
+  "redirects": [
+    {
+      "source": "/download",
+      "destination": "https://github.com/jonathansakafu/TradeMind-AI/releases/download/android-latest/trademind-ai.apk",
+      "permanent": false
+    },
+    {
+      "source": "/download/trademind-ai.apk",
+      "destination": "https://github.com/jonathansakafu/TradeMind-AI/releases/download/android-latest/trademind-ai.apk",
+      "permanent": false
+    }
+  ],
   "rewrites": [
     {
       "source": "/api/:path*",

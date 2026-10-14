@@ -29,5 +29,7 @@ export async function checkForUpdate() {
   }
 }
 
-export const ANDROID_APK_URL =
-  "https://github.com/jonathansakafu/TradeMind-AI/releases/download/android-latest/trademind-ai.apk";
+// TradeMind's own address (vercel.json redirects it to the latest APK on
+// GitHub Releases), so the download starts straight away in the browser and
+// the link is easy to share. Absolute: the Android app runs from localhost.
+export const ANDROID_APK_URL = "https://trade-mind-ai-seven.vercel.app/download/trademind-ai.apk";
