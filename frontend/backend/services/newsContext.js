@@ -12,6 +12,12 @@ const economicCalendar = require("./economicCalendar");
 const marketService = require("./marketService");
 
 const AHEAD_MS = 6 * 3600 * 1000;
+// How the AI should use the calendar. TradeMind itself blocks new signals
+// from 30 min before to 60 min after top-tier releases (signalRules), so a
+// release hours away is not a reason to WAIT -- the old wording ("an
+// imminent top-tier release makes a new position risky") had the AI answer
+// WAIT on every USD pair for ~6 hours before US CPI (2026-10-14).
+const GUIDANCE = "How to use this: TradeMind already blocks new signals from 30 min before to 60 min after top-tier releases, so do NOT answer WAIT just because a release is coming later today -- judge the chart. Only if a top-tier release is less than 90 min away, prefer a nearer take profit that can be reached before it, or WAIT if the setup needs longer. A strong post-release reaction shows which way the news pushed the market.";
 const BACK_MS = 3 * 3600 * 1000;
 const CANDLE_CACHE_MS = 5 * 60 * 1000;
 const candleCache = new Map();
@@ -76,7 +82,7 @@ exports.getNewsContext = async (pair, { atrH1 } = {}, now = new Date()) => {
     }
     for (const r of reactions) lines.push(`Post-release reaction: ${r.line}`);
     const text = lines.length
-      ? `Economic calendar for ${pair}:\n- ${lines.join("\n- ")}\nTake this into account: an imminent top-tier release makes a new position risky; a strong post-release reaction shows which way the news pushed the market.`
+      ? `Economic calendar for ${pair}:\n- ${lines.join("\n- ")}\n${GUIDANCE}`
       : "";
     return { upcoming, reactions, text };
   } catch (err) {

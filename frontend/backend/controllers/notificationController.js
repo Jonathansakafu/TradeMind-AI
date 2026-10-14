@@ -500,7 +500,11 @@ exports.autoGenerate = async (userId) => {
             { upsert: true }
           );
         }
-        if (!analysis.signal || analysis.signal === "wait") pipelineStats.inc("forex.wait");
+        if (!analysis.signal || analysis.signal === "wait") {
+          pipelineStats.inc("forex.wait");
+          // WAIT while a release is ahead -- shows if news still holds signals back.
+          if (newsCtx.upcoming?.length) pipelineStats.inc("forex.wait.newsAhead");
+        }
 
         if (analysis.signal && analysis.signal !== "wait") {
           // Angalia kama notification kama hii haijatumwa leo
