@@ -1,7 +1,8 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { domToBlob } from "modern-screenshot";
 import { X, CheckCircle, Pencil } from "lucide-react";
 import TradeSnapshot from "./TradeSnapshot";
+import SignalChart from "./SignalChart";
 import { useTheme } from "../hooks/useTheme";
 import { calculatePL } from "../utils/tradePL";
 
@@ -12,15 +13,36 @@ import { calculatePL } from "../utils/tradePL";
 // TP / exit if none was attached.
 function ConfirmTradeModal({ form, screenshotPreview, onChangePrices, onConfirm, onClose, saving }) {
   const nodeRef = useRef(null);
+  const chartRef = useRef(null);
+  const [chartFailed, setChartFailed] = useState(false);
+  const pl = calculatePL(form.pair, form.direction, form.entryPrice, form.exitPrice, form.lotSize);
+  // The real candle chart with the signal's drawings (SignalChart); refreshed
+  // shortly after the prices stop changing. Plain snapshot if it can't load.
+  const makeQuery = () => ({
+    pair: form.pair, dir: form.direction, entry: form.entryPrice, sl: form.stopLoss, tp: form.takeProfit,
+    at: form.openedAt ? new Date(form.openedAt).toISOString() : undefined,
+    exit: form.exitPrice || undefined,
+    exitAt: form.exitPrice ? new Date(form.closedAt || Date.now()).toISOString() : undefined,
+    outcome: pl?.outcome,
+  });
+  const [chartQuery, setChartQuery] = useState(makeQuery);
+  useEffect(() => {
+    const id = setTimeout(() => setChartQuery(makeQuery()), 700);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.entryPrice, form.exitPrice, form.stopLoss, form.takeProfit, form.lotSize]);
   const { theme } = useTheme();
   const [busy, setBusy] = useState(false);
-  const pl = calculatePL(form.pair, form.direction, form.entryPrice, form.exitPrice, form.lotSize);
 
   const confirm = async () => {
     setBusy(true);
     try {
       let file = null;
-      if (!screenshotPreview && nodeRef.current) {
+      if (!screenshotPreview && !chartFailed && chartRef.current) {
+        const blob = await chartRef.current.capture().catch(() => null);
+        if (blob) file = new File([blob], `trade-chart-${Date.now()}.png`, { type: "image/png" });
+      }
+      if (!file && !screenshotPreview && nodeRef.current) {
         const blob = await domToBlob(nodeRef.current, {
           backgroundColor: theme === "dark" ? "#020617" : "#ffffff",
           scale: 2,
@@ -93,6 +115,10 @@ function ConfirmTradeModal({ form, screenshotPreview, onChangePrices, onConfirm,
               <img src={screenshotPreview} alt="Trade screenshot" className="w-full rounded-xl object-cover max-h-60 border border-slate-200 dark:border-slate-700" />
             ) : (
               <div className="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700">
+                {!chartFailed && (
+                  <SignalChart ref={chartRef} query={chartQuery} height={260} compact onError={() => setChartFailed(true)} />
+                )}
+                <div style={chartFailed ? undefined : { position: "fixed", left: -10000, top: 0, width: 480 }} aria-hidden={!chartFailed}>
                 <TradeSnapshot
                   ref={nodeRef}
                   pair={form.pair}
@@ -107,6 +133,7 @@ function ConfirmTradeModal({ form, screenshotPreview, onChangePrices, onConfirm,
                   pips={pl?.pips}
                   outcome={pl?.outcome}
                 />
+                </div>
               </div>
             )}
           </div>

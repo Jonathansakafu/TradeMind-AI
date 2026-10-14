@@ -258,6 +258,19 @@ function supportResistance(price, tfs, atrH1) {
   return { supports, resistances };
 }
 
+// Fair value gaps, order block, premium / discount, previous day and Asian
+// range (services/smcZones.js) -- extra context for the AI, no rule uses it.
+function zonesFor(h1c, atrH1, px, fmt) {
+  try {
+    if (!h1c.length || !px) return "";
+    const maj = majorSwings(h1c, 0.5 * (atrH1 || 0));
+    const ev = structureEvents(h1c, maj.highs, maj.lows).events;
+    return require("./smcZones").zonesLine({ candles: h1c, majorHighs: maj.highs, majorLows: maj.lows, majorEvents: ev, atr: atrH1, price: px, fmt });
+  } catch {
+    return "";
+  }
+}
+
 // ---------- public ----------
 
 const fmtFor = (price) => (n) => (n == null ? "?" : Number(n).toFixed(price >= 100 ? 2 : 5));
@@ -314,6 +327,7 @@ exports.getMarketContext = async (pair, price) => {
     `- Nearest support: ${levels.supports.map((l) => fmt(l.price)).join(", ") || "none found"}`,
     `- Nearest resistance: ${levels.resistances.map((l) => fmt(l.price)).join(", ") || "none found"}`,
     atrH1 ? `- 1H average range (ATR): ${fmt(atrH1)}` : "",
+    zonesFor(h1c, atrH1, px, fmt),
   ].filter(Boolean).join("\n");
 
   const ctx = { pair, price: px, h4, h1, m15, atrH1, levels, summary, candlesH1: h1c.slice(-10) };

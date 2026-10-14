@@ -4,7 +4,7 @@ import axios from "axios";
 import MainLayout from "../layouts/MainLayout";
 import {
   TrendingUp, TrendingDown, Search, Download,
-  X, CheckCircle, RefreshCw, LineChart, Pencil, FileText, Lock
+  X, CheckCircle, RefreshCw, LineChart, Pencil, FileText, Lock, CandlestickChart
 } from "lucide-react";
 import { API_URL } from "../config/api";
 import { downloadFile } from "../utils/nativeDownload";
@@ -19,6 +19,7 @@ import { RiskRewardText } from "../components/RiskReward";
 import { calculatePL, PIP_VALUES, PIP_DECIMALS } from "../utils/tradePL";
 import LivePositions, { LiveDuration } from "../components/LivePositions";
 import DaySummary from "../components/DaySummary";
+import ChartModal from "../components/ChartModal";
 import { useRiskSettings } from "../hooks/useRiskSettings";
 import { fmtDuration, tradeDuration } from "../utils/livePL";
 
@@ -59,6 +60,7 @@ function TradeHistory() {
   const [editProfitLoss, setEditProfitLoss] = useState("");
   const [editEntry, setEditEntry] = useState("");
   const [editExit, setEditExit] = useState("");
+  const [chartTrade, setChartTrade] = useState(null); // trade whose analysis chart is open
   const [editLoading, setEditLoading] = useState(false);
   const { headers } = useAuth();
   // Full table only from 1280px: at 1024 the sidebar leaves ~640px, too
@@ -451,6 +453,13 @@ function TradeHistory() {
                   </div>
                   <div className="flex items-center gap-2">
                     <button
+                      onClick={() => setChartTrade(trade)}
+                      aria-label="Trade chart with analysis"
+                      className="p-2 rounded-lg bg-green-500/10 border border-green-500/20 text-green-500"
+                    >
+                      <CandlestickChart size={14} />
+                    </button>
+                    <button
                       onClick={() => navigate("/charts", {
                         state: { symbol: TRADINGVIEW_SYMBOLS[trade.pair] }
                       })}
@@ -637,6 +646,14 @@ function TradeHistory() {
                       {/* Actions */}
                       <td className="px-4 py-3.5">
                         <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => setChartTrade(trade)}
+                            title="Trade chart with analysis"
+                            aria-label="Trade chart with analysis"
+                            className="p-1.5 rounded-lg bg-green-500/10 border border-green-500/20 text-green-500 hover:bg-green-500/20 transition"
+                          >
+                            <CandlestickChart size={13} />
+                          </button>
                           <button
                             onClick={() => navigate("/charts", {
                               state: { symbol: TRADINGVIEW_SYMBOLS[trade.pair] }
@@ -993,6 +1010,13 @@ function TradeHistory() {
         </div>
       )}
 
+      {chartTrade && (
+        <ChartModal
+          tradeId={chartTrade._id}
+          title={`${String(chartTrade.direction).toUpperCase()} ${chartTrade.pair}`}
+          onClose={() => setChartTrade(null)}
+        />
+      )}
     </MainLayout>
   );
 }

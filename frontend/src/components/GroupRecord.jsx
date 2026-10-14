@@ -3,6 +3,7 @@ import axios from "axios";
 import { domToBlob } from "modern-screenshot";
 import { AlertTriangle, CheckCircle2, XCircle, Loader2, Lock, MinusCircle, Camera, UploadCloud, Clock } from "lucide-react";
 import TradeSnapshot from "./TradeSnapshot";
+import SignalChart from "./SignalChart";
 import { API_URL } from "../config/api";
 import { useTheme } from "../hooks/useTheme";
 import { tradeFromSignal } from "../utils/groupRecord";
@@ -76,6 +77,8 @@ export function GroupRecordFlow({ signals, lot, headers, onClose, onFinished }) 
   const [startedAt, setStartedAt] = useState(0);
   const [now, setNow] = useState(0);
   const snapRef = useRef(null);
+  const chartRef = useRef(null);
+  const chartWait = useRef(null); // resolves true when the trade's chart has drawn, false if it failed
   const listRef = useRef(null);
   const cancelRef = useRef(false);
   const { theme } = useTheme();
@@ -115,11 +118,19 @@ export function GroupRecordFlow({ signals, lot, headers, onClose, onFinished }) 
       listRef.current?.querySelector(`[data-id="${t.id}"]`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
       try {
         setStatus(t.id, "chart");
+        // The real candle chart with the signal's drawings; the plain
+        // snapshot if it can't load within 15 s.
+        const ready = new Promise((resolve) => {
+          chartWait.current = resolve;
+          setTimeout(() => resolve(false), 15000);
+        });
         setCurrent(t);
+        const drawn = await ready;
         await nextFrame();
-        const blob = snapRef.current
-          ? await domToBlob(snapRef.current, { backgroundColor: theme === "dark" ? "#020617" : "#ffffff", scale: 2, type: "image/png" })
-          : null;
+        let blob = drawn && chartRef.current ? await chartRef.current.capture().catch(() => null) : null;
+        if (!blob && snapRef.current) {
+          blob = await domToBlob(snapRef.current, { backgroundColor: theme === "dark" ? "#020617" : "#ffffff", scale: 2, type: "image/png" });
+        }
         setStatus(t.id, "saving");
         const fd = new FormData();
         const fields = {
@@ -271,7 +282,19 @@ export function GroupRecordFlow({ signals, lot, headers, onClose, onFinished }) 
 
         {/* Chart for the trade being saved, drawn off-screen and captured. */}
         {current && (
-          <div aria-hidden="true" style={{ position: "fixed", left: -10000, top: 0, width: 480 }}>
+          <div aria-hidden="true" style={{ position: "fixed", left: -10000, top: 0, width: 720 }}>
+            <SignalChart
+              key={current.id}
+              ref={chartRef}
+              compact
+              height={380}
+              query={{
+                pair: current.pair, dir: current.direction, entry: current.entryPrice, sl: current.stopLoss, tp: current.takeProfit,
+                at: current.openedAt, exit: current.exitPrice ?? undefined, exitAt: current.closedAt ?? undefined, outcome: current.pl?.outcome,
+              }}
+              onLoaded={() => setTimeout(() => chartWait.current?.(true), 400)}
+              onError={() => chartWait.current?.(false)}
+            />
             <TradeSnapshot
               ref={snapRef}
               pair={current.pair}

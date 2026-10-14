@@ -6,7 +6,7 @@ import {
   Bell, BookOpen, Brain,
   History, X, CheckCheck, PlusCircle, Zap,
   TrendingUp, TrendingDown, Clock,
-  ShieldCheck, ShieldAlert, Newspaper, Webhook, ListChecks, Check,
+  ShieldCheck, ShieldAlert, Newspaper, Webhook, ListChecks, Check, CandlestickChart,
 } from "lucide-react";
 import { API_URL } from "../config/api";
 import SessionBanner from "../components/SessionBanner";
@@ -18,6 +18,7 @@ import { RiskRewardTile } from "../components/RiskReward";
 import { SignalResultBadge, LotSuggestion } from "../components/SignalExtras";
 import { useRiskSettings } from "../hooks/useRiskSettings";
 import { GroupRecordBar, GroupRecordFlow } from "../components/GroupRecord";
+import ChartModal from "../components/ChartModal";
 import { groupIneligibleReason, isTodays } from "../utils/groupRecord";
 
 const SOURCE_ICONS = {
@@ -212,6 +213,7 @@ function Notifications() {
   const [selected, setSelected] = useState(() => new Set());
   const [groupLot, setGroupLot] = useState("0.01");
   const [recording, setRecording] = useState(false);
+  const [chartSignal, setChartSignal] = useState(null); // signal whose analysis chart is open
   const toggleSelected = (id) => setSelected((prev) => {
     const next = new Set(prev);
     if (next.has(id)) next.delete(id); else next.add(id);
@@ -511,6 +513,15 @@ function Notifications() {
                           {sendingId === n._id ? "Sending..." : "MT5"}
                         </button>
                       )}
+                      {n.signal !== "wait" && n.entry > 0 && (
+                        <button
+                          onClick={() => setChartSignal(n)}
+                          className="flex items-center gap-1.5 text-xs bg-blue-500/10 border border-blue-500/30 text-blue-500 hover:bg-blue-500/20 px-3 py-1.5 rounded-lg transition font-semibold"
+                        >
+                          <CandlestickChart size={12} />
+                          Chart
+                        </button>
+                      )}
                       {n.signal !== "wait" && (
                         <button
                           onClick={() => addTradeFromSignal(n)}
@@ -540,6 +551,13 @@ function Notifications() {
           onClear={() => setSelected(new Set())}
           onCancel={stopSelecting}
           onRecord={() => setRecording(true)}
+        />
+      )}
+      {chartSignal && (
+        <ChartModal
+          notificationId={chartSignal._id}
+          title={`${String(chartSignal.signal).toUpperCase()} ${chartSignal.pair} · ${chartSignal.confidence}%`}
+          onClose={() => setChartSignal(null)}
         />
       )}
       {recording && (
