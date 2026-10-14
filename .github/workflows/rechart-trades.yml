@@ -18,7 +18,7 @@ jobs:
       - name: Replace in batches
         run: |
           for i in $(seq 1 40); do
-            OUT=$(curl -sS -f --max-time 300 "https://trademind-ai-backend-2tnj.onrender.com/api/cron/rechart-trades?secret=${{ secrets.CRON_SECRET }}&limit=20&dry=${{ inputs.dry }}&includeKept=${{ inputs.dry }}")
+            OUT=$(curl -sS -f --max-time 300 "https://trademind-ai-backend-2tnj.onrender.com/api/cron/rechart-trades?secret=${{ secrets.CRON_SECRET }}&limit=20&dry=${{ inputs.dry }}&includeKept=1")
             echo "$OUT" | python3 -m json.tool
             REMAINING=$(echo "$OUT" | python3 -c "import sys,json; print(json.load(sys.stdin)['remaining'])")
             if [ "${{ inputs.dry }}" = "1" ] || [ "$REMAINING" = "0" ]; then break; fi

@@ -168,7 +168,7 @@ router.get("/rechart-trades", async (req, res) => {
     const dry = req.query.dry === "1";
     // Skip trades already done (their picture is "chart-<id>").
     // ?includeKept=1 (dry run only): also list the ones kept as uploads.
-    const includeKept = dry && req.query.includeKept === "1";
+    const includeKept = req.query.includeKept === "1";
     const candidates = await Trade.find({ entryPrice: { $gt: 0 }, ...(includeKept ? {} : { screenshotIsUpload: { $ne: true } }), "screenshot.publicId": { $not: /\/chart-[0-9a-f]{24}$/ } })
       .select("user pair entryPrice screenshot").sort({ createdAt: -1 }).lean();
     const out = { checked: 0, replaced: 0, filled: 0, keptUserUploads: 0, failed: 0, details: [] };
@@ -183,7 +183,12 @@ router.get("/rechart-trades", async (req, res) => {
           const info = await cloudinary.api.resource(t.screenshot.publicId);
           original = `${info.original_filename || "-"} ${info.format} ${info.width}x${info.height} ${String(info.created_at || "").slice(0, 10)}`;
           info.original_filename = String(info.original_filename || "");
-          generated = GENERATED.test(info.original_filename);
+          // Cloudinary often kept no file name, so also by picture size: the
+          // app's old snapshots are PNGs 600-1000 px wide and under 1000 px
+          // tall (960x769, 937x767, 634x549...); phone screenshots are wider
+          // (iPhone 1179) and MT5 captures are JPG or larger.
+          const appSized = info.format === "png" && info.width >= 600 && info.width <= 1000 && info.height < 1000;
+          generated = GENERATED.test(info.original_filename) || appSized;
         } catch (err) {
           generated = err?.error?.http_code === 404; // old picture already gone
         }
@@ -198,7 +203,7 @@ router.get("/rechart-trades", async (req, res) => {
       try {
         const pic = await signalImage.forTrade(t);
         if (!pic) throw new Error("no chart data");
-        await Trade.updateOne({ _id: t._id }, { screenshot: { url: pic.url, publicId: pic.publicId } });
+        await Trade.updateOne({ _id: t._id }, { screenshot: { url: pic.url, publicId: pic.publicId }, screenshotIsUpload: false });
         if (t.screenshot?.publicId) await cloudinary.uploader.destroy(t.screenshot.publicId).catch(() => {});
         if (t.screenshot?.url) out.replaced++; else out.filled++;
         out.details.push(`${t.pair} ${t._id}`);
