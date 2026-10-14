@@ -54,7 +54,7 @@ import org.json.JSONObject;
  * card over whatever is on screen -- the orb, what you said, the answer --
  * instead of opening the app. Records the question itself (Android blocks
  * Google's recogniser for background apps; this service already holds the
- * microphone), has the server transcribe it (Groq Whisper), asks Ask AI in short spoken style (POST /api/ai/ask/stream, voice: true,
+ * microphone), has the server transcribe it (Groq Whisper) and answer in short spoken style in one request (POST /api/ai/voice,
  * saved in the chat history), shows the answer as it arrives and reads it
  * aloud. Says so when there's no internet. Tap the card to continue in the
  * app. Without "display over other apps" it runs without the card: spoken
@@ -68,6 +68,9 @@ class VoiceAssistant {
     void openApp(Intent intent);
 
     void showAnswerNotification(String question, String answer);
+
+    /** {file path, text} of a greeting recorded in advance, or null. */
+    String[] greetingClip();
   }
 
   private static final String TAG = "VoiceAssistant";
@@ -92,6 +95,10 @@ class VoiceAssistant {
   private TextToSpeech tts;
   private boolean ttsReady = false;
   private boolean answerVoice = false;
+  private boolean answered = false;
+  private int spokenUpTo = 0;
+  private int partNo = 0;
+  private android.media.MediaPlayer player; // pre-recorded greeting
   private final TextToSpeech warmTts; // the service's engine, already started (or null)
   private AudioManager audio;
   private AudioFocusRequest focus;
@@ -136,8 +143,9 @@ class VoiceAssistant {
       return;
     }
     if (speakAnswers && tts != null) {
-      greeting = true; // greet() runs when the voice is ready
-      main.postDelayed(greetTimeout, 3000);
+      greeting = true;
+      String[] clip = host.greetingClip(); // recorded in advance: plays at once
+      if (clip == null || !playClip(clip)) main.postDelayed(greetTimeout, 3000); // else greet() when the voice is ready
     } else {
       setStatus(greetingText(prefs.getString("appLang", lang)));
       listen();
@@ -156,6 +164,13 @@ class VoiceAssistant {
       } catch (Exception ignored) {
       }
       tts = null;
+    }
+    if (player != null) {
+      try {
+        player.release();
+      } catch (Exception ignored) {
+      }
+      player = null;
     }
     releaseAudio();
     io.shutdownNow();
@@ -301,21 +316,10 @@ class VoiceAssistant {
       }
       main.post(() -> {
         setStatus(msg("thinking"));
-        main.postDelayed(() -> { if (asked == null && !finished) setStatus(msg("waking")); }, 7000);
+        level(0.3f);
+        main.postDelayed(() -> { if (answerText.length() == 0 && !finished) setStatus(msg("waking")); }, 6000);
       });
-      final String text = transcribe(wav);
-      main.post(() -> {
-        if (finished) return;
-        if (text == null) {
-          if (httpCode == 401 || httpCode == 403) fail(msg("loginTitle"), msg("login"));
-          else if (!online()) fail(msg("offlineTitle"), msg("offline"));
-          else fail(msg("errorTitle"), msg("error"));
-        } else if (text.trim().isEmpty()) {
-          noHear();
-        } else {
-          ask(text.trim());
-        }
-      });
+      voiceAsk(wav);
     });
   }
 
@@ -326,26 +330,26 @@ class VoiceAssistant {
     say(msg("noHear"));
   }
 
-  // Records until the speaker pauses (~1.3 s of quiet after speech), 15 s at
-  // most; null if nothing was said within 7 s. 16 kHz mono 16-bit WAV.
+  // Records the question and stops ~0.7 s after the voice ends. The noise
+  // level is learnt before and between words (the old fixed threshold took
+  // boosted background noise for speech and never stopped). Sensitivity
+  // (Settings) lowers the level that counts as a voice. 12 s at most; null
+  // if nothing was said within 6 s. Unboosted audio, levelled as a whole.
   private byte[] record() {
     final int rate = MicInput.RATE;
-    try {
-      Thread.sleep(150); // let the greeting's echo die down
-    } catch (InterruptedException e) {
-      return null;
-    }
     MicInput rec;
     try {
-      rec = new MicInput(prefs); // boosted per Settings > Microphone sensitivity
+      rec = new MicInput(prefs, false);
     } catch (Exception e) {
       Log.w(TAG, "microphone unavailable", e);
       return null;
     }
+    final float sens = MicInput.gainFor(prefs);
+    final double minVoice = 600.0 / sens;
     ByteArrayOutputStream pcm = new ByteArrayOutputStream();
     short[] frame = new short[320]; // 20 ms
-    double floor = Double.MAX_VALUE;
-    int frames = 0, loudRun = 0, quietMs = 0;
+    double noise = -1, voice = 0;
+    int loudRun = 0, quietMs = 0;
     boolean spoke = false;
     long started = SystemClock.elapsedRealtime();
     try {
@@ -359,31 +363,57 @@ class VoiceAssistant {
           pcm.write((frame[i] >> 8) & 0xff);
         }
         double rms = Math.sqrt(sum / n);
-        if (++frames <= 15) floor = Math.min(floor, rms); // quietest of the first 300 ms
-        double threshold = Math.max(250, (floor == Double.MAX_VALUE ? 0 : floor) * 2.5);
-        final float lvl = (float) Math.min(1.0, rms / 3500.0);
+        if (noise < 0) noise = rms;
+        final float lvl = (float) Math.min(1.0, rms * sens / 3500.0);
         main.post(() -> level(lvl));
-        if (rms > threshold) {
-          if (++loudRun >= 4) spoke = true;
-          quietMs = 0;
+        if (!spoke) {
+          if (rms > Math.max(minVoice, noise * 3.0)) {
+            if (++loudRun >= 3) {
+              spoke = true;
+              voice = rms;
+            }
+          } else {
+            loudRun = 0;
+            noise = noise * 0.9 + rms * 0.1;
+          }
+        } else if (rms < Math.max(minVoice * 0.8, Math.max(noise * 2.0, voice * 0.18))) {
+          quietMs += 20;
+          noise = noise * 0.98 + rms * 0.02;
         } else {
-          loudRun = 0;
-          if (spoke) quietMs += 20;
+          quietMs = 0;
+          voice = Math.max(voice * 0.995, rms);
         }
         long elapsed = SystemClock.elapsedRealtime() - started;
-        if (spoke && quietMs >= 1300) break;
-        if (!spoke && elapsed > 7000) break;
-        if (elapsed > 15000) break;
+        if (spoke && quietMs >= 700) break;
+        if (!spoke && elapsed > 6000) break;
+        if (elapsed > 12000) break;
       }
     } finally {
       rec.close();
     }
-    return spoke ? wav(pcm.toByteArray(), rate) : null;
+    if (!spoke) return null;
+    byte[] data = pcm.toByteArray();
+    int keep = Math.max(0, data.length - Math.max(0, quietMs - 300) * 32); // drop trailing silence
+    return wav(normalize(data, keep & ~1), rate);
+  }
+
+  // Levels the whole recording to ~90% of full scale (max 8x), no clipping.
+  private static byte[] normalize(byte[] pcm, int len) {
+    int peak = 1;
+    for (int i = 0; i + 1 < len; i += 2) peak = Math.max(peak, Math.abs((short) ((pcm[i] & 0xff) | (pcm[i + 1] << 8))));
+    float g = Math.min(8f, 0.9f * 32767f / peak);
+    byte[] out = new byte[len];
+    for (int i = 0; i + 1 < len; i += 2) {
+      int v = Math.round(((short) ((pcm[i] & 0xff) | (pcm[i + 1] << 8))) * g);
+      v = Math.max(Short.MIN_VALUE, Math.min(Short.MAX_VALUE, v));
+      out[i] = (byte) (v & 0xff);
+      out[i + 1] = (byte) ((v >> 8) & 0xff);
+    }
+    return out;
   }
 
   private static byte[] wav(byte[] pcm, int rate) {
     ByteArrayOutputStream out = new ByteArrayOutputStream(pcm.length + 44);
-    int byteRate = rate * 2;
     writeAscii(out, "RIFF");
     writeInt(out, 36 + pcm.length);
     writeAscii(out, "WAVEfmt ");
@@ -391,7 +421,7 @@ class VoiceAssistant {
     writeShort(out, 1); // PCM
     writeShort(out, 1); // mono
     writeInt(out, rate);
-    writeInt(out, byteRate);
+    writeInt(out, rate * 2);
     writeShort(out, 2);
     writeShort(out, 16);
     writeAscii(out, "data");
@@ -416,34 +446,55 @@ class VoiceAssistant {
     o.write((v >> 8) & 0xff);
   }
 
-  private volatile int httpCode = 0;
-
-  // Server-side speech-to-text. "" = nothing understood, null = failed.
-  private String transcribe(byte[] wav) {
+  // One request (POST /api/ai/voice): the recording goes up, the server
+  // transcribes it and streams the answer back -- "question", then the
+  // usual Ask AI events. Runs on the io thread.
+  private void voiceAsk(byte[] wav) {
     HttpURLConnection c = null;
     try {
+      long lastAt = prefs.getLong("voiceConversationAt", 0);
+      String reuse = System.currentTimeMillis() - lastAt < CONVERSATION_REUSE_MS ? prefs.getString("voiceConversationId", null) : null;
       String api = prefs.getString("apiUrl", "https://trade-mind-ai-seven.vercel.app");
-      c = (HttpURLConnection) new URL(api + "/api/ai/transcribe?lang=" + lang).openConnection();
+      String url = api + "/api/ai/voice?lang=" + lang + (reuse != null ? "&conversationId=" + reuse : "");
+      c = (HttpURLConnection) new URL(url).openConnection();
       c.setRequestMethod("POST");
       c.setConnectTimeout(20000);
       c.setReadTimeout(90000);
       c.setDoOutput(true);
+      c.setFixedLengthStreamingMode(wav.length);
       c.setRequestProperty("Content-Type", "audio/wav");
       c.setRequestProperty("Authorization", "Bearer " + prefs.getString("token", ""));
       try (OutputStream os = c.getOutputStream()) {
         os.write(wav);
       }
-      httpCode = c.getResponseCode();
-      if (httpCode >= 400) return null;
-      StringBuilder sb = new StringBuilder();
-      try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), StandardCharsets.UTF_8))) {
-        String line;
-        while ((line = r.readLine()) != null) sb.append(line);
+      int code = c.getResponseCode();
+      if (code == 401 || code == 403) {
+        main.post(() -> fail(msg("loginTitle"), msg("login")));
+        return;
       }
-      return new JSONObject(sb.toString()).optString("text", "");
+      if (code >= 400) {
+        main.post(() -> fail(msg("errorTitle"), msg("error")));
+        return;
+      }
+      BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), StandardCharsets.UTF_8));
+      String line, event = null;
+      while ((line = r.readLine()) != null && !finished) {
+        if (line.startsWith("event:")) {
+          event = line.substring(6).trim();
+        } else if (line.startsWith("data:") && event != null) {
+          final JSONObject data = new JSONObject(line.substring(5).trim());
+          final String ev = event;
+          if ("nohear".equals(ev)) {
+            main.post(this::noHear);
+            return;
+          }
+          main.post(() -> onEvent(ev, data));
+        }
+      }
+      main.post(this::onAnswered);
     } catch (Exception e) {
-      Log.w(TAG, "transcribe failed", e);
-      return null;
+      Log.w(TAG, "voice ask failed", e);
+      main.post(() -> fail(online() ? msg("errorTitle") : msg("offlineTitle"), online() ? msg("error") : msg("offline")));
     } finally {
       if (c != null) c.disconnect();
     }
@@ -458,71 +509,12 @@ class VoiceAssistant {
 
   // ---------- asking ----------
 
-  private void ask(String q) {
-    showQuestion(q);
-    setStatus(msg("thinking"));
-    level(0.3f);
-    if (!online()) {
-      setStatus(msg("offlineTitle"));
-      setAnswer(msg("offline"));
-      say(msg("offline"));
-      return;
-    }
-    main.postDelayed(() -> {
-      if (answerText.length() == 0 && !finished) setStatus(msg("waking"));
-    }, 7000);
-    long lastAt = prefs.getLong("voiceConversationAt", 0);
-    String reuse = System.currentTimeMillis() - lastAt < CONVERSATION_REUSE_MS ? prefs.getString("voiceConversationId", null) : null;
-    final String token = prefs.getString("token", "");
-    final String api = prefs.getString("apiUrl", "https://trade-mind-ai-seven.vercel.app");
-    io.execute(() -> {
-      HttpURLConnection c = null;
-      try {
-        c = (HttpURLConnection) new URL(api + "/api/ai/ask/stream").openConnection();
-        c.setRequestMethod("POST");
-        c.setConnectTimeout(20000);
-        c.setReadTimeout(90000);
-        c.setDoOutput(true);
-        c.setRequestProperty("Content-Type", "application/json");
-        c.setRequestProperty("Authorization", "Bearer " + token);
-        JSONObject body = new JSONObject().put("question", q).put("voice", true);
-        if (reuse != null) body.put("conversationId", reuse);
-        try (OutputStream os = c.getOutputStream()) {
-          os.write(body.toString().getBytes(StandardCharsets.UTF_8));
-        }
-        int code = c.getResponseCode();
-        if (code == 401 || code == 403) {
-          main.post(() -> fail(msg("loginTitle"), msg("login")));
-          return;
-        }
-        if (code >= 400) {
-          main.post(() -> fail(msg("errorTitle"), msg("error")));
-          return;
-        }
-        BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), StandardCharsets.UTF_8));
-        String line, event = null;
-        while ((line = r.readLine()) != null) {
-          if (line.startsWith("event:")) {
-            event = line.substring(6).trim();
-          } else if (line.startsWith("data:") && event != null) {
-            JSONObject data = new JSONObject(line.substring(5).trim());
-            final String ev = event;
-            main.post(() -> onEvent(ev, data));
-          }
-        }
-        main.post(this::onAnswered);
-      } catch (Exception e) {
-        Log.w(TAG, "ask failed", e);
-        main.post(() -> fail(online() ? msg("errorTitle") : msg("offlineTitle"), online() ? msg("error") : msg("offline")));
-      } finally {
-        if (c != null) c.disconnect();
-      }
-    });
-  }
-
   private void onEvent(String event, JSONObject data) {
     if (finished) return;
     switch (event) {
+      case "question":
+        showQuestion(data.optString("text", ""));
+        break;
       case "conversation":
         conversationId = data.optString("id", null);
         prefs.edit().putString("voiceConversationId", conversationId).putLong("voiceConversationAt", System.currentTimeMillis()).apply();
@@ -531,6 +523,7 @@ class VoiceAssistant {
         answerText.append(data.optString("text", ""));
         setAnswer(answerText.toString().trim());
         setStatus(msg("answer"));
+        speakReady(false); // start talking at the first full sentence
         break;
       case "error":
         if (answerText.length() == 0) fail(msg("errorTitle"), data.optString("message", msg("error")));
@@ -542,10 +535,40 @@ class VoiceAssistant {
 
   private void onAnswered() {
     if (finished || answerText.length() == 0) return;
+    answered = true;
     setStatus(msg("answer"));
     if (!withCard) host.showAnswerNotification(asked, answerText.toString().trim());
-    if (speakAnswers) say(answerText.toString());
-    else closeIn(25000);
+    if (!speakAnswers) closeIn(25000);
+    else if (tts != null && ttsReady && answerVoice) speakReady(true);
+    else say(answerText.toString()); // waits for the voice, or closes if there is none
+  }
+
+  // Speaks the finished sentences not spoken yet (all of the rest when
+  // last), so the answer starts while the server is still writing it.
+  private void speakReady(boolean last) {
+    if (!speakAnswers || tts == null || !ttsReady || !answerVoice || greeting || finished) return;
+    String all = answerText.toString();
+    int end = last ? all.length() : sentenceEnd(all, spokenUpTo);
+    List<String> parts = end > spokenUpTo ? chunks(clean(all.substring(spokenUpTo, end))) : new ArrayList<>();
+    if (end > spokenUpTo) spokenUpTo = end;
+    if (!parts.isEmpty()) louder();
+    for (int i = 0; i < parts.size(); i++) {
+      String id = (last && i == parts.size() - 1 ? "last" : "part") + (partNo++);
+      tts.speak(parts.get(i), TextToSpeech.QUEUE_ADD, loud(), id);
+    }
+    if (last && parts.isEmpty()) tts.playSilentUtterance(10, TextToSpeech.QUEUE_ADD, "last" + (partNo++));
+  }
+
+  // End of the last complete sentence after `from` (a full stop counts only
+  // when followed by a space, so "1.5" isn't split), or `from` if none.
+  private static int sentenceEnd(String t, int from) {
+    int end = from;
+    for (int i = from; i < t.length(); i++) {
+      char ch = t.charAt(i);
+      if ("。！？".indexOf(ch) >= 0) end = i + 1;
+      else if (".!?؟".indexOf(ch) >= 0 && i + 1 < t.length() && Character.isWhitespace(t.charAt(i + 1))) end = i + 1;
+    }
+    return end;
   }
 
   private void fail(String title, String message) {
@@ -591,7 +614,9 @@ class VoiceAssistant {
     answerVoice = useLanguage(locale);
     if (!answerVoice) setFooter(msg("noVoice"));
     if (greeting) {
-      greet();
+      if (player == null) greet();
+    } else if (answerText.length() > 0) {
+      speakReady(answered); // answer arrived before the voice was ready
     } else if (pendingSpeech != null) {
       String s = pendingSpeech;
       pendingSpeech = null;
@@ -603,6 +628,10 @@ class VoiceAssistant {
   // there is one (pitch lowered otherwise). False if the phone has no voice
   // for it.
   private boolean useLanguage(String tag) {
+    return applyLanguage(tts, tag);
+  }
+
+  static boolean applyLanguage(TextToSpeech tts, String tag) {
     if (tts == null) return false;
     Locale loc = Locale.forLanguageTag(tag);
     int res = tts.setLanguage(loc);
@@ -618,8 +647,20 @@ class VoiceAssistant {
       }
     } catch (Exception ignored) {
     }
+    boolean male = pick != null;
+    if (pick == null) { // no male voice: any on-device one (online voices start slowly)
+      try {
+        for (Voice v : tts.getVoices()) {
+          if (v.getLocale().getLanguage().equals(loc.getLanguage()) && !v.isNetworkConnectionRequired()) {
+            pick = v;
+            break;
+          }
+        }
+      } catch (Exception ignored) {
+      }
+    }
     if (pick != null) tts.setVoice(pick);
-    tts.setPitch(pick != null ? 1.0f : 0.85f);
+    tts.setPitch(male ? 1.0f : 0.85f);
     return true;
   }
 
@@ -647,8 +688,21 @@ class VoiceAssistant {
   }
 
   private String greetingText(String language) {
+    return greetingVariant(prefs, language, -1);
+  }
+
+  static String appLocale(String language) {
+    return APP_LOCALES.containsKey(language) ? APP_LOCALES.get(language) : "en-US";
+  }
+
+  static int greetingCount(String language) {
+    return (GREETINGS.containsKey(language) ? GREETINGS.get(language) : GREETINGS.get("en")).length;
+  }
+
+  /** Greeting number i (-1 = random) in `language`, with the first name. */
+  static String greetingVariant(SharedPreferences prefs, String language, int i) {
     String[] list = GREETINGS.containsKey(language) ? GREETINGS.get(language) : GREETINGS.get("en");
-    String t = list[(int) (Math.random() * list.length)];
+    String t = list[i >= 0 ? i % list.length : (int) (Math.random() * list.length)];
     String name = prefs.getString("userName", "").trim();
     if (name.contains(" ")) name = name.substring(0, name.indexOf(' '));
     if (name.isEmpty()) return t.replaceAll("\\[[^\\]]*\\]", "");
@@ -667,6 +721,37 @@ class VoiceAssistant {
     louder();
     tts.setSpeechRate(1.0f); // short greeting: natural pace
     if (tts.speak(text, TextToSpeech.QUEUE_FLUSH, loud(), "greet") != TextToSpeech.SUCCESS) finishGreeting();
+  }
+
+  private boolean playClip(String[] clip) {
+    try {
+      android.media.MediaPlayer mp = new android.media.MediaPlayer();
+      mp.setAudioAttributes(new AudioAttributes.Builder()
+          .setUsage(AudioAttributes.USAGE_MEDIA)
+          .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+          .build());
+      mp.setDataSource(clip[0]);
+      mp.setOnCompletionListener((m) -> {
+        m.release();
+        player = null;
+        finishGreeting();
+      });
+      mp.setOnErrorListener((m, what, extra) -> {
+        m.release();
+        player = null;
+        finishGreeting();
+        return true;
+      });
+      mp.prepare();
+      setStatus(clip[1]);
+      louder();
+      player = mp;
+      mp.start();
+      return true;
+    } catch (Exception e) {
+      Log.w(TAG, "greeting clip failed", e);
+      return false;
+    }
   }
 
   private final Runnable greetTimeout = this::finishGreeting;

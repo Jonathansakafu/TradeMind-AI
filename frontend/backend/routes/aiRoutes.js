@@ -3,7 +3,7 @@ const {
   analyzeTrade, detectPatterns, getTradeSuggestion,
   analyzeDocument, analyzeScreenshot, getBooks, deleteBook,
   askQuestion, askQuestionStream, detectStrategy,
-  listConversations, getConversation, deleteConversation, translateForSpeech, transcribeVoice,
+  listConversations, getConversation, deleteConversation, translateForSpeech, transcribeVoice, voiceAsk,
 } = require("../controllers/aiController");
 const { protect } = require("../middleware/authMiddleware");
 const multer = require("multer");
@@ -36,6 +36,7 @@ router.post("/ask/stream", askQuestionStream);
 router.get("/conversations", listConversations);
 router.post("/speech-translate", translateForSpeech);
 router.post("/transcribe", require("express").raw({ type: ["audio/wav", "application/octet-stream"], limit: "6mb" }), transcribeVoice);
+router.post("/voice", require("express").raw({ type: ["audio/wav", "application/octet-stream"], limit: "6mb" }), voiceAsk);
 router.get("/conversations/:id", getConversation);
 router.delete("/conversations/:id", deleteConversation);
 

@@ -8,10 +8,15 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.ServiceInfo;
 import android.media.AudioManager;
 import android.media.ToneGenerator;
 import android.speech.tts.TextToSpeech;
+import android.speech.tts.UtteranceProgressListener;
+import java.io.File;
+import java.util.List;
+import java.util.ArrayList;
 import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
@@ -44,6 +49,7 @@ public class WakeWordService extends Service implements RecognitionListener {
   static final String ACTION_PAUSE = "com.trademind.ai.wake.PAUSE";
   static final String ACTION_RESUME = "com.trademind.ai.wake.RESUME";
   static final String ACTION_RELOAD = "com.trademind.ai.wake.RELOAD"; // new mic sensitivity
+  static final String ACTION_GREETINGS = "com.trademind.ai.wake.GREETINGS"; // new name / language
   static final String EXTRA_WAKE = "tm_wake";
   static final String EXTRA_OPEN_CONVERSATION = "tm_open_conversation";
   static final int HIT_ID = 4712;
@@ -73,6 +79,10 @@ public class WakeWordService extends Service implements RecognitionListener {
   // Kept warm so the greeting starts at once (a new engine takes 1-2 s).
   private TextToSpeech tts;
   private volatile boolean ttsReady = false;
+  // Greetings ("Yes, Jonathan?") recorded in advance so they play at once.
+  private String[] greetTexts = new String[0];
+  private boolean[] greetDone = new boolean[0];
+  private boolean greetingsStale = false;
   private final Handler main = new Handler(Looper.getMainLooper());
   private final Runnable autoResume = this::resumeListening;
 
@@ -94,7 +104,10 @@ public class WakeWordService extends Service implements RecognitionListener {
     super.onCreate();
     createChannels();
     try {
-      tts = new TextToSpeech(this, (st) -> ttsReady = st == TextToSpeech.SUCCESS);
+      tts = new TextToSpeech(this, (st) -> {
+        ttsReady = st == TextToSpeech.SUCCESS;
+        if (ttsReady) main.post(this::prepareGreetings);
+      });
     } catch (Exception e) {
       tts = null;
     }
@@ -113,7 +126,9 @@ public class WakeWordService extends Service implements RecognitionListener {
       return START_NOT_STICKY;
     }
     running = true;
-    if (ACTION_RELOAD.equals(action)) {
+    if (ACTION_GREETINGS.equals(action)) {
+      prepareGreetings();
+    } else if (ACTION_RELOAD.equals(action)) {
       if (micThread != null) {
         releaseMic();
         resumeListening();
@@ -298,6 +313,7 @@ public class WakeWordService extends Service implements RecognitionListener {
           @Override
           public void onAssistantFinished() {
             assistant = null;
+            if (greetingsStale) prepareGreetings();
             main.postDelayed(autoResume, 800);
           }
 
@@ -309,6 +325,11 @@ public class WakeWordService extends Service implements RecognitionListener {
           @Override
           public void showAnswerNotification(String question, String answer) {
             showAnswer(question, answer);
+          }
+
+          @Override
+          public String[] greetingClip() {
+            return pickGreeting();
           }
         });
         assistant.start();
@@ -348,6 +369,61 @@ public class WakeWordService extends Service implements RecognitionListener {
       }
     }
     showHitNotification(open);
+  }
+
+  // Records each greeting variant to a file with the warm speech engine,
+  // in the app language (English if the phone has no voice for it).
+  private void prepareGreetings() {
+    if (tts == null || !ttsReady) return;
+    if (assistant != null) { // the engine is busy talking; redo afterwards
+      greetingsStale = true;
+      return;
+    }
+    greetingsStale = false;
+    SharedPreferences p = getSharedPreferences(PREFS, MODE_PRIVATE);
+    String language = p.getString("appLang", "en");
+    if (!VoiceAssistant.applyLanguage(tts, VoiceAssistant.appLocale(language))) {
+      language = "en";
+      VoiceAssistant.applyLanguage(tts, "en-US");
+    }
+    tts.setSpeechRate(1.0f);
+    int count = Math.min(4, VoiceAssistant.greetingCount(language));
+    final String[] texts = new String[count];
+    final boolean[] done = new boolean[count];
+    greetTexts = texts;
+    greetDone = done;
+    tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
+      @Override public void onStart(String id) {}
+      @Override public void onDone(String id) {
+        if (!id.startsWith("g")) return;
+        try {
+          int i = Integer.parseInt(id.substring(1));
+          if (greetDone == done && i < done.length) done[i] = true;
+        } catch (NumberFormatException ignored) {
+        }
+      }
+      @Override public void onError(String id) {}
+    });
+    for (int i = 0; i < count; i++) {
+      texts[i] = VoiceAssistant.greetingVariant(p, language, i);
+      File f = greetingFile(i);
+      f.delete();
+      tts.synthesizeToFile(texts[i], new android.os.Bundle(), f, "g" + i);
+    }
+  }
+
+  private File greetingFile(int i) {
+    return new File(getCacheDir(), "greeting" + i + ".wav");
+  }
+
+  private String[] pickGreeting() {
+    List<Integer> ready = new ArrayList<>();
+    for (int i = 0; i < greetDone.length; i++) {
+      if (greetDone[i] && greetingFile(i).length() > 1000) ready.add(i);
+    }
+    if (ready.isEmpty()) return null;
+    int i = ready.get((int) (Math.random() * ready.size()));
+    return new String[] {greetingFile(i).getAbsolutePath(), greetTexts[i]};
   }
 
   private void beep() {

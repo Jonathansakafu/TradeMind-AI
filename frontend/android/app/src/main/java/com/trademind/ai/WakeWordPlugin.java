@@ -129,6 +129,7 @@ public class WakeWordPlugin extends Plugin {
     }
     android.content.SharedPreferences sp = getContext().getSharedPreferences(WakeWordService.PREFS, Context.MODE_PRIVATE);
     String oldGain = sp.getString("micGain", "high");
+    String oldGreeting = sp.getString("userName", "") + "|" + sp.getString("appLang", "");
     for (String key : new String[] {"apiUrl", "response", "position", "micLocale", "speed", "userName", "appLang", "micGain", "boostVolume"}) {
       String v = call.getString(key);
       if (v != null) e.putString(key, v);
@@ -136,6 +137,8 @@ public class WakeWordPlugin extends Plugin {
     e.apply();
     String newGain = call.getString("micGain");
     if (newGain != null && !newGain.equals(oldGain)) send(WakeWordService.ACTION_RELOAD);
+    String newGreeting = sp.getString("userName", "") + "|" + sp.getString("appLang", "");
+    if (!newGreeting.equals(oldGreeting)) send(WakeWordService.ACTION_GREETINGS);
     call.resolve();
   }
 

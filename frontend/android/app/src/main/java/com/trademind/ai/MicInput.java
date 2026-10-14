@@ -24,6 +24,15 @@ class MicInput {
 
   /** Throws if the microphone can't be opened (busy, blocked). */
   MicInput(SharedPreferences prefs) {
+    this(prefs, true);
+  }
+
+  /**
+   * boost=false: no software gain -- for the question recording, which is
+   * levelled as a whole afterwards (boosting each sample clipped loud
+   * syllables and hurt recognition: "last month" came out "last man").
+   */
+  MicInput(SharedPreferences prefs, boolean boost) {
     int min = AudioRecord.getMinBufferSize(RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
     record = new AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION, RATE, AudioFormat.CHANNEL_IN_MONO,
         AudioFormat.ENCODING_PCM_16BIT, Math.max(min, RATE));
@@ -42,7 +51,7 @@ class MicInput {
       }
     } catch (Exception ignored) {
     }
-    gain = gainFor(prefs);
+    gain = boost ? gainFor(prefs) : 1f;
     record.startRecording();
   }
 

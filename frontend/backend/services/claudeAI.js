@@ -1097,11 +1097,11 @@ ${ragCtx}`
   // The trader's own numbers (services/userDataContext.js) and where every
   // answer's facts come from.
   const dataInstruction = userData
-    ? `\n\n${userData}\n\nWhen the trader asks about their own performance, results, win rate, profit/loss, trades or TradeMind's signals (in any language, e.g. "how was last month?"), answer straight from "Your trading data" above with the actual numbers for the period they mean — never tell them to go and look at a page in the app instead. If that period has no trades, say so. Start such answers by saying where the numbers come from and for which period, e.g. "From your TradeMind trade journal, September 2026: …".`
+    ? `\n\n${userData}\n\nWhen the trader asks about their own performance, results, win rate, profit/loss, trades or TradeMind's signals (in any language, e.g. "how was last month?"), answer straight from "Your trading data" above with the actual numbers for the period they mean — never tell them to go and look at a page in the app instead. Never refuse a period because the account or journal is younger than it (e.g. "last year", "the last 12 months", "all time"): give whatever trades fall in that period and say when the journal starts. Only if that period truly has no trades, say so. Start such answers by saying where the numbers come from and for which period, e.g. "From your TradeMind trade journal, September 2026: …".`
     : "";
   const sourceInstruction = "\n\nAlways make clear where the information comes from: their trade journal, their uploaded books, live market prices (say they are live, from the internet), the economic calendar, or your own general trading knowledge.";
   const voiceInstruction = voice
-    ? "\n\nThis answer will be SPOKEN aloud by a phone voice assistant: reply in 2–4 short, natural sentences (about 60 words at most), no lists, headings, markdown, tables, emoji or links. Say numbers plainly (e.g. \"58 percent\", \"plus 34 dollars\"). Still say where the information comes from in a few words."
+    ? "\n\nThis answer will be SPOKEN aloud by a phone voice assistant: reply in 2–4 short, natural sentences (about 60 words at most), no lists, headings, markdown, tables, emoji or links. Say numbers plainly (e.g. \"58 percent\", \"plus 34 dollars\"). Still say where the information comes from in a few words. The question was transcribed from speech and may contain recognition mistakes or odd words (e.g. \"last man\" = \"last month\", \"when rate\" = \"win rate\", \"gold\" said as \"goal\") — answer the most likely meaning for a trader; don't comment on the wording."
     : "";
 
   const formatInstruction = jsonMode
@@ -1199,9 +1199,9 @@ exports.transcribeSpeech = async (wav, lang) => {
   const file = await Groq.toFile(wav, "question.wav", { type: "audio/wav" });
   const res = await getGroqClient().audio.transcriptions.create({
     file,
-    model: "whisper-large-v3-turbo",
+    model: "whisper-large-v3", // more accurate than turbo with accents; still ~0.5 s on Groq
     language: /^[a-z]{2}$/.test(lang || "") ? lang : undefined,
-    prompt: "Trading questions: EURUSD, GBPUSD, XAUUSD, gold, stop loss, take profit, win rate, TradeMind.",
+    prompt: "How was my performance last month? Last week, this week, this year, last year, win rate, profit and loss, my trades, EURUSD, GBPUSD, XAUUSD, gold, stop loss, take profit, NFP, CPI, TradeMind.",
     response_format: "json",
     temperature: 0,
   });

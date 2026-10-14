@@ -35,6 +35,8 @@ function periods(now) {
     { label: `Last month (${MONTHS[(m + 11) % 12]} ${m ? y : y - 1})`, from: fromLocal(m ? y : y - 1, (m + 11) % 12), to: fromLocal(y, m) },
     { label: "Last 30 days", from: new Date(now - 30 * DAY), to: now },
     { label: `This year (${y})`, from: fromLocal(y, 0), to: now },
+    { label: `Last year (${y - 1})`, from: fromLocal(y - 1, 0), to: fromLocal(y, 0) },
+    { label: "Last 12 months", from: fromLocal(y - 1, m, d), to: now },
     { label: "All time", from: new Date(0), to: now },
   ];
 }
@@ -44,6 +46,7 @@ const doneAt = (t) => new Date(t.closedAt || t.openedAt || t.createdAt);
 function summarize(trades, money) {
   const closed = trades.filter((t) => t.outcome);
   if (!closed.length) return "no closed trades";
+  const n = closed.length;
   const wins = closed.filter((t) => t.outcome === "win").length;
   const losses = closed.filter((t) => t.outcome === "loss").length;
   const be = closed.length - wins - losses;
@@ -52,7 +55,7 @@ function summarize(trades, money) {
   for (const t of closed) byPair.set(t.pair, (byPair.get(t.pair) || 0) + (Number(t.profitLoss) || 0));
   const pairs = [...byPair.entries()].sort((a, b) => b[1] - a[1]);
   const parts = [
-    `${closed.length} trades: ${wins} wins, ${losses} losses${be ? `, ${be} breakeven` : ""}`,
+    `${n} trade${n === 1 ? "" : "s"}: ${wins} win${wins === 1 ? "" : "s"}, ${losses} loss${losses === 1 ? "" : "es"}${be ? `, ${be} breakeven` : ""}`,
     `win rate ${Math.round((wins / closed.length) * 100)}%`,
     `net P/L ${money(net)}`,
   ];
@@ -86,6 +89,8 @@ exports.build = async (userId, now = new Date()) => {
   if (!trades.length) {
     lines.push("- The journal has no trades yet.");
   } else {
+    const times = trades.map(doneAt).sort((a, b) => a - b);
+    lines.push(`Journal covers ${fmtDay(times[0])} ${local(times[0]).getUTCFullYear()} to ${fmtDay(times.at(-1))} ${local(times.at(-1)).getUTCFullYear()} (${trades.length} trades). A period that starts before the first trade still includes every trade inside it — answer with that data and mention when the journal starts.`);
     lines.push("Results by period (closed trades with a recorded result):");
     for (const p of periods(now)) {
       lines.push(`- ${p.label}: ${summarize(trades.filter((t) => doneAt(t) >= p.from && doneAt(t) < p.to), money)}`);

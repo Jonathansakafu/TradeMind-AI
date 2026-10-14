@@ -308,12 +308,29 @@ exports.askQuestion = async (req, res) => {
 // Ask AI (streaming) — same as askQuestion but sends the answer as
 // Server-Sent Events so the UI can render it token-by-token instead of
 // waiting for the full response.
-exports.askQuestionStream = async (req, res) => {
-  const { question, conversationId } = req.body;
-  if (!question || !question.trim()) {
-    return res.status(400).json({ message: "Question is required" });
-  }
+// Opens a Server-Sent Events response; send(event, data) writes one event.
+function openSSE(res) {
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache",
+    Connection: "keep-alive",
+    "X-Accel-Buffering": "no",
+  });
+  const state = { closed: false };
+  // res, not req: on current Node, a request's "close" only means its
+  // body was read -- it never reported the client disconnecting, so a
+  // dropped connection kept generating (and burning AI quota) to the end.
+  res.on("close", () => { if (!res.writableEnded) state.closed = true; });
+  state.send = (event, data) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  return state;
+}
 
+// Retrieval adds an embedding call; spoken answers can't wait long for it.
+const withTimeout = (p, ms, fallback) => Promise.race([p, new Promise((r) => setTimeout(() => r(fallback), ms))]);
+
+// Saves the question to the conversation (new or continued) and streams
+// the answer over an already-open SSE response.
+async function answerOverSSE(req, res, sse, { question, conversationId, voice }) {
   // Load (or start) the saved conversation, and save the question right
   // away -- so it's never lost even if the answer fails or the connection
   // drops mid-stream.
@@ -327,23 +344,6 @@ exports.askQuestionStream = async (req, res) => {
   }
   conversation.messages.push({ role: "user", content: question.trim() });
   await conversation.save();
-
-  res.writeHead(200, {
-    "Content-Type": "text/event-stream",
-    "Cache-Control": "no-cache",
-    Connection: "keep-alive",
-    "X-Accel-Buffering": "no",
-  });
-
-  const send = (event, data) => {
-    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-  };
-
-  // res, not req: on current Node, a request's "close" only means its
-  // body was read -- it never reported the client disconnecting, so a
-  // dropped connection kept generating (and burning AI quota) to the end.
-  let closed = false;
-  res.on("close", () => { if (!res.writableEnded) closed = true; });
 
   let answer = "";
   let sources = [];
@@ -359,38 +359,75 @@ exports.askQuestionStream = async (req, res) => {
   };
 
   try {
-    send("conversation", { id: conversation._id, title: conversation.title });
+    sse.send("conversation", { id: conversation._id, title: conversation.title });
 
+    const retrieval = ragService.retrieve(req.user._id, question, {
+      topK: 8,
+      sources: ["book", "trade", "guide", "screenshot"],
+    });
     const [retrievedChunks, bookSummary, userData] = await Promise.all([
-      ragService.retrieve(req.user._id, question, {
-        topK: 8,
-        sources: ["book", "trade", "guide", "screenshot"],
-      }),
-      ragService.getBookConceptSummary(req.user._id),
+      voice ? withTimeout(retrieval.catch(() => []), 1200, []) : retrieval,
+      voice ? withTimeout(ragService.getBookConceptSummary(req.user._id).catch(() => ""), 800, "") : ragService.getBookConceptSummary(req.user._id),
       userDataContext.build(req.user._id).catch((err) => { console.error("userDataContext:", err.message); return ""; }),
     ]);
-    if (closed) return res.end();
+    if (sse.closed) return res.end();
 
     sources = claudeAI.answerSourcesFor(retrievedChunks);
-    send("sources", { sources });
+    sse.send("sources", { sources });
 
-    for await (const delta of claudeAI.streamAnswer(question, retrievedChunks, { bookSummary, history, userData, voice: !!req.body.voice })) {
+    for await (const delta of claudeAI.streamAnswer(question, retrievedChunks, { bookSummary, history, userData, voice })) {
       answer += delta;
-      if (closed) {
+      if (sse.closed) {
         await saveAnswer();
         return res.end();
       }
-      send("chunk", { text: delta });
+      sse.send("chunk", { text: delta });
     }
 
     finished = true;
     await saveAnswer();
-    send("done", {});
+    sse.send("done", {});
     res.end();
   } catch (err) {
     await saveAnswer();
-    if (!closed) {
-      send("error", { message: err.message });
+    if (!sse.closed) {
+      sse.send("error", { message: err.message });
+      res.end();
+    }
+  }
+}
+
+exports.askQuestionStream = async (req, res) => {
+  const { question, conversationId } = req.body;
+  if (!question || !question.trim()) {
+    return res.status(400).json({ message: "Question is required" });
+  }
+  const sse = openSSE(res);
+  await answerOverSSE(req, res, sse, { question, conversationId, voice: !!req.body.voice });
+};
+
+// Hey TradeMind in one request (fastest path): WAV audio in, then SSE out
+// -- "question" (what was understood), or "nohear", then the usual
+// conversation / sources / chunk / done events with a short spoken-style
+// answer. ?lang=en|sw|...&conversationId=...
+exports.voiceAsk = async (req, res) => {
+  const sse = openSSE(res);
+  try {
+    const audio = Buffer.isBuffer(req.body) ? req.body : null;
+    const question = audio && audio.length >= 4000
+      ? await claudeAI.transcribeSpeech(audio, String(req.query.lang || "").slice(0, 2))
+      : "";
+    if (sse.closed) return res.end();
+    if (!question) {
+      sse.send("nohear", {});
+      return res.end();
+    }
+    sse.send("question", { text: question });
+    await answerOverSSE(req, res, sse, { question, conversationId: req.query.conversationId || null, voice: true });
+  } catch (err) {
+    pipelineStats.recordError("chat", `voice: ${err.message}`);
+    if (!sse.closed) {
+      sse.send("error", { message: "Couldn't understand the audio right now." });
       res.end();
     }
   }
