@@ -36,6 +36,19 @@
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="signals" />
 
+        <!-- "Hey TradeMind" card on the lock screen (show-when-locked). -->
+        <activity
+            android:name=".LockCardActivity"
+            android:exported="false"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:excludeFromRecents="true"
+            android:launchMode="singleInstance"
+            android:taskAffinity="com.trademind.ai.voice"
+            android:noHistory="false"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
         <!-- "Hey TradeMind" wake word: listens in the background (offline). -->
         <service
             android:name=".WakeWordService"

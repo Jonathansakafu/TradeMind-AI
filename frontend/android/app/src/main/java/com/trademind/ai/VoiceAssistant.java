@@ -110,6 +110,7 @@ class VoiceAssistant {
   private int spokenUpTo = 0;
   private int partNo = 0;
   private android.media.MediaPlayer player; // pre-recorded greeting
+  private android.media.audiofx.Visualizer viz; // orb follows the greeting's sound
   private final TextToSpeech warmTts; // the service's engine, already started (or null)
   private AudioManager audio;
   private AudioFocusRequest focus;
@@ -118,6 +119,12 @@ class VoiceAssistant {
   private String pendingSpeech = null;
   private String conversationId = null;
   private boolean finished = false;
+  static volatile VoiceAssistant active; // the open session (for LockCardActivity)
+  private final String appLang; // card labels and system messages
+  private WindowManager.LayoutParams overlayLp;
+  private boolean inOverlay = false;
+  private LockCardActivity lockCard;
+  private String pendingSystem = null;
   private final StringBuilder answerText = new StringBuilder();
   private final Runnable closeLater = this::finish;
 
@@ -129,14 +136,16 @@ class VoiceAssistant {
     this.host = host;
     this.locale = prefs.getString("micLocale", "en-US");
     this.lang = locale.substring(0, 2);
+    this.appLang = prefs.getString("appLang", this.lang);
     this.speakAnswers = !"text".equals(prefs.getString("response", "voice"));
   }
 
   // ---------- lifecycle ----------
 
   void start() {
+    active = this;
     wakeScreen();
-    if (withCard) showCard();
+    if (withCard || isLocked()) showCard(); // locked: on the lock screen, even without the overlay permission
     takeAudioFocus(); // other sound dips while we listen and talk
     if (speakAnswers) {
       if (warmTts != null) {
@@ -177,6 +186,7 @@ class VoiceAssistant {
       }
       tts = null;
     }
+    stopViz();
     if (player != null) {
       try {
         player.release();
@@ -194,13 +204,20 @@ class VoiceAssistant {
       screenOn = null;
     }
     io.shutdownNow();
-    if (card != null && wm != null) {
+    if (card != null && wm != null && inOverlay) {
       try {
         wm.removeView(card);
       } catch (Exception ignored) {
       }
-      card = null;
     }
+    inOverlay = false;
+    if (lockCard != null) {
+      LockCardActivity a = lockCard;
+      lockCard = null;
+      a.finish();
+    }
+    card = null;
+    if (active == this) active = null;
     host.onAssistantFinished();
   }
 
@@ -289,14 +306,52 @@ class VoiceAssistant {
     card = frame;
 
     int type = Build.VERSION.SDK_INT >= 26 ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY : WindowManager.LayoutParams.TYPE_PHONE;
-    WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
+    overlayLp = new WindowManager.LayoutParams(
         WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.WRAP_CONTENT, type,
         WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
         PixelFormat.TRANSLUCENT);
-    lp.gravity = (top ? Gravity.TOP : Gravity.BOTTOM) | Gravity.CENTER_HORIZONTAL;
-    lp.y = top ? dp(36) : dp(64);
-    lp.windowAnimations = android.R.style.Animation_Toast;
-    wm.addView(card, lp);
+    overlayLp.gravity = (top ? Gravity.TOP : Gravity.BOTTOM) | Gravity.CENTER_HORIZONTAL;
+    overlayLp.y = top ? dp(36) : dp(64);
+    overlayLp.windowAnimations = android.R.style.Animation_Toast;
+    if (isLocked()) {
+      // Floating windows don't show on the lock screen: use the
+      // show-when-locked card screen so the orb is visible there too.
+      try {
+        ctx.startActivity(new Intent(ctx, LockCardActivity.class)
+            .putExtra(LockCardActivity.EXTRA_TOP, top)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_NO_ANIMATION | Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS));
+        return;
+      } catch (Exception e) {
+        Log.w(TAG, "lock-screen card failed", e);
+      }
+    }
+    addOverlay();
+  }
+
+  private void addOverlay() {
+    if (!withCard || card == null || inOverlay) return;
+    try {
+      wm.addView(card, overlayLp);
+      inOverlay = true;
+    } catch (Exception e) {
+      Log.w(TAG, "overlay failed", e);
+    }
+  }
+
+  /** LockCardActivity takes the card. */
+  boolean attachTo(LockCardActivity activity) {
+    if (finished || card == null) return false;
+    if (card.getParent() instanceof android.view.ViewGroup) ((android.view.ViewGroup) card.getParent()).removeView(card);
+    activity.setContentView(card);
+    lockCard = activity;
+    return true;
+  }
+
+  /** The lock-screen card was closed (back button, swiped away): end the session. */
+  void onLockCardGone(LockCardActivity activity) {
+    if (lockCard != activity) return;
+    lockCard = null;
+    if (!finished) finish();
   }
 
   private void setStatus(String s) {
@@ -315,6 +370,10 @@ class VoiceAssistant {
     if (orb != null) orb.setLevel(v);
   }
 
+  private void thinking(boolean on) {
+    if (orb != null) orb.setThinking(on);
+  }
+
   private void openInApp() {
     Intent i = new Intent(ctx, MainActivity.class)
         .putExtra(WakeWordService.EXTRA_OPEN_CONVERSATION, conversationId != null ? conversationId : "")
@@ -328,6 +387,7 @@ class VoiceAssistant {
   // Silence: 5 s -> "Proceed, I'm still listening", 3 s more -> close.
   private void listen() {
     recording = true;
+    thinking(false);
     final long waitMs = followUp ? FOLLOW_UP_MS : secondTry ? 3000 : 5000;
     io.execute(() -> {
       byte[] wav = record(waitMs);
@@ -364,7 +424,7 @@ class VoiceAssistant {
     answered = false;
     setAnswer("");
     setStatus(msg("thinking"));
-    level(0.3f);
+    thinking(true);
     main.postDelayed(() -> { if (answerText.length() == 0 && !finished) setStatus(msg("waking")); }, 6000);
     io.execute(() -> voiceAsk(wav));
   }
@@ -486,7 +546,7 @@ class VoiceAssistant {
     if (finished) return;
     setStatus(msg("noHearTitle"));
     setAnswer(msg("noHear"));
-    say(msg("noHear"));
+    sayAppText(msg("noHear"));
   }
 
   // Records the question and stops ~0.7 s after the voice ends. The noise
@@ -523,7 +583,9 @@ class VoiceAssistant {
         }
         double rms = Math.sqrt(sum / n);
         if (noise < 0) noise = rms;
-        final float lvl = (float) Math.min(1.0, rms * sens / 3500.0);
+        // Orb: how far the voice is above the room's noise (dB), 0 at silence.
+        double above = 20 * Math.log10(Math.max(rms, 1)) - 20 * Math.log10(Math.max(noise, minVoice * 0.5)) - 4;
+        final float lvl = (float) Math.max(0, Math.min(1.0, above / 22.0));
         main.post(() -> level(lvl));
         if (!spoke) {
           if (rms > Math.max(minVoice, noise * 3.0)) {
@@ -686,6 +748,7 @@ class VoiceAssistant {
         answerText.append(data.optString("text", ""));
         setAnswer(answerText.toString().trim());
         setStatus(msg("answer"));
+        thinking(false);
         speakReady(false); // start talking at the first full sentence
         break;
       case "error":
@@ -761,7 +824,33 @@ class VoiceAssistant {
     if (!withCard) host.showAnswerNotification(title, message);
     setStatus(title);
     setAnswer(message);
-    say(message);
+    thinking(false);
+    sayAppText(message);
+  }
+
+  // System messages (no internet, not logged in...) are spoken in the app
+  // language, like the greeting; shown only if the phone has no voice for it.
+  private void sayAppText(String text) {
+    if (finished) return;
+    if (!speakAnswers || tts == null) {
+      closeIn(25000);
+      return;
+    }
+    if (!ttsReady) {
+      pendingSystem = text;
+      return;
+    }
+    if (!useLanguage(appLocale(appLang))) {
+      closeIn(20000);
+      return;
+    }
+    tts.setSpeechRate(answerRate());
+    louder();
+    List<String> parts = chunks(clean(text));
+    for (int i = 0; i < parts.size(); i++) {
+      tts.speak(parts.get(i), TextToSpeech.QUEUE_ADD, loud(), (i == parts.size() - 1 ? "last" : "part") + (partNo++));
+    }
+    if (parts.isEmpty()) closeIn(9000);
   }
 
   // ---------- speaking ----------
@@ -804,6 +893,10 @@ class VoiceAssistant {
       if (player == null) greet();
     } else if (answerText.length() > 0) {
       speakReady(answered); // answer arrived before the voice was ready
+    } else if (pendingSystem != null) {
+      String s = pendingSystem;
+      pendingSystem = null;
+      sayAppText(s);
     } else if (pendingSpeech != null) {
       String s = pendingSpeech;
       pendingSpeech = null;
@@ -919,11 +1012,13 @@ class VoiceAssistant {
           .build());
       mp.setDataSource(clip[0]);
       mp.setOnCompletionListener((m) -> {
+        stopViz();
         m.release();
         player = null;
         finishGreeting();
       });
       mp.setOnErrorListener((m, what, extra) -> {
+        stopViz();
         m.release();
         player = null;
         finishGreeting();
@@ -934,11 +1029,49 @@ class VoiceAssistant {
       louder();
       player = mp;
       mp.start();
+      followSound(mp.getAudioSessionId());
       return true;
     } catch (Exception e) {
       Log.w(TAG, "greeting clip failed", e);
       return false;
     }
+  }
+
+  // Orb pulses with the actual loudness of the greeting being played.
+  private void followSound(int session) {
+    try {
+      viz = new android.media.audiofx.Visualizer(session);
+      viz.setCaptureSize(android.media.audiofx.Visualizer.getCaptureSizeRange()[0]);
+      viz.setDataCaptureListener(new android.media.audiofx.Visualizer.OnDataCaptureListener() {
+        @Override
+        public void onWaveFormDataCapture(android.media.audiofx.Visualizer v, byte[] wave, int rate) {
+          double sum = 0;
+          for (byte b : wave) {
+            int x = (b & 0xff) - 128;
+            sum += x * x;
+          }
+          double rms = Math.sqrt(sum / Math.max(1, wave.length));
+          final float lvl = (float) Math.min(1.0, rms / 40.0);
+          main.post(() -> level(lvl));
+        }
+
+        @Override
+        public void onFftDataCapture(android.media.audiofx.Visualizer v, byte[] fft, int rate) {}
+      }, Math.min(android.media.audiofx.Visualizer.getMaxCaptureRate(), 20000), true, false);
+      viz.setEnabled(true);
+    } catch (Exception e) {
+      viz = null; // not allowed on this phone: the orb just rests
+    }
+  }
+
+  private void stopViz() {
+    if (viz == null) return;
+    try {
+      viz.setEnabled(false);
+      viz.release();
+    } catch (Exception ignored) {
+    }
+    viz = null;
   }
 
   private final Runnable greetTimeout = this::finishGreeting;
@@ -1140,7 +1273,7 @@ class VoiceAssistant {
   }
 
   private String msg(String key) {
-    Map<String, String> m = TEXT.get(lang);
+    Map<String, String> m = TEXT.get(appLang);
     String s = m != null ? m.get(key) : null;
     return s != null ? s : TEXT.get("en").get(key);
   }
