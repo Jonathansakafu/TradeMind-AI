@@ -7,6 +7,7 @@ import {
   Zap, Menu, X, Newspaper, Bell, Bot, Sparkles, BookOpen, Target, Webhook, PieChart, CalendarDays
 } from "lucide-react";
 import NotificationBell from "../components/NotificationBell";
+import EquityBar from "../components/EquityBar";
 import ChatWidget from "../components/ChatWidget";
 import ThemeToggle from "../components/ThemeToggle";
 import { useAuth } from "../hooks/useAuth";
@@ -220,6 +221,8 @@ function MainLayout({ children }) {
           // it never sits on top of a page's last buttons/rows.
           style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 6rem)" }}
         >
+          {/* Live equity: today's P/L with its highest profit and deepest loss. */}
+          <EquityBar />
           {children}
         </main>
       </div>

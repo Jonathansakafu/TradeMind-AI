@@ -27,6 +27,16 @@ const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
 
 router.use(protect);
 router.get("/stats", getStats);
+// Equity curve of today / the last 7 days with its peak and low (services/equityCurve.js).
+router.get("/equity", async (req, res) => {
+  try {
+    const period = req.query.period === "7d" ? "7d" : "today";
+    res.set("Cache-Control", "no-store");
+    res.json(await require("../services/equityCurve").build(req.user._id, period));
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
 router.get("/", getTrades);
 router.post("/", upload.single("screenshot"), createTrade);
 router.get("/:id", getTrade);
