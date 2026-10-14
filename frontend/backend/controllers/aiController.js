@@ -410,6 +410,9 @@ exports.askQuestionStream = async (req, res) => {
 // -- "question" (what was understood), or "nohear", then the usual
 // conversation / sources / chunk / done events with a short spoken-style
 // answer. ?lang=en|sw|...&conversationId=...
+const VOICE_GOODBYE = /^(ok(ay)?[, ]*)?(stop|cancel|that'?s (all|it)|thanks?( you)?( so much)?|no,? thanks?( you)?|nothing( else)?|bye|good ?bye|asante( sana)?|hapana|basi|inatosha|merci( beaucoup)?|c'est tout|non merci|arr[êe]te|شكرا|شكراً|خلاص|توقف|谢谢|没有了|好了|停止|감사합니다|고마워|그만|됐어|ありがとう(ございます)?|大丈夫です?|以上です?|ストップ)[.!?。！？ ]*$/i;
+exports.VOICE_GOODBYE = VOICE_GOODBYE;
+
 exports.voiceAsk = async (req, res) => {
   const sse = openSSE(res);
   try {
@@ -423,6 +426,12 @@ exports.voiceAsk = async (req, res) => {
       return res.end();
     }
     sse.send("question", { text: question });
+    // "Thank you" / "stop" in any app language ends a hands-free
+    // conversation (like Siri / Google) instead of getting an answer.
+    if (VOICE_GOODBYE.test(question.trim())) {
+      sse.send("bye", {});
+      return res.end();
+    }
     await answerOverSSE(req, res, sse, { question, conversationId: req.query.conversationId || null, voice: true });
   } catch (err) {
     pipelineStats.recordError("chat", `voice: ${err.message}`);

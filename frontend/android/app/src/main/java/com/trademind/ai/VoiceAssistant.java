@@ -101,6 +101,10 @@ class VoiceAssistant {
   private boolean answerVoice = false;
   private boolean answered = false;
   private boolean secondTry = false; // after "Proceed, I'm still listening"
+  // After each answer it keeps listening for a follow-up (like Google's
+  // Continued Conversation, ~8 s); silence closes it, "thank you" ends it.
+  private boolean followUp = false;
+  private static final long FOLLOW_UP_MS = 8000;
   private BroadcastReceiver unlockReceiver;
   private PowerManager.WakeLock screenOn;
   private int spokenUpTo = 0;
@@ -324,15 +328,22 @@ class VoiceAssistant {
   // Silence: 5 s -> "Proceed, I'm still listening", 3 s more -> close.
   private void listen() {
     recording = true;
-    final long waitMs = secondTry ? 3000 : 5000;
+    final long waitMs = followUp ? FOLLOW_UP_MS : secondTry ? 3000 : 5000;
     io.execute(() -> {
       byte[] wav = record(waitMs);
+      recording = false;
       if (finished) return;
       main.post(() -> {
         if (finished) return;
         if (wav == null) {
-          if (secondTry) finish(); // still silent: close straight away
-          else stillListening();
+          if (followUp) {
+            if (speakAnswers) finish(); // conversation over: close quietly
+            else closeIn(15000); // silent mode: leave the answer up to read
+          } else if (secondTry) {
+            finish(); // still silent: close straight away
+          } else {
+            stillListening();
+          }
         } else if (isLocked()) {
           waitForUnlock(wav);
         } else {
@@ -347,6 +358,11 @@ class VoiceAssistant {
       answerVoice = useLanguage(locale);
       tts.setSpeechRate(answerRate());
     }
+    main.removeCallbacks(closeLater);
+    answerText.setLength(0);
+    spokenUpTo = 0;
+    answered = false;
+    setAnswer("");
     setStatus(msg("thinking"));
     level(0.3f);
     main.postDelayed(() -> { if (answerText.length() == 0 && !finished) setStatus(msg("waking")); }, 6000);
@@ -628,7 +644,11 @@ class VoiceAssistant {
           final JSONObject data = new JSONObject(line.substring(5).trim());
           final String ev = event;
           if ("nohear".equals(ev)) {
-            main.post(this::noHear);
+            main.post(() -> { if (followUp) finish(); else noHear(); });
+            return;
+          }
+          if ("bye".equals(ev)) { // "thank you" / "stop": end the conversation
+            main.post(this::finish);
             return;
           }
           main.post(() -> onEvent(ev, data));
@@ -681,9 +701,31 @@ class VoiceAssistant {
     answered = true;
     setStatus(msg("answer"));
     if (!withCard) host.showAnswerNotification(asked, answerText.toString().trim());
-    if (!speakAnswers) closeIn(25000);
-    else if (tts != null && ttsReady && answerVoice) speakReady(true);
+    if (!speakAnswers || tts == null || !answerVoice) listenForFollowUp(); // answer shown, not spoken
+    else if (ttsReady) speakReady(true);
     else say(answerText.toString()); // waits for the voice, or closes if there is none
+  }
+
+  // Answer finished: a soft tone, then listen again for a follow-up in the
+  // same conversation (the server keeps the history).
+  private void listenForFollowUp() {
+    if (finished || recording) return;
+    if (!answered) { // an error / "didn't hear" message was spoken: close as before
+      closeIn(9000);
+      return;
+    }
+    followUp = true;
+    secondTry = false;
+    main.removeCallbacks(closeLater);
+    setStatus(msg("followUp"));
+    level(0.2f);
+    try {
+      android.media.ToneGenerator tone = new android.media.ToneGenerator(AudioManager.STREAM_MUSIC, 35);
+      tone.startTone(android.media.ToneGenerator.TONE_PROP_BEEP, 90);
+      main.postDelayed(tone::release, 300);
+    } catch (Exception ignored) {
+    }
+    main.postDelayed(() -> { if (!finished && !recording) listen(); }, 250); // after the tone and the voice's echo
   }
 
   // Speaks the finished sentences not spoken yet (all of the rest when
@@ -744,12 +786,12 @@ class VoiceAssistant {
       @Override public void onDone(String id) {
         if ("greet".equals(id)) main.post(VoiceAssistant.this::finishGreeting);
         else if ("prompt".equals(id)) main.post(() -> { if (!finished) listen(); });
-        else if (id.startsWith("last")) main.post(() -> closeIn(9000));
+        else if (id.startsWith("last")) main.post(VoiceAssistant.this::listenForFollowUp);
       }
       @Override public void onError(String id) {
         if ("greet".equals(id)) main.post(VoiceAssistant.this::finishGreeting);
         else if ("prompt".equals(id)) main.post(() -> { if (!finished) listen(); });
-        else if (id.startsWith("last")) main.post(() -> closeIn(15000));
+        else if (id.startsWith("last")) main.post(VoiceAssistant.this::listenForFollowUp);
       }
       @Override public void onRangeStart(String id, int start, int end, int frame) {
         main.post(() -> level(0.45f + (float) Math.random() * 0.5f));
@@ -1053,43 +1095,43 @@ class VoiceAssistant {
   }
 
   static {
-    put("en", "listening", "Listening…", "thinking", "Thinking…", "waking", "Waking up the server…", "answer", "Answer",
+    put("en", "followUp", "Listening… ask a follow-up", "listening", "Listening…", "thinking", "Thinking…", "waking", "Waking up the server…", "answer", "Answer",
         "offlineTitle", "No internet", "offline", "I need an internet connection to answer that. Please connect and try again.",
         "noHearTitle", "Didn't catch that", "noHear", "I didn't hear a question. Say Hey TradeMind and try again.",
         "loginTitle", "Not logged in", "login", "Please open TradeMind and log in first.",
         "errorTitle", "No answer", "error", "Sorry, I couldn't get an answer right now. Please try again in a moment.",
         "tapToOpen", "Tap to continue in TradeMind", "noVoice", "No voice for this language on this phone — showing the answer as text.");
-    put("sw", "listening", "Nasikiliza…", "thinking", "Ninafikiri…", "waking", "Inaamsha seva…", "answer", "Jibu",
+    put("sw", "followUp", "Nasikiliza… uliza swali jingine", "listening", "Nasikiliza…", "thinking", "Ninafikiri…", "waking", "Inaamsha seva…", "answer", "Jibu",
         "offlineTitle", "Hakuna intaneti", "offline", "Nahitaji intaneti ili kujibu. Tafadhali unganisha kisha ujaribu tena.",
         "noHearTitle", "Sikusikia", "noHear", "Sikusikia swali. Sema Hey TradeMind ujaribu tena.",
         "loginTitle", "Hujaingia", "login", "Tafadhali fungua TradeMind uingie kwanza.",
         "errorTitle", "Hakuna jibu", "error", "Samahani, siwezi kupata jibu sasa hivi. Jaribu tena baadaye kidogo.",
         "tapToOpen", "Gusa kuendelea ndani ya TradeMind", "noVoice", "Hakuna sauti ya lugha hii kwenye simu — jibu limeonyeshwa kwa maandishi.");
-    put("fr", "listening", "J'écoute…", "thinking", "Je réfléchis…", "waking", "Réveil du serveur…", "answer", "Réponse",
+    put("fr", "followUp", "J'écoute… une autre question ?", "listening", "J'écoute…", "thinking", "Je réfléchis…", "waking", "Réveil du serveur…", "answer", "Réponse",
         "offlineTitle", "Pas d'internet", "offline", "J'ai besoin d'une connexion internet pour répondre. Connectez-vous et réessayez.",
         "noHearTitle", "Pas compris", "noHear", "Je n'ai pas entendu de question. Dites Hey TradeMind et réessayez.",
         "loginTitle", "Non connecté", "login", "Ouvrez TradeMind et connectez-vous d'abord.",
         "errorTitle", "Pas de réponse", "error", "Désolé, je n'ai pas pu obtenir de réponse. Réessayez dans un instant.",
         "tapToOpen", "Touchez pour continuer dans TradeMind", "noVoice", "Pas de voix pour cette langue sur ce téléphone — réponse affichée en texte.");
-    put("ar", "listening", "أستمع…", "thinking", "أفكر…", "waking", "جارٍ تشغيل الخادم…", "answer", "الإجابة",
+    put("ar", "followUp", "أستمع… اسأل سؤالاً آخر", "listening", "أستمع…", "thinking", "أفكر…", "waking", "جارٍ تشغيل الخادم…", "answer", "الإجابة",
         "offlineTitle", "لا يوجد إنترنت", "offline", "أحتاج إلى اتصال بالإنترنت للإجابة. يرجى الاتصال والمحاولة مرة أخرى.",
         "noHearTitle", "لم أفهم", "noHear", "لم أسمع سؤالاً. قل Hey TradeMind وحاول مرة أخرى.",
         "loginTitle", "غير مسجّل الدخول", "login", "يرجى فتح TradeMind وتسجيل الدخول أولاً.",
         "errorTitle", "لا توجد إجابة", "error", "عذراً، لم أتمكن من الحصول على إجابة الآن. حاول مرة أخرى بعد قليل.",
         "tapToOpen", "اضغط للمتابعة في TradeMind", "noVoice", "لا يوجد صوت لهذه اللغة على الهاتف — الإجابة معروضة كنص.");
-    put("zh", "listening", "正在听…", "thinking", "正在思考…", "waking", "正在唤醒服务器…", "answer", "回答",
+    put("zh", "followUp", "在听…可以继续问", "listening", "正在听…", "thinking", "正在思考…", "waking", "正在唤醒服务器…", "answer", "回答",
         "offlineTitle", "没有网络", "offline", "回答需要网络连接。请连接网络后再试。",
         "noHearTitle", "没听清", "noHear", "我没有听到问题。请说 Hey TradeMind 再试一次。",
         "loginTitle", "未登录", "login", "请先打开 TradeMind 并登录。",
         "errorTitle", "没有回答", "error", "抱歉，现在无法获取回答。请稍后再试。",
         "tapToOpen", "点击在 TradeMind 中继续", "noVoice", "此手机没有该语言的语音——以文字显示回答。");
-    put("ko", "listening", "듣고 있어요…", "thinking", "생각 중…", "waking", "서버를 깨우는 중…", "answer", "답변",
+    put("ko", "followUp", "듣고 있어요… 이어서 물어보세요", "listening", "듣고 있어요…", "thinking", "생각 중…", "waking", "서버를 깨우는 중…", "answer", "답변",
         "offlineTitle", "인터넷 없음", "offline", "답하려면 인터넷 연결이 필요합니다. 연결한 뒤 다시 시도하세요.",
         "noHearTitle", "못 들었어요", "noHear", "질문을 듣지 못했어요. Hey TradeMind라고 말하고 다시 시도하세요.",
         "loginTitle", "로그인 안 됨", "login", "먼저 TradeMind를 열고 로그인하세요.",
         "errorTitle", "답변 없음", "error", "죄송합니다. 지금은 답변을 가져올 수 없습니다. 잠시 후 다시 시도하세요.",
         "tapToOpen", "눌러서 TradeMind에서 계속하기", "noVoice", "이 휴대폰에 이 언어 음성이 없어 답변을 글로 보여줍니다.");
-    put("ja", "listening", "聞いています…", "thinking", "考えています…", "waking", "サーバーを起動中…", "answer", "回答",
+    put("ja", "followUp", "聞いています…続けてどうぞ", "listening", "聞いています…", "thinking", "考えています…", "waking", "サーバーを起動中…", "answer", "回答",
         "offlineTitle", "インターネットなし", "offline", "回答にはインターネット接続が必要です。接続してからもう一度お試しください。",
         "noHearTitle", "聞き取れませんでした", "noHear", "質問が聞こえませんでした。Hey TradeMind と言ってもう一度どうぞ。",
         "loginTitle", "未ログイン", "login", "まず TradeMind を開いてログインしてください。",

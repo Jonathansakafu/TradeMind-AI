@@ -61,7 +61,7 @@ public class WakeWordService extends Service implements RecognitionListener {
   // Only these phrases can be recognised; everything else becomes [unk].
   private static final String GRAMMAR = "[\"hey trade mind\", \"trade mind\", \"[unk]\"]";
   private static final long PAUSE_AFTER_HIT_MS = 45_000;
-  private static final long ASSISTANT_MAX_MS = 5 * 60_000;
+  private static final long ASSISTANT_MAX_MS = 15 * 60_000; // a long back-and-forth conversation
   private static final long RETRY_MS = 30_000;
 
   static volatile boolean running = false;
