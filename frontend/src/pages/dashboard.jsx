@@ -104,7 +104,11 @@ function Dashboard() {
             losses) or, for win rate, the Performance statistics page. */}
         <Link to="/history" className="block bg-white dark:bg-slate-900 p-5 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-800 hover:border-green-500/50 hover:-translate-y-0.5 transition">
           <h3 className="text-slate-500 dark:text-slate-400 mb-2 text-sm">{t("stats.totalTrades", { ns: "dashboard" })}</h3>
-          <p className="text-3xl font-bold">{trades.length}</p>
+          {/* Closed trades only; ongoing ones count once they close. */}
+          <p className="text-3xl font-bold">{closed}</p>
+          {trades.length > closed && (
+            <p className="text-xs text-amber-500 mt-1">+{trades.length - closed} ongoing</p>
+          )}
         </Link>
         <Link to="/history?filter=win" className="block bg-white dark:bg-slate-900 p-5 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-800 hover:border-green-500/50 hover:-translate-y-0.5 transition">
           <h3 className="text-slate-500 dark:text-slate-400 mb-2 text-sm">{t("stats.wins", { ns: "dashboard" })}</h3>

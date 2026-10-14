@@ -70,6 +70,9 @@ const tradeSchema = new mongoose.Schema({
   // an open one can still be closed once.
   locked: { type: Boolean, default: false },
   batchId: { type: String },
+  // Who closed it: "signal" = automatically at TP / SL (services/ongoingTrades.js).
+  closedBy: { type: String, enum: ["signal", "trader"] },
+  expiryReminded: { type: Boolean },
 }, { timestamps: true });
 
 tradeSchema.index({ user: 1, createdAt: -1 });

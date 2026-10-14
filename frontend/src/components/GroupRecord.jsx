@@ -170,15 +170,16 @@ export function GroupRecordFlow({ signals, lot, headers, onClose, onFinished }) 
               <div className="grid grid-cols-3 gap-2 text-center">
                 <div className="rounded-xl bg-green-500/10 p-2"><p className="text-lg font-bold text-green-600 dark:text-green-400">{wins}</p><p className="text-[11px] text-slate-500 dark:text-slate-400">hit TP</p></div>
                 <div className="rounded-xl bg-red-500/10 p-2"><p className="text-lg font-bold text-red-500">{losses}</p><p className="text-[11px] text-slate-500 dark:text-slate-400">hit SL</p></div>
-                <div className="rounded-xl bg-slate-100 dark:bg-slate-800 p-2"><p className="text-lg font-bold text-slate-700 dark:text-slate-200">{open}</p><p className="text-[11px] text-slate-500 dark:text-slate-400">still open</p></div>
+                <div className="rounded-xl bg-slate-100 dark:bg-slate-800 p-2"><p className="text-lg font-bold text-slate-700 dark:text-slate-200">{open}</p><p className="text-[11px] text-slate-500 dark:text-slate-400">ongoing</p></div>
               </div>
               {wins + losses > 0 && (
                 <p className="text-sm text-slate-600 dark:text-slate-300">Result of the closed ones: <b className={total >= 0 ? "text-green-600 dark:text-green-400" : "text-red-500"}>{money(total)}</b></p>
               )}
               <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-900 dark:text-amber-200 space-y-1.5">
                 <p className="font-bold flex items-center gap-1.5"><Lock size={13} /> Group-recorded trades can't be edited</p>
-                <p>Each trade is saved exactly from its signal: entry, SL and TP; exit = <b>TP</b> if it hit TP, <b>SL</b> if it hit SL, otherwise it stays <b>open</b>. A chart screenshot is generated for each.</p>
-                <p>Afterwards you can't change prices, lot size or results. Open ones can only be closed once with their exit price. If a trade was different, record it on its own with <b>Add Trade</b> instead.</p>
+                <p>Each trade is saved exactly from its signal: entry, SL and TP; exit = <b>TP</b> if it hit TP, <b>SL</b> if it hit SL, otherwise it is saved as <b>ongoing</b>. A chart screenshot is generated for each.</p>
+                {open > 0 && <p>Ongoing trades don't count in your performance until they close: TradeMind closes them itself the moment price hits their TP or SL, or you close them in Trade History. If a signal expires without hitting either, you'll be reminded to close it.</p>}
+                <p>Afterwards you can't change prices, lot size or results. If a trade was different, record it on its own with <b>Add Trade</b> instead.</p>
               </div>
               <label className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200 cursor-pointer">
                 <input type="checkbox" checked={understood} onChange={(e) => setUnderstood(e.target.checked)} className="mt-0.5 w-4 h-4 accent-green-500 flex-shrink-0" />
@@ -234,7 +235,7 @@ export function GroupRecordFlow({ signals, lot, headers, onClose, onFinished }) 
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">
                         <span className={t.direction === "buy" ? "text-green-600 dark:text-green-400" : "text-red-500"}>{t.direction.toUpperCase()}</span> {t.pair}
-                        <span className="font-normal text-xs text-slate-500 dark:text-slate-400"> · {t.pl ? `${t.pl.outcome === "win" ? "TP" : "SL"} ${money(t.pl.pl)}` : "open"}</span>
+                        <span className="font-normal text-xs text-slate-500 dark:text-slate-400"> · {t.pl ? `${t.pl.outcome === "win" ? "TP" : "SL"} ${money(t.pl.pl)}` : "ongoing"}</span>
                       </p>
                       {t.error && <p className="text-xs text-red-500 truncate">{t.error}</p>}
                     </div>

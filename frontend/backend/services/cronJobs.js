@@ -95,6 +95,14 @@ async function runCycle() {
     console.error("Signal outcome tracking failed:", err.message);
   }
 
+  // Ongoing group-recorded trades: close at TP / SL once their signal hit one.
+  try {
+    const { closed, reminded } = await require("./ongoingTrades").settle();
+    if (closed || reminded) console.log(`🔒 Closed ${closed} ongoing trade(s), ${reminded} expiry reminder(s)`);
+  } catch (err) {
+    console.error("Ongoing trades settle failed:", err.message);
+  }
+
   // Weekday pre-London plan, once a day (no-op outside 04:00-10:00 UTC).
   try {
     await morningBrief.maybeSendMorningBrief();

@@ -100,13 +100,14 @@ exports.createTrade = async (req, res) => {
 
 // UPDATE trade
 // What a group-recorded (locked) trade still accepts: being closed once.
-const CLOSE_FIELDS = ["exitPrice", "profitLoss", "outcome", "status", "closedAt"];
+const CLOSE_FIELDS = ["exitPrice", "profitLoss", "outcome", "status", "closedAt", "closedBy"];
 
 exports.updateTrade = async (req, res) => {
   try {
     const updateData = { ...req.body };
     delete updateData.locked;
     delete updateData.batchId;
+    if (updateData.status === "closed") updateData.closedBy = "trader";
     const existing = await Trade.findOne({ _id: req.params.id, user: req.user._id }).select("locked status");
     if (existing?.locked) {
       const onlyClosing = existing.status === "open" && Object.keys(updateData).every((k) => CLOSE_FIELDS.includes(k));
