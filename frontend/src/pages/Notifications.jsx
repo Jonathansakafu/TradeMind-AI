@@ -6,7 +6,7 @@ import {
   Bell, BookOpen, Brain,
   History, X, CheckCheck, PlusCircle, Zap,
   TrendingUp, TrendingDown, Clock,
-  ShieldCheck, ShieldAlert, Newspaper, Webhook,
+  ShieldCheck, ShieldAlert, Newspaper, Webhook, ListChecks, Check,
 } from "lucide-react";
 import { API_URL } from "../config/api";
 import SessionBanner from "../components/SessionBanner";
@@ -17,6 +17,8 @@ import { fetchNotifications as fetchNotificationsResource, fetchActiveSession } 
 import { RiskRewardTile } from "../components/RiskReward";
 import { SignalResultBadge, LotSuggestion } from "../components/SignalExtras";
 import { useRiskSettings } from "../hooks/useRiskSettings";
+import { GroupRecordBar, GroupRecordFlow } from "../components/GroupRecord";
+import { groupIneligibleReason, isTodays } from "../utils/groupRecord";
 
 const SOURCE_ICONS = {
   past_trades: <History size={14} className="text-blue-400" />,
@@ -205,12 +207,27 @@ function Notifications() {
     }
   };
 
+  // Record trades: pick many signals and save them as trades in one go.
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState(() => new Set());
+  const [groupLot, setGroupLot] = useState("0.01");
+  const [recording, setRecording] = useState(false);
+  const toggleSelected = (id) => setSelected((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  const stopSelecting = () => { setSelecting(false); setSelected(new Set()); };
+
   const filtered = filter === "taken" ? (takenList || []) : notifications.filter((n) => {
     if (filter === "unread") return !n.read;
     if (filter === "buy") return n.signal === "buy";
     if (filter === "sell") return n.signal === "sell";
     return true;
   });
+
+  const todaysEligible = filtered.filter((n) => isTodays(n) && !groupIneligibleReason(n));
+  const selectedSignals = notifications.filter((n) => selected.has(n._id));
 
   return (
     <MainLayout>
@@ -227,6 +244,20 @@ function Notifications() {
           </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
+          {filter !== "taken" && (
+            <button
+              onClick={() => (selecting ? stopSelecting() : setSelecting(true))}
+              aria-pressed={selecting}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition ${
+                selecting
+                  ? "bg-green-500 text-slate-950"
+                  : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:border-green-500/50"
+              }`}
+            >
+              <ListChecks size={15} />
+              {selecting ? "Selecting…" : "Record trades"}
+            </button>
+          )}
           {unreadCount > 0 && (
             <button
               onClick={markAllAsRead}
@@ -282,16 +313,35 @@ function Notifications() {
         // Columns by available width, not screen breakpoints: a second
         // column only appears once each card gets >= 380px. With the
         // sidebar open, the old md:grid-cols-2 squeezed cards to ~300px.
-        <div className="grid gap-4 grid-cols-[repeat(auto-fill,minmax(min(100%,380px),1fr))]">
+        <div className={`grid gap-4 grid-cols-[repeat(auto-fill,minmax(min(100%,380px),1fr))] ${selecting ? "pb-56" : ""}`}>
           {filtered.map((n) => (
             <div
               key={n._id}
               // @container: the card's insides adapt to the card's own
               // width (e.g. price tiles 2x2 when narrow, 4 across when wide).
-              className={`@container min-w-0 bg-white dark:bg-slate-900 border rounded-2xl p-4 @sm:p-5 transition ${
-                !n.read ? "border-slate-300 dark:border-slate-700 shadow-lg" : "border-slate-200 dark:border-slate-800 dark:opacity-75"
+              className={`@container relative min-w-0 bg-white dark:bg-slate-900 border rounded-2xl p-4 @sm:p-5 transition ${
+                selecting && selected.has(n._id) ? "border-green-500 ring-2 ring-green-500/40"
+                : !n.read ? "border-slate-300 dark:border-slate-700 shadow-lg" : "border-slate-200 dark:border-slate-800 dark:opacity-75"
               }`}
             >
+              {/* Selection mode: the whole card is the checkbox. */}
+              {selecting && (() => {
+                const why = groupIneligibleReason(n);
+                const on = selected.has(n._id);
+                return why ? (
+                  <div className="absolute inset-0 z-10 rounded-2xl bg-white/70 dark:bg-slate-950/70 flex items-start justify-end p-3">
+                    <span className="text-xs font-semibold px-2 py-1 rounded-lg bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300">{why}</span>
+                  </div>
+                ) : (
+                  <button type="button" onClick={() => toggleSelected(n._id)} aria-pressed={on}
+                    aria-label={`${on ? "Unselect" : "Select"} ${n.signal} ${n.pair}`}
+                    className="absolute inset-0 z-10 rounded-2xl flex items-start justify-end p-3">
+                    <span className={`w-7 h-7 rounded-lg border-2 flex items-center justify-center shadow ${on ? "bg-green-500 border-green-500 text-slate-950" : "bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600"}`}>
+                      {on && <Check size={16} strokeWidth={3} />}
+                    </span>
+                  </button>
+                );
+              })()}
               {/* Card Header */}
               <div className="flex items-start gap-3 mb-4">
                 <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 mt-2.5 ${
@@ -478,6 +528,28 @@ function Notifications() {
             </div>
           ))}
         </div>
+      )}
+
+      {selecting && (
+        <GroupRecordBar
+          selectedCount={selected.size}
+          todaysCount={todaysEligible.length}
+          lot={groupLot}
+          onLot={setGroupLot}
+          onSelectToday={() => setSelected(new Set(todaysEligible.map((n) => n._id)))}
+          onClear={() => setSelected(new Set())}
+          onCancel={stopSelecting}
+          onRecord={() => setRecording(true)}
+        />
+      )}
+      {recording && (
+        <GroupRecordFlow
+          signals={selectedSignals}
+          lot={groupLot}
+          headers={headers}
+          onFinished={() => { refetchNotifications(); }}
+          onClose={() => { setRecording(false); stopSelecting(); }}
+        />
       )}
 
     </MainLayout>

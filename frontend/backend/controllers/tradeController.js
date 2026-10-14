@@ -64,9 +64,14 @@ exports.createTrade = async (req, res) => {
 
     // Only link a signal that belongs to this user.
     if (tradeData.notificationId) {
-      const owned = await Notification.exists({ _id: tradeData.notificationId, user: req.user._id }).catch(() => null);
+      const owned = await Notification.findOne({ _id: tradeData.notificationId, user: req.user._id }).select("tradeId").catch(() => null);
       if (!owned) delete tradeData.notificationId;
+      // One trade per signal: a group record (or a retry) never duplicates.
+      else if (owned.tradeId && await Trade.exists({ _id: owned.tradeId, user: req.user._id })) {
+        return res.status(409).json({ message: "This signal is already recorded as a trade.", tradeId: owned.tradeId });
+      }
     }
+    tradeData.locked = tradeData.locked === true || tradeData.locked === "true";
 
     const trade = await Trade.create(tradeData);
     // Logging a trade from a signal marks that signal as taken and links
@@ -94,9 +99,21 @@ exports.createTrade = async (req, res) => {
 };
 
 // UPDATE trade
+// What a group-recorded (locked) trade still accepts: being closed once.
+const CLOSE_FIELDS = ["exitPrice", "profitLoss", "outcome", "status", "closedAt"];
+
 exports.updateTrade = async (req, res) => {
   try {
     const updateData = { ...req.body };
+    delete updateData.locked;
+    delete updateData.batchId;
+    const existing = await Trade.findOne({ _id: req.params.id, user: req.user._id }).select("locked status");
+    if (existing?.locked) {
+      const onlyClosing = existing.status === "open" && Object.keys(updateData).every((k) => CLOSE_FIELDS.includes(k));
+      if (!onlyClosing) {
+        return res.status(403).json({ message: "This trade was recorded in a group and can't be edited." });
+      }
+    }
 
     // Handle screenshot if uploaded (e.g. close-trade snapshot)
     if (req.file) {

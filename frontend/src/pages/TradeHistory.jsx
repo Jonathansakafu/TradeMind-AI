@@ -4,7 +4,7 @@ import axios from "axios";
 import MainLayout from "../layouts/MainLayout";
 import {
   TrendingUp, TrendingDown, Search, Download,
-  X, CheckCircle, RefreshCw, LineChart, Pencil, FileText
+  X, CheckCircle, RefreshCw, LineChart, Pencil, FileText, Lock
 } from "lucide-react";
 import { API_URL } from "../config/api";
 import { downloadFile } from "../utils/nativeDownload";
@@ -438,6 +438,9 @@ function TradeHistory() {
                       >
                         Close
                       </button>
+                    ) : trade.locked ? (
+                      <span title="Recorded in a group — can't be edited" aria-label="Recorded in a group — can't be edited"
+                        className="p-2 rounded-lg text-slate-400 dark:text-slate-500"><Lock size={14} /></span>
                     ) : (
                       <button
                         onClick={() => openEditTrade(trade)}
@@ -621,6 +624,9 @@ function TradeHistory() {
                             >
                               Close
                             </button>
+                          ) : trade.locked ? (
+                            <span title="Recorded in a group — can't be edited" aria-label="Recorded in a group — can't be edited"
+                              className="p-1.5 text-slate-400 dark:text-slate-500 inline-flex"><Lock size={13} /></span>
                           ) : (
                             <button
                               onClick={() => openEditTrade(trade)}

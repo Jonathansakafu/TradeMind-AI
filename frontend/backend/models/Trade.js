@@ -65,6 +65,11 @@ const tradeSchema = new mongoose.Schema({
   mt5Ticket: { type: Number, unique: true, sparse: true },
   // The signal (Notification) this trade was taken from, if any.
   notificationId: { type: mongoose.Schema.Types.ObjectId, ref: "Notification" },
+  // Recorded with others in one go from their signals (Notifications >
+  // Record trades): saved exactly from the signal and not editable after;
+  // an open one can still be closed once.
+  locked: { type: Boolean, default: false },
+  batchId: { type: String },
 }, { timestamps: true });
 
 tradeSchema.index({ user: 1, createdAt: -1 });
