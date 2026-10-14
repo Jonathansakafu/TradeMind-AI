@@ -4,6 +4,9 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.PixelFormat;
+import android.media.AudioAttributes;
+import android.media.AudioFocusRequest;
+import android.media.AudioManager;
 import android.media.AudioFormat;
 import android.media.AudioRecord;
 import android.media.MediaRecorder;
@@ -13,6 +16,7 @@ import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.os.Build;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
@@ -88,6 +92,10 @@ class VoiceAssistant {
   private TextToSpeech tts;
   private boolean ttsReady = false;
   private boolean answerVoice = false;
+  private final TextToSpeech warmTts; // the service's engine, already started (or null)
+  private AudioManager audio;
+  private AudioFocusRequest focus;
+  private int savedVolume = -1;
   private boolean greeting = false;
   private String pendingSpeech = null;
   private String conversationId = null;
@@ -95,8 +103,9 @@ class VoiceAssistant {
   private final StringBuilder answerText = new StringBuilder();
   private final Runnable closeLater = this::finish;
 
-  VoiceAssistant(Context ctx, SharedPreferences prefs, boolean withCard, Host host) {
+  VoiceAssistant(Context ctx, SharedPreferences prefs, boolean withCard, TextToSpeech warmTts, Host host) {
     this.ctx = ctx;
+    this.warmTts = warmTts;
     this.withCard = withCard;
     this.prefs = prefs;
     this.host = host;
@@ -109,8 +118,14 @@ class VoiceAssistant {
 
   void start() {
     if (withCard) showCard();
+    takeAudioFocus(); // other sound dips while we listen and talk
     if (speakAnswers) {
-      tts = new TextToSpeech(ctx, (s) -> main.post(() -> onTtsReady(s)));
+      if (warmTts != null) {
+        tts = warmTts;
+        main.post(() -> onTtsReady(TextToSpeech.SUCCESS));
+      } else {
+        tts = new TextToSpeech(ctx, (s) -> main.post(() -> onTtsReady(s)));
+      }
     }
     if (!online()) {
       fail(msg("offlineTitle"), msg("offline"));
@@ -137,11 +152,12 @@ class VoiceAssistant {
     if (tts != null) {
       try {
         tts.stop();
-        tts.shutdown();
+        if (tts != warmTts) tts.shutdown(); // the service's engine stays warm
       } catch (Exception ignored) {
       }
       tts = null;
     }
+    releaseAudio();
     io.shutdownNow();
     if (card != null && wm != null) {
       try {
@@ -313,22 +329,15 @@ class VoiceAssistant {
   // Records until the speaker pauses (~1.3 s of quiet after speech), 15 s at
   // most; null if nothing was said within 7 s. 16 kHz mono 16-bit WAV.
   private byte[] record() {
-    final int rate = 16000;
+    final int rate = MicInput.RATE;
     try {
-      Thread.sleep(350); // let the wake beep finish
+      Thread.sleep(150); // let the greeting's echo die down
     } catch (InterruptedException e) {
       return null;
     }
-    AudioRecord rec;
+    MicInput rec;
     try {
-      int min = AudioRecord.getMinBufferSize(rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
-      rec = new AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION, rate, AudioFormat.CHANNEL_IN_MONO,
-          AudioFormat.ENCODING_PCM_16BIT, Math.max(min, rate));
-      if (rec.getState() != AudioRecord.STATE_INITIALIZED) {
-        rec.release();
-        return null;
-      }
-      rec.startRecording();
+      rec = new MicInput(prefs); // boosted per Settings > Microphone sensitivity
     } catch (Exception e) {
       Log.w(TAG, "microphone unavailable", e);
       return null;
@@ -341,7 +350,7 @@ class VoiceAssistant {
     long started = SystemClock.elapsedRealtime();
     try {
       while (recording && !finished) {
-        int n = rec.read(frame, 0, frame.length);
+        int n = rec.read(frame);
         if (n <= 0) break;
         double sum = 0;
         for (int i = 0; i < n; i++) {
@@ -351,7 +360,7 @@ class VoiceAssistant {
         }
         double rms = Math.sqrt(sum / n);
         if (++frames <= 15) floor = Math.min(floor, rms); // quietest of the first 300 ms
-        double threshold = Math.max(350, (floor == Double.MAX_VALUE ? 0 : floor) * 3);
+        double threshold = Math.max(250, (floor == Double.MAX_VALUE ? 0 : floor) * 2.5);
         final float lvl = (float) Math.min(1.0, rms / 3500.0);
         main.post(() -> level(lvl));
         if (rms > threshold) {
@@ -367,11 +376,7 @@ class VoiceAssistant {
         if (elapsed > 15000) break;
       }
     } finally {
-      try {
-        rec.stop();
-      } catch (Exception ignored) {
-      }
-      rec.release();
+      rec.close();
     }
     return spoke ? wav(pcm.toByteArray(), rate) : null;
   }
@@ -565,7 +570,7 @@ class VoiceAssistant {
       if (pendingSpeech != null) closeIn(20000);
       return;
     }
-    tts.setSpeechRate("normal".equals(prefs.getString("speed", "slow")) ? 0.95f : 0.8f);
+    tts.setSpeechRate(answerRate());
     tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
       @Override public void onStart(String id) {
         main.post(() -> level(0.6f));
@@ -659,7 +664,9 @@ class VoiceAssistant {
       useLanguage("en-US");
     }
     setStatus(text);
-    if (tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "greet") != TextToSpeech.SUCCESS) finishGreeting();
+    louder();
+    tts.setSpeechRate(1.0f); // short greeting: natural pace
+    if (tts.speak(text, TextToSpeech.QUEUE_FLUSH, loud(), "greet") != TextToSpeech.SUCCESS) finishGreeting();
   }
 
   private final Runnable greetTimeout = this::finishGreeting;
@@ -670,7 +677,10 @@ class VoiceAssistant {
     if (!greeting || finished) return;
     greeting = false;
     main.removeCallbacks(greetTimeout);
-    if (tts != null && ttsReady) answerVoice = useLanguage(locale);
+    if (tts != null && ttsReady) {
+      answerVoice = useLanguage(locale);
+      tts.setSpeechRate(answerRate());
+    }
     setStatus(msg("listening"));
     listen();
   }
@@ -689,12 +699,72 @@ class VoiceAssistant {
       closeIn(25000);
       return;
     }
+    louder();
     List<String> parts = chunks(clean(text));
     for (int i = 0; i < parts.size(); i++) {
       String id = (i == parts.size() - 1 ? "last" : "part") + i;
-      tts.speak(parts.get(i), TextToSpeech.QUEUE_ADD, null, id);
+      tts.speak(parts.get(i), TextToSpeech.QUEUE_ADD, loud(), id);
     }
     if (parts.isEmpty()) closeIn(9000);
+  }
+
+  private float answerRate() {
+    return "normal".equals(prefs.getString("speed", "slow")) ? 0.95f : 0.8f;
+  }
+
+  // ---------- loudness ----------
+
+  // Full engine volume on the media stream.
+  private static Bundle loud() {
+    Bundle b = new Bundle();
+    b.putInt(TextToSpeech.Engine.KEY_PARAM_STREAM, AudioManager.STREAM_MUSIC);
+    b.putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, 1.0f);
+    return b;
+  }
+
+  private void takeAudioFocus() {
+    try {
+      audio = (AudioManager) ctx.getSystemService(Context.AUDIO_SERVICE);
+      if (Build.VERSION.SDK_INT >= 26) {
+        focus = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+            .setAudioAttributes(new AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_ASSISTANT)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                .build())
+            .build();
+        audio.requestAudioFocus(focus);
+      } else {
+        audio.requestAudioFocus(null, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK);
+      }
+    } catch (Exception ignored) {
+    }
+  }
+
+  // Settings > "Speak loudly even if the phone is quiet": raise media
+  // volume to at least 80% while TradeMind talks; put it back afterwards.
+  private void louder() {
+    if (audio == null || savedVolume >= 0 || "false".equals(prefs.getString("boostVolume", "true"))) return;
+    try {
+      int max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+      int cur = audio.getStreamVolume(AudioManager.STREAM_MUSIC);
+      int want = (int) Math.ceil(max * 0.8);
+      if (cur < want) {
+        audio.setStreamVolume(AudioManager.STREAM_MUSIC, want, 0);
+        savedVolume = cur;
+      }
+    } catch (Exception ignored) { // Do Not Disturb, fixed-volume devices
+    }
+  }
+
+  private void releaseAudio() {
+    if (audio == null) return;
+    try {
+      if (savedVolume >= 0) audio.setStreamVolume(AudioManager.STREAM_MUSIC, savedVolume, 0);
+      if (Build.VERSION.SDK_INT >= 26 && focus != null) audio.abandonAudioFocusRequest(focus);
+      else audio.abandonAudioFocus(null);
+    } catch (Exception ignored) {
+    }
+    savedVolume = -1;
   }
 
   private void closeIn(long ms) {

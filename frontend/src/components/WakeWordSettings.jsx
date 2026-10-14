@@ -109,7 +109,25 @@ function WakeWordSettings() {
               </div>
             </div>
           )}
-          <p className="text-xs text-slate-500 dark:text-slate-400">It listens and answers in the language picked on Ask AI's 🎤 chip.</p>
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs text-slate-500 dark:text-slate-400">Microphone sensitivity</p>
+            <div className="inline-flex rounded-xl border border-slate-200 dark:border-slate-700 p-0.5 bg-slate-100 dark:bg-slate-800">
+              {[["normal", "Normal"], ["high", "High"], ["max", "Maximum"]].map(([v, label]) => (
+                <button key={v} onClick={() => choose({ micGain: v })} aria-pressed={prefs.micGain === v}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold ${prefs.micGain === v ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow" : "text-slate-500 dark:text-slate-400"}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          {prefs.response === "voice" && (
+            <label className="flex items-center justify-between gap-3 cursor-pointer">
+              <span className="text-xs text-slate-500 dark:text-slate-400">Speak loudly even if the phone volume is low</span>
+              <input type="checkbox" checked={!!prefs.boostVolume} onChange={(e) => choose({ boostVolume: e.target.checked })}
+                className="w-4 h-4 accent-green-500 flex-shrink-0" />
+            </label>
+          )}
+          <p className="text-xs text-slate-500 dark:text-slate-400">It listens and answers in the language picked on Ask AI's 🎤 chip. Use Maximum if it often misses you from across the room; Normal if it wakes up by mistake.</p>
           {!s.canOpenOverApps && (
             <div className={row}>
               <p className="text-xs text-slate-700 dark:text-slate-300"><b>{prefs.response === "app" ? "Open by itself" : "Needed for the answer card"}:</b> allow "Display over other apps". {prefs.response === "app" ? "Without it you'll get a notification to tap." : "Until then the answer comes as speech and a notification."}</p>

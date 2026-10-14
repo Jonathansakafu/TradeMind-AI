@@ -29,9 +29,10 @@ export function onWake(cb) {
 
 // How "Hey TradeMind" answers: "voice" (floating card + spoken answer),
 // "text" (floating card, silent) or "app" (open Ask AI); card at the
-// "bottom" or "top" of the screen.
+// "bottom" or "top" of the screen; microphone boost ("normal" | "high" |
+// "max") and whether to raise a quiet phone's volume while it talks.
 const PREFS_KEY = "tm.wakePrefs";
-const DEFAULTS = { response: "voice", position: "bottom" };
+const DEFAULTS = { response: "voice", position: "bottom", micGain: "high", boostVolume: true };
 export function getWakePrefs() {
   try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(PREFS_KEY) || "{}") }; } catch { return { ...DEFAULTS }; }
 }
@@ -58,9 +59,9 @@ export function syncWakeConfig() {
     userName = first ? first[0].toUpperCase() + first.slice(1) : "";
   } catch { /* ignore */ }
   const appLang = (document.documentElement.lang || "en").slice(0, 2);
-  const { response, position } = getWakePrefs();
+  const { response, position, micGain, boostVolume } = getWakePrefs();
   WakeWord.setConfig({
-    token, apiUrl: API_URL, response, position,
+    token, apiUrl: API_URL, response, position, micGain, boostVolume: String(!!boostVolume),
     userName, appLang, // the greeting: "Yes, Jonathan?" / "Naam, Jonathan?"
     micLocale: micLocale(savedMicLang(appLang)),
     speed: getSpeechPrefs().speed,

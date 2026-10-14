@@ -127,11 +127,15 @@ public class WakeWordPlugin extends Plugin {
       String token = call.getString("token");
       if (token == null || token.isEmpty()) e.remove("token"); else e.putString("token", token);
     }
-    for (String key : new String[] {"apiUrl", "response", "position", "micLocale", "speed", "userName", "appLang"}) {
+    android.content.SharedPreferences sp = getContext().getSharedPreferences(WakeWordService.PREFS, Context.MODE_PRIVATE);
+    String oldGain = sp.getString("micGain", "high");
+    for (String key : new String[] {"apiUrl", "response", "position", "micLocale", "speed", "userName", "appLang", "micGain", "boostVolume"}) {
       String v = call.getString(key);
       if (v != null) e.putString(key, v);
     }
     e.apply();
+    String newGain = call.getString("micGain");
+    if (newGain != null && !newGain.equals(oldGain)) send(WakeWordService.ACTION_RELOAD);
     call.resolve();
   }
 

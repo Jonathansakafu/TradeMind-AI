@@ -11,6 +11,7 @@ import android.content.Intent;
 import android.content.pm.ServiceInfo;
 import android.media.AudioManager;
 import android.media.ToneGenerator;
+import android.speech.tts.TextToSpeech;
 import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
@@ -26,7 +27,6 @@ import org.vosk.LogLevel;
 import org.vosk.Model;
 import org.vosk.Recognizer;
 import org.vosk.android.RecognitionListener;
-import org.vosk.android.SpeechService;
 import org.vosk.android.StorageService;
 
 /**
@@ -43,6 +43,7 @@ public class WakeWordService extends Service implements RecognitionListener {
   static final String ACTION_STOP = "com.trademind.ai.wake.STOP";
   static final String ACTION_PAUSE = "com.trademind.ai.wake.PAUSE";
   static final String ACTION_RESUME = "com.trademind.ai.wake.RESUME";
+  static final String ACTION_RELOAD = "com.trademind.ai.wake.RELOAD"; // new mic sensitivity
   static final String EXTRA_WAKE = "tm_wake";
   static final String EXTRA_OPEN_CONVERSATION = "tm_open_conversation";
   static final int HIT_ID = 4712;
@@ -64,10 +65,14 @@ public class WakeWordService extends Service implements RecognitionListener {
 
   private Model model;
   private Recognizer recognizer;
-  private SpeechService speech;
+  private Thread micThread; // reads the boosted microphone into Vosk
+  private volatile boolean micOn = false;
   private boolean loading = false;
   private long lastHit = 0;
   private VoiceAssistant assistant; // floating answer card, while open
+  // Kept warm so the greeting starts at once (a new engine takes 1-2 s).
+  private TextToSpeech tts;
+  private volatile boolean ttsReady = false;
   private final Handler main = new Handler(Looper.getMainLooper());
   private final Runnable autoResume = this::resumeListening;
 
@@ -88,6 +93,11 @@ public class WakeWordService extends Service implements RecognitionListener {
   public void onCreate() {
     super.onCreate();
     createChannels();
+    try {
+      tts = new TextToSpeech(this, (st) -> ttsReady = st == TextToSpeech.SUCCESS);
+    } catch (Exception e) {
+      tts = null;
+    }
   }
 
   @Override
@@ -103,7 +113,12 @@ public class WakeWordService extends Service implements RecognitionListener {
       return START_NOT_STICKY;
     }
     running = true;
-    if (ACTION_PAUSE.equals(action)) {
+    if (ACTION_RELOAD.equals(action)) {
+      if (micThread != null) {
+        releaseMic();
+        resumeListening();
+      }
+    } else if (ACTION_PAUSE.equals(action)) {
       pauseListening(RETRY_MS);
     } else if (model == null) {
       loadModel();
@@ -149,11 +164,33 @@ public class WakeWordService extends Service implements RecognitionListener {
 
   private void resumeListening() {
     main.removeCallbacks(autoResume);
-    if (!running || model == null || speech != null || assistant != null) return;
+    if (!running || model == null || micThread != null || assistant != null) return;
     try {
-      recognizer = new Recognizer(model, RATE, GRAMMAR);
-      speech = new SpeechService(recognizer, RATE);
-      speech.startListening(this);
+      final Recognizer rec = new Recognizer(model, RATE, GRAMMAR);
+      final MicInput mic = new MicInput(getSharedPreferences(PREFS, MODE_PRIVATE));
+      recognizer = rec;
+      micOn = true;
+      micThread = new Thread(() -> {
+        short[] buf = new short[1600]; // 100 ms
+        try {
+          while (micOn) {
+            int n = mic.read(buf);
+            if (n <= 0) {
+              main.post(() -> onError(new Exception("microphone stopped")));
+              break;
+            }
+            final boolean done = rec.acceptWaveForm(buf, n);
+            final String hyp = done ? rec.getResult() : rec.getPartialResult();
+            main.post(() -> {
+              if (!micOn) return;
+              if (done) onResult(hyp); else onPartialResult(hyp);
+            });
+          }
+        } finally {
+          mic.close();
+        }
+      }, "wake-mic");
+      micThread.start();
       state = "listening";
       lastError = null;
       updateNotification();
@@ -174,13 +211,13 @@ public class WakeWordService extends Service implements RecognitionListener {
   }
 
   private void releaseMic() {
-    if (speech != null) {
+    micOn = false;
+    if (micThread != null) {
       try {
-        speech.stop();
-        speech.shutdown();
-      } catch (Exception ignored) {
+        micThread.join(600);
+      } catch (InterruptedException ignored) {
       }
-      speech = null;
+      micThread = null;
     }
     if (recognizer != null) {
       try {
@@ -257,7 +294,7 @@ public class WakeWordService extends Service implements RecognitionListener {
     if (!"app".equals(mode)) {
       pauseListening(ASSISTANT_MAX_MS); // keep the mic free (and don't hear ourselves) until the card closes
       try {
-        assistant = new VoiceAssistant(this, getSharedPreferences(PREFS, MODE_PRIVATE), canOverlay, new VoiceAssistant.Host() {
+        assistant = new VoiceAssistant(this, getSharedPreferences(PREFS, MODE_PRIVATE), canOverlay, ttsReady ? tts : null, new VoiceAssistant.Host() {
           @Override
           public void onAssistantFinished() {
             assistant = null;
@@ -420,6 +457,13 @@ public class WakeWordService extends Service implements RecognitionListener {
   public void onDestroy() {
     running = false;
     if (assistant != null) assistant.finish();
+    if (tts != null) {
+      try {
+        tts.shutdown();
+      } catch (Exception ignored) {
+      }
+      tts = null;
+    }
     state = "off";
     main.removeCallbacks(autoResume);
     releaseMic();
