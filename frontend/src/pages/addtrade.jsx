@@ -124,7 +124,7 @@ function AddTrade() {
     exitFilledFrom: exitFrom, // shown in the confirmation; cleared when the trader edits the exit
     stopLoss: signalData?.stopLoss ? String(signalData.stopLoss) : "",
     takeProfit: signalData?.takeProfit ? String(signalData.takeProfit) : "",
-    lotSize: "",
+    lotSize: "0.01", // default; changeable here or in the confirmation
     setup: "",
     notes: signalData
       ? `AI Signal — ${signalData.sourceLabel || "AI Auto"}\n${signalData.reasoning || ""}`

@@ -5,8 +5,8 @@ import TradeSnapshot from "./TradeSnapshot";
 import { useTheme } from "../hooks/useTheme";
 import { calculatePL } from "../utils/tradePL";
 
-// "Save Trade" confirmation (added 2026-10-14): the entry and exit prices
-// (editable here -- exit was filled from the signal's TP / SL when
+// "Save Trade" confirmation (added 2026-10-14): lot size (0.01 by default),
+// entry and exit prices (editable here -- exit was filled from the signal's TP / SL when
 // TradeMind scored it), the P/L they give, and the chart screenshot that
 // will be saved: the trader's own, or one generated now from entry / SL /
 // TP / exit if none was attached.
@@ -37,7 +37,7 @@ function ConfirmTradeModal({ form, screenshotPreview, onChangePrices, onConfirm,
     }
   };
 
-  const input = "w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:border-green-500 p-3 rounded-xl outline-none transition text-slate-900 dark:text-white font-mono text-sm";
+  const input = "w-full min-w-0 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:border-green-500 px-2.5 py-3 rounded-xl outline-none transition text-slate-900 dark:text-white font-mono text-sm";
   const isBusy = busy || saving;
   const color = pl ? (pl.outcome === "win" ? "text-green-600 dark:text-green-400" : pl.outcome === "loss" ? "text-red-500" : "text-slate-500") : "text-slate-500";
 
@@ -49,7 +49,7 @@ function ConfirmTradeModal({ form, screenshotPreview, onChangePrices, onConfirm,
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex-shrink-0">
           <div>
             <p className="font-bold text-slate-900 dark:text-white">Confirm trade</p>
-            <p className="text-xs text-slate-500 dark:text-slate-400">{form.pair} · {String(form.direction).toUpperCase()} · {form.lotSize} lot</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">{form.pair} · {String(form.direction).toUpperCase()}</p>
           </div>
           <button onClick={onClose} disabled={isBusy} aria-label="Close" className="p-2 -m-2 text-slate-400 hover:text-slate-900 dark:hover:text-white transition">
             <X size={18} />
@@ -57,7 +57,12 @@ function ConfirmTradeModal({ form, screenshotPreview, onChangePrices, onConfirm,
         </div>
 
         <div className="overflow-y-auto p-5 space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-2">
+            <div>
+              <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 flex items-center gap-1" htmlFor="ct-lot">Lot size <Pencil size={11} /></label>
+              <input id="ct-lot" type="number" step="0.01" min="0.01" inputMode="decimal" value={form.lotSize}
+                onChange={(e) => onChangePrices({ lotSize: e.target.value })} className={input} />
+            </div>
             <div>
               <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 flex items-center gap-1" htmlFor="ct-entry">Entry price <Pencil size={11} /></label>
               <input id="ct-entry" type="number" step="any" inputMode="decimal" value={form.entryPrice}
@@ -112,7 +117,7 @@ function ConfirmTradeModal({ form, screenshotPreview, onChangePrices, onConfirm,
             className="py-3 rounded-xl font-semibold text-sm bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700">
             Edit trade
           </button>
-          <button onClick={confirm} disabled={isBusy || !form.entryPrice}
+          <button onClick={confirm} disabled={isBusy || !form.entryPrice || !(Number(form.lotSize) > 0)}
             className="py-3 rounded-xl font-bold text-sm bg-green-500 hover:bg-green-600 disabled:opacity-50 text-slate-950 flex items-center justify-center gap-2">
             {isBusy ? <div className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" /> : <CheckCircle size={16} />}
             Confirm & save
