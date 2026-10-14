@@ -38,3 +38,43 @@ html:not(.dark) {
   --color-slate-400: #475569;
   --color-slate-500: #334155;
 }
+/* ---- Voice orb (MicButton, Siri-style listening indicator) ---- */
+.tm-orb {
+  position: relative;
+  display: block;
+  width: var(--s);
+  height: var(--s);
+  border-radius: 9999px;
+  background: radial-gradient(circle at 50% 45%, rgba(255, 255, 255, 0.9) 0%, rgba(167, 243, 208, 0.55) 18%, rgba(2, 6, 23, 0.2) 62%, transparent 72%);
+  box-shadow: 0 0 calc(var(--s) * 0.35) rgba(34, 197, 94, 0.45), 0 0 calc(var(--s) * 0.7) rgba(6, 182, 212, 0.25);
+  animation: tm-orb-breathe 2.6s ease-in-out infinite;
+  transition: transform 0.3s ease;
+}
+.tm-orb > span {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  mix-blend-mode: screen;
+  filter: blur(calc(var(--s) * 0.06));
+  animation: tm-orb-swirl linear infinite;
+}
+.tm-orb > span:nth-child(1) { background: radial-gradient(circle at 30% 30%, #22c55e 0%, transparent 58%); animation-duration: 3.2s; }
+.tm-orb > span:nth-child(2) { background: radial-gradient(circle at 72% 38%, #06b6d4 0%, transparent 56%); animation-duration: 4.4s; animation-direction: reverse; }
+.tm-orb > span:nth-child(3) { background: radial-gradient(circle at 50% 78%, #8b5cf6 0%, transparent 55%); animation-duration: 5.6s; }
+.tm-orb > span:nth-child(4) { background: radial-gradient(circle at 28% 70%, #f472b6 0%, transparent 50%); opacity: 0.7; animation-duration: 6.8s; animation-direction: reverse; }
+.tm-orb-lively { transform: scale(1.12); }
+.tm-orb-lively > span { animation-duration: 1.4s !important; }
+@keyframes tm-orb-swirl {
+  from { transform: rotate(0deg) scale(1); }
+  50% { transform: rotate(180deg) scale(1.1); }
+  to { transform: rotate(360deg) scale(1); }
+}
+@keyframes tm-orb-breathe {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.25); }
+}
+.tm-fade-in { animation: tm-fade-in 0.2s ease-out; }
+@keyframes tm-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .tm-orb, .tm-orb > span, .tm-fade-in { animation: none; }
+}
