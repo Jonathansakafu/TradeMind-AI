@@ -167,7 +167,9 @@ router.get("/rechart-trades", async (req, res) => {
     const limit = Math.min(60, Number(req.query.limit) || 25);
     const dry = req.query.dry === "1";
     // Skip trades already done (their picture is "chart-<id>").
-    const candidates = await Trade.find({ entryPrice: { $gt: 0 }, screenshotIsUpload: { $ne: true }, "screenshot.publicId": { $not: /\/chart-[0-9a-f]{24}$/ } })
+    // ?includeKept=1 (dry run only): also list the ones kept as uploads.
+    const includeKept = dry && req.query.includeKept === "1";
+    const candidates = await Trade.find({ entryPrice: { $gt: 0 }, ...(includeKept ? {} : { screenshotIsUpload: { $ne: true } }), "screenshot.publicId": { $not: /\/chart-[0-9a-f]{24}$/ } })
       .select("user pair entryPrice screenshot").sort({ createdAt: -1 }).lean();
     const out = { checked: 0, replaced: 0, filled: 0, keptUserUploads: 0, failed: 0, details: [] };
     let todo = 0;
