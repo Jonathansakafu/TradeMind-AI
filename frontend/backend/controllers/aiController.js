@@ -410,26 +410,35 @@ exports.askQuestionStream = async (req, res) => {
 // -- "question" (what was understood), or "nohear", then the usual
 // conversation / sources / chunk / done events with a short spoken-style
 // answer. ?lang=en|sw|...&conversationId=...
-const VOICE_GOODBYE = /^(ok(ay)?[, ]*)?(stop|cancel|that'?s (all|it)|thanks?( you)?( so much)?|no,? thanks?( you)?|nothing( else)?|bye|good ?bye|asante( sana)?|hapana|basi|inatosha|merci( beaucoup)?|c'est tout|non merci|arr[êe]te|شكرا|شكراً|خلاص|توقف|谢谢|没有了|好了|停止|감사합니다|고마워|그만|됐어|ありがとう(ございます)?|大丈夫です?|以上です?|ストップ)[.!?。！？ ]*$/i;
+// Ending a hands-free conversation, in any app language (like Siri /
+// Google): "thank you" -> TradeMind says "You're welcome, Jonathan" and
+// closes; "stop" / "that's all" -> a short goodbye. An optional name or
+// two words after it ("thank you TradeMind", "asante sana") still count;
+// a real question after it ("thanks, and gold?") does not.
+const TAIL = "(?:[ ,]+[\\p{L}']+){0,2}[.!?。！？、, ]*$";
+const THANKS = new RegExp(`^(?:ok(?:ay)?[, ]*)?(?:thanks?(?: you)?(?: (?:so|very) much| a lot)?|thank u|cheers|asante(?: sana)?|nashukuru|merci(?: beaucoup)?|شكرا|شكراً|شكرًا|谢谢|多谢|感谢|감사합니다|고마워요?|ありがとう(?:ございます)?)${TAIL}`, "iu");
+const STOP = new RegExp(`^(?:ok(?:ay)?[, ]*)?(?:stop|cancel|that'?s (?:all|it)|no,? thanks?(?: you)?|nothing(?: else)?|bye|good ?bye|hapana|basi|inatosha|c'est tout|non merci|arr[êe]te|au revoir|خلاص|توقف|مع السلامة|没有了|好了|停止|再见|그만|됐어|안녕|大丈夫です?|以上です?|ストップ|さようなら)${TAIL}`, "iu");
+const VOICE_GOODBYE = { test: (q) => THANKS.test(q) || STOP.test(q), kind: (q) => (THANKS.test(q) ? "thanks" : STOP.test(q) ? "stop" : null) };
 exports.VOICE_GOODBYE = VOICE_GOODBYE;
 
 exports.voiceAsk = async (req, res) => {
   const sse = openSSE(res);
   try {
     const audio = Buffer.isBuffer(req.body) ? req.body : null;
-    const question = audio && audio.length >= 4000
+    const heard = audio && audio.length >= 4000
       ? await claudeAI.transcribeSpeech(audio, String(req.query.lang || "").slice(0, 2))
-      : "";
+      : { text: "", lang: null };
+    const question = heard.text;
     if (sse.closed) return res.end();
     if (!question) {
       sse.send("nohear", {});
       return res.end();
     }
-    sse.send("question", { text: question });
-    // "Thank you" / "stop" in any app language ends a hands-free
-    // conversation (like Siri / Google) instead of getting an answer.
-    if (VOICE_GOODBYE.test(question.trim())) {
-      sse.send("bye", {});
+    // lang: the language actually spoken -- the phone answers in its voice.
+    sse.send("question", { text: question, lang: heard.lang });
+    const bye = VOICE_GOODBYE.kind(question.trim());
+    if (bye) {
+      sse.send("bye", { kind: bye, lang: heard.lang });
       return res.end();
     }
     await answerOverSSE(req, res, sse, { question, conversationId: req.query.conversationId || null, voice: true });
@@ -491,8 +500,8 @@ exports.deleteConversation = async (req, res) => {
 exports.transcribeVoice = async (req, res) => {
   if (!Buffer.isBuffer(req.body) || req.body.length < 4000) return res.json({ text: "" });
   try {
-    const text = await claudeAI.transcribeSpeech(req.body, String(req.query.lang || "").slice(0, 2));
-    res.json({ text });
+    const { text, lang } = await claudeAI.transcribeSpeech(req.body, String(req.query.lang || "").slice(0, 2));
+    res.json({ text, lang });
   } catch (err) {
     pipelineStats.recordError("chat", `transcribe: ${err.message}`);
     res.status(502).json({ message: "Couldn't understand the audio right now." });

@@ -1195,16 +1195,33 @@ exports.answerSourcesFor = chunksToSources;
 // Groq Whisper, with the chosen language as a hint. Whisper invents a
 // stock phrase on near-silence, so those count as "nothing heard".
 const WHISPER_SILENCE = /^(thank you\.?|thanks for watching!?|you|bye\.?|\.|ok\.?|subtitles by .*|ترجمة .*|字幕.*|ご視聴ありがとうございました.*|시청해 주셔서 감사합니다.*)$/i;
-exports.transcribeSpeech = async (wav, lang) => {
+// The language is detected from the audio (answer in whatever language the
+// trader spoke, whatever the app language); only if Whisper detects one the
+// app doesn't support is it asked again with the 🎤 language as a hint.
+// Returns { text, lang } -- lang a 2-letter code.
+const WHISPER_LANGS = { english: "en", swahili: "sw", french: "fr", arabic: "ar", chinese: "zh", korean: "ko", japanese: "ja" };
+const SUPPORTED_VOICE_LANGS = new Set(Object.values(WHISPER_LANGS));
+
+async function whisper(wav, language) {
   const file = await Groq.toFile(wav, "question.wav", { type: "audio/wav" });
-  const res = await getGroqClient().audio.transcriptions.create({
+  return getGroqClient().audio.transcriptions.create({
     file,
     model: "whisper-large-v3", // more accurate than turbo with accents; still ~0.5 s on Groq
-    language: /^[a-z]{2}$/.test(lang || "") ? lang : undefined,
-    prompt: "How was my performance last month? Last week, this week, this year, last year, win rate, profit and loss, my trades, EURUSD, GBPUSD, XAUUSD, gold, stop loss, take profit, NFP, CPI, TradeMind.",
-    response_format: "json",
+    language,
+    // Symbols only: an English sentence here nudged other languages into English.
+    prompt: "XAUUSD, EURUSD, GBPUSD, TradeMind, CPI, NFP.",
+    response_format: "verbose_json",
     temperature: 0,
   });
+}
+
+exports.transcribeSpeech = async (wav, hint) => {
+  let res = await whisper(wav, undefined);
+  let lang = WHISPER_LANGS[String(res.language || "").toLowerCase()] || String(res.language || "").slice(0, 2).toLowerCase();
+  if (!SUPPORTED_VOICE_LANGS.has(lang) && /^[a-z]{2}$/.test(hint || "")) {
+    res = await whisper(wav, hint);
+    lang = hint;
+  }
   const text = String(res.text || "").trim();
-  return WHISPER_SILENCE.test(text) ? "" : text;
+  return { text: WHISPER_SILENCE.test(text) ? "" : text, lang: SUPPORTED_VOICE_LANGS.has(lang) ? lang : hint || "en" };
 };

@@ -86,7 +86,10 @@ class VoiceAssistant {
   private final Handler main = new Handler(Looper.getMainLooper());
   private final ExecutorService io = Executors.newSingleThreadExecutor();
   private final String lang; // en, sw, fr, ar, zh, ko, ja
-  private final String locale;
+  private final String locale; // the 🎤 language (hint for the recogniser)
+  // Voice for answers: the language the trader actually spoke (detected by
+  // the server), so answers come in that language whatever the app language.
+  private String answerLocale;
   private final boolean speakAnswers;
 
   private WindowManager wm;
@@ -135,6 +138,7 @@ class VoiceAssistant {
     this.prefs = prefs;
     this.host = host;
     this.locale = prefs.getString("micLocale", "en-US");
+    this.answerLocale = this.locale;
     this.lang = locale.substring(0, 2);
     this.appLang = prefs.getString("appLang", this.lang);
     this.speakAnswers = !"text".equals(prefs.getString("response", "voice"));
@@ -415,7 +419,7 @@ class VoiceAssistant {
 
   private void send(byte[] wav) {
     if (tts != null && ttsReady) { // back from the app-language phrases
-      answerVoice = useLanguage(locale);
+      answerVoice = useLanguage(answerLocale);
       tts.setSpeechRate(answerRate());
     }
     main.removeCallbacks(closeLater);
@@ -509,6 +513,45 @@ class VoiceAssistant {
       return text;
     }
     return phrase(appLang, key);
+  }
+
+  // "Thank you" -> "You're welcome, Jonathan", "stop" -> "Okay, Jonathan.
+  // Goodbye" -- in the language the trader said it in -- then close.
+  private static final Map<String, String[]> FAREWELLS = new HashMap<>();
+
+  static {
+    FAREWELLS.put("en", new String[] {"You're welcome[, {name}]!", "Okay[, {name}]. Goodbye!"});
+    FAREWELLS.put("sw", new String[] {"Karibu sana[, {name}]!", "Sawa[, {name}]. Kwaheri!"});
+    FAREWELLS.put("fr", new String[] {"Avec plaisir[, {name}] !", "D'accord[, {name}]. À bientôt !"});
+    FAREWELLS.put("ar", new String[] {"عفواً[ يا {name}]!", "حسناً[ يا {name}]. مع السلامة!"});
+    FAREWELLS.put("zh", new String[] {"不客气[，{name}]！", "好的[，{name}]，再见！"});
+    FAREWELLS.put("ko", new String[] {"천만에요[, {name}님]!", "알겠어요[, {name}님]. 안녕히 계세요!"});
+    FAREWELLS.put("ja", new String[] {"どういたしまして[、{name}さん]！", "わかりました[、{name}さん]。またね！"});
+  }
+
+  private void farewell(String kind, String language) {
+    if (finished) return;
+    recording = false;
+    String[] pair = FAREWELLS.containsKey(language) ? FAREWELLS.get(language) : FAREWELLS.get("en");
+    String text = withName(prefs, pair["stop".equals(kind) ? 1 : 0]);
+    thinking(false);
+    setStatus(text);
+    setAnswer("");
+    if (speakAnswers && tts != null && ttsReady) {
+      boolean ok = useLanguage(APP_LOCALES.containsKey(language) ? APP_LOCALES.get(language) : "en-US");
+      if (!ok) { // no voice for that language: say it in English
+        text = withName(prefs, FAREWELLS.get("en")["stop".equals(kind) ? 1 : 0]);
+        useLanguage("en-US");
+        setStatus(text);
+      }
+      tts.setSpeechRate(1.0f);
+      louder();
+      if (tts.speak(text, TextToSpeech.QUEUE_FLUSH, loud(), "farewell") == TextToSpeech.SUCCESS) {
+        closeIn(6000); // safety net if the "done" callback never comes
+        return;
+      }
+    }
+    closeIn(2500);
   }
 
   private static final Map<String, Map<String, String>> PHRASES = new HashMap<>();
@@ -709,8 +752,8 @@ class VoiceAssistant {
             main.post(() -> { if (followUp) finish(); else noHear(); });
             return;
           }
-          if ("bye".equals(ev)) { // "thank you" / "stop": end the conversation
-            main.post(this::finish);
+          if ("bye".equals(ev)) { // "thank you" / "stop": reply, then end the conversation
+            main.post(() -> farewell(data.optString("kind", "thanks"), data.optString("lang", appLang)));
             return;
           }
           main.post(() -> onEvent(ev, data));
@@ -739,6 +782,14 @@ class VoiceAssistant {
     switch (event) {
       case "question":
         showQuestion(data.optString("text", ""));
+        String spoken = data.optString("lang", "");
+        if (APP_LOCALES.containsKey(spoken) && !APP_LOCALES.get(spoken).equals(answerLocale)) {
+          answerLocale = APP_LOCALES.get(spoken);
+          if (tts != null && ttsReady) {
+            answerVoice = useLanguage(answerLocale);
+            setFooter(answerVoice ? msg("tapToOpen") : msg("noVoice"));
+          }
+        }
         break;
       case "conversation":
         conversationId = data.optString("id", null);
@@ -875,11 +926,13 @@ class VoiceAssistant {
       @Override public void onDone(String id) {
         if ("greet".equals(id)) main.post(VoiceAssistant.this::finishGreeting);
         else if ("prompt".equals(id)) main.post(() -> { if (!finished) listen(); });
+        else if ("farewell".equals(id)) main.post(VoiceAssistant.this::finish);
         else if (id.startsWith("last")) main.post(VoiceAssistant.this::listenForFollowUp);
       }
       @Override public void onError(String id) {
         if ("greet".equals(id)) main.post(VoiceAssistant.this::finishGreeting);
         else if ("prompt".equals(id)) main.post(() -> { if (!finished) listen(); });
+        else if ("farewell".equals(id)) main.post(VoiceAssistant.this::finish);
         else if (id.startsWith("last")) main.post(VoiceAssistant.this::listenForFollowUp);
       }
       @Override public void onRangeStart(String id, int start, int end, int frame) {
@@ -887,7 +940,7 @@ class VoiceAssistant {
       }
     });
     ttsReady = true;
-    answerVoice = useLanguage(locale);
+    answerVoice = useLanguage(answerLocale);
     if (!answerVoice) setFooter(msg("noVoice"));
     if (greeting) {
       if (player == null) greet();
@@ -1083,7 +1136,7 @@ class VoiceAssistant {
     greeting = false;
     main.removeCallbacks(greetTimeout);
     if (tts != null && ttsReady) {
-      answerVoice = useLanguage(locale);
+      answerVoice = useLanguage(answerLocale);
       tts.setSpeechRate(answerRate());
     }
     setStatus(msg("listening"));
