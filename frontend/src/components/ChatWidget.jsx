@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import ChatText from "./ChatText";
 import { Sparkles, X, Send, Bot, User, BookOpen, History, HelpCircle, Image, MessageSquarePlus } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import MicButton from "./MicButton";
@@ -107,7 +108,7 @@ function ChatWidget() {
                         </div>
                       ) : (
                         <>
-                          {m.text}
+                          {m.role === "ai" ? <ChatText text={m.text} /> : m.text}
                           {m.role === "ai" && isLast && loading && (
                             <span className="inline-block w-1 h-3 bg-green-400 ml-0.5 align-middle animate-pulse" />
                           )}

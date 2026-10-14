@@ -73,12 +73,66 @@ function signalLine(sigs) {
   return `${won} hit take profit, ${lost} hit stop loss, ${expired} expired${won + lost ? ` (accuracy ${Math.round((won / (won + lost)) * 100)}%)` : ""}, total ${r >= 0 ? "+" : ""}${r.toFixed(1)}R`;
 }
 
+const startOfDay = (now) => { const l = local(now); return fromLocal(l.getUTCFullYear(), l.getUTCMonth(), l.getUTCDate()); };
+const hhmm = (d) => local(d).toISOString().slice(11, 16);
+const openTime = (t) => new Date(t.openedAt || t.createdAt);
+const fmtNum = (v) => (v == null ? "-" : String(Number(v)));
+
+// Trades one by one (last 7 days, by opening time, numbered per day with
+// the day's running total) -- for questions about particular trades, their
+// order ("first 5 today"), times or pairs. At most the latest 80.
+function tradeList(trades, now, money) {
+  const since = new Date(startOfDay(now) - 6 * DAY);
+  const list = trades.filter((t) => openTime(t) >= since).sort((a, b) => openTime(a) - openTime(b)).slice(-80);
+  if (!list.length) return [];
+  const out = ["Trades one by one (last 7 days, oldest first, times in East Africa Time; #n = order opened that day; ongoing = no result yet, not counted):"];
+  let day = null, n = 0, dayTotal = 0;
+  for (const t of list) {
+    const d = local(openTime(t));
+    const key = d.toISOString().slice(0, 10);
+    if (key !== day) {
+      day = key;
+      n = 0;
+      dayTotal = 0;
+      out.push(`${["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getUTCDay()]} ${fmtDay(openTime(t))}:`);
+    }
+    n++;
+    const head = `- #${n} ${hhmm(openTime(t))} ${t.pair} ${String(t.direction).toUpperCase()} ${fmtNum(t.lotSize)} lot, entry ${fmtNum(t.entryPrice)}`;
+    const src = t.notificationId ? " [from a TradeMind signal]" : "";
+    if (t.outcome) {
+      const pl = Number(t.profitLoss) || 0;
+      dayTotal += pl;
+      out.push(`${head} -> exit ${fmtNum(t.exitPrice)}, ${money(pl)} ${t.outcome}${t.closedBy === "signal" ? " (closed automatically at TP/SL)" : ""}${src}; day total so far ${money(dayTotal)}`);
+    } else {
+      out.push(`${head}, ongoing${src}`);
+    }
+  }
+  return out;
+}
+
+// Today's signals in order, whether the trader took them and that trade's result.
+function signalList(signals, trades, money) {
+  if (!signals.length) return [];
+  const byId = new Map(trades.map((t) => [String(t._id), t]));
+  const out = ["Today's TradeMind signals (oldest first, East Africa Time):"];
+  signals.forEach((s, i) => {
+    const res = s.simOutcome === "win" ? "hit TP" : s.simOutcome === "loss" ? "hit SL" : s.simOutcome === "expired" ? "expired" : "still running";
+    const t = s.tradeId && byId.get(String(s.tradeId));
+    const took = t ? `TAKEN -> trade ${t.outcome ? `${money(Number(t.profitLoss) || 0)} ${t.outcome}` : "ongoing"}` : s.taken ? "marked taken (no trade recorded)" : "not taken";
+    out.push(`- S${i + 1} ${hhmm(s.createdAt)} ${s.pair} ${String(s.signal).toUpperCase()} entry ${fmtNum(s.entry)} SL ${fmtNum(s.stopLoss)} TP ${fmtNum(s.takeProfit)} — ${res} — ${took}`);
+  });
+  return out;
+}
+
 exports.build = async (userId, now = new Date()) => {
-  const [trades, user, signals] = await Promise.all([
-    Trade.find({ user: userId }).select("pair direction outcome profitLoss status openedAt closedAt createdAt type").lean(),
+  const [trades, user, signals, todaysSignals] = await Promise.all([
+    Trade.find({ user: userId }).select("pair direction outcome profitLoss status openedAt closedAt createdAt type entryPrice exitPrice lotSize notificationId locked closedBy").lean(),
     User.findById(userId).select("riskSettings").lean(),
     Notification.find({ user: userId, simOutcome: { $exists: true }, createdAt: { $gte: new Date(now - 62 * DAY) } })
       .select("simOutcome simR createdAt").lean(),
+    // Today's signals, oldest first, for "the first 5 signals today..." questions.
+    Notification.find({ user: userId, signal: { $in: ["buy", "sell"] }, createdAt: { $gte: startOfDay(now) } })
+      .select("pair signal entry stopLoss takeProfit createdAt simOutcome taken tradeId type").sort({ createdAt: 1 }).limit(40).lean(),
   ]);
   const ccy = user?.riskSettings?.currency || "USD";
   const sym = { USD: "$", EUR: "€", GBP: "£" }[ccy];
@@ -106,7 +160,9 @@ exports.build = async (userId, now = new Date()) => {
     if (monthly.length) lines.push("Month by month:", ...monthly.map((x) => `- ${x}`));
     const open = trades.filter((t) => t.status === "open");
     lines.push(`- Open trades now: ${open.length ? open.map((t) => `${t.pair} ${String(t.direction).toUpperCase()}`).join(", ") : "none"}`);
+    lines.push(...tradeList(trades, now, money));
   }
+  lines.push(...signalList(todaysSignals, trades, money));
   if (signals.length) {
     const l = local(now);
     const thisMonth = fromLocal(l.getUTCFullYear(), l.getUTCMonth());

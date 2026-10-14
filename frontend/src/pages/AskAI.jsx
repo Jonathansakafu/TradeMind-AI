@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import ChatText from "../components/ChatText";
 import { useSearchParams } from "react-router-dom";
 import MainLayout from "../layouts/MainLayout";
 import { Sparkles, Send, BookOpen, History, HelpCircle, Image, User, Bot, MessageSquarePlus, MessagesSquare, Trash2 } from "lucide-react";
@@ -186,7 +187,7 @@ function AskAI() {
                       </div>
                     ) : (
                       <>
-                        {m.text}
+                        {m.role === "ai" ? <ChatText text={m.text} /> : m.text}
                         {m.role === "ai" && isLast && loading && (
                           <span className="inline-block w-1.5 h-4 bg-green-400 ml-0.5 align-middle animate-pulse" />
                         )}
