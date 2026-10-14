@@ -52,7 +52,10 @@ export function syncWakeConfig() {
   try {
     token = localStorage.getItem("token") || "";
     const u = JSON.parse(localStorage.getItem("user") || "null");
-    userName = String(u?.name || u?.username || "").trim().split(/\s+/)[0] || "";
+    // First name from the profile name (Settings > Profile, stored as
+    // username): "jonathan_sakafu" / "Jonathan Sakafu" -> "Jonathan".
+    const first = String(u?.name || u?.username || "").trim().split(/[\s._\-@0-9]+/).find(Boolean) || "";
+    userName = first ? first[0].toUpperCase() + first.slice(1) : "";
   } catch { /* ignore */ }
   const appLang = (document.documentElement.lang || "en").slice(0, 2);
   const { response, position } = getWakePrefs();
