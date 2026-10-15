@@ -67,6 +67,15 @@ const notificationSchema = new mongoose.Schema({
   // Chart pictures (services/signalImage.js): at the signal, and after TP / SL.
   chartImage: { type: String },
   resultChartImage: { type: String },
+  // Post-mortem after TP / SL (services/tradeResearch.js).
+  research: {
+    factors: [String],
+    verdict: String,
+    mfeR: Number,
+    maeR: Number,
+    minutes: Number,
+    at: Date,
+  },
 }, { timestamps: true });
 
 notificationSchema.index({ user: 1, createdAt: -1 });

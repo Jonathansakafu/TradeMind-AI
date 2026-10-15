@@ -14,6 +14,9 @@ export function SignalResultBadge({ notification: n }) {
   return (
     <span className={`text-xs font-semibold ${cls}`} title="Checked automatically against real prices">
       Signal result: {label}{extra ? ` (${extra})` : ""}
+      {n.research?.verdict && n.research.verdict !== "no price data" && (
+        <span className="block font-normal text-slate-600 dark:text-slate-400 mt-0.5">🔍 {n.research.verdict}</span>
+      )}
     </span>
   );
 }

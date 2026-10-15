@@ -109,6 +109,16 @@ exports.statsTextByPair = async (userId) => {
     });
     out[pair] = `Track record of your own recent ${pair} signals (last 14 days, checked against real prices): ${parts.join("; ")}. Weigh this: be more selective in a direction that has been losing.`;
   }
+  // What the post-mortems found (services/tradeResearch.js).
+  const research = require("./tradeResearch");
+  const summary = await research.summaryLessons().catch(() => []);
+  for (const pair of ["XAUUSD", "EURUSD", "GBPUSD"]) {
+    const lessons = await research.lessonsFor(userId, pair).catch(() => []);
+    // The AI's lessons that name this pair, or no pair at all.
+    const general = summary.filter((l) => { const u = l.toUpperCase(); return u.includes(pair) || !["XAUUSD", "EURUSD", "GBPUSD", "GOLD"].some((p) => u.includes(p)); });
+    const all = [...lessons, ...general.slice(0, 3)];
+    if (all.length) out[pair] = `${out[pair] ? `${out[pair]}\n` : ""}Lessons from post-mortems of past signals (why they won or lost): ${all.join("; ")}. Apply these: do not repeat a losing pattern.`;
+  }
   return out;
 };
 

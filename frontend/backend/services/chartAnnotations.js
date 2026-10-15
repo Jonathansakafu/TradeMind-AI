@@ -209,7 +209,7 @@ exports.build = async (user, opts) => {
     position: dir && s.entry ? { entry: s.entry, sl: s.sl, tp: s.tp, from: sigT, to: s.exitAt ? sec(s.exitAt) : view.at(-1).t, rr, risk: risk ? unit(risk) : null, reward: s.tp ? unit(Math.abs(s.tp - s.entry)) : null } : null,
     result: s.exitPrice && s.exitAt ? { price: s.exitPrice, time: sec(s.exitAt), outcome: s.outcome } : null,
     trend: { h4: h4Read.trend, h1: h1Read.trend, tf: tfRead.trend },
-    atr: atrV, steps, basis: basisText,
+    atr: atrV, rsi: mc.rsi(hist.map((x) => x.close)), steps, basis: basisText,
   };
 };
 

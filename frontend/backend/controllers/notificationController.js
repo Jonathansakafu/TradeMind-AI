@@ -1,4 +1,5 @@
 const crypto = require("crypto");
+const signalGuards = require("../services/signalGuards");
 const Notification = require("../models/Notification");
 const Trade = require("../models/Trade");
 const TradingSession = require("../models/TradingSession");
@@ -546,6 +547,20 @@ exports.autoGenerate = async (userId) => {
               console.log(`🚫 ${pair} ${analysis.signal} blocked by rules: ${check.blocked.join(", ")}`);
               continue;
             }
+
+            // Loss safeguards (services/signalGuards.js): loss brake, no
+            // conflicting dollar bets, respect a strong post-news move.
+            const guards = await signalGuards.evaluate({ userId, pair, signal: analysis.signal, ctx, newsCtx }).catch((err) => {
+              console.error("Signal guards failed:", err.message);
+              return null;
+            });
+            if (guards && !guards.passed) {
+              pipelineStats.inc("rules.blocked");
+              guards.blocked.forEach((k) => pipelineStats.inc(`rules.blocked.${k}`));
+              console.log(`🛡 ${pair} ${analysis.signal} held back: ${guards.blocked.join(", ")}`);
+              continue;
+            }
+            if (check && guards) check.rules.push(...guards.rules);
 
             const notification = await Notification.create({
               user: userId,

@@ -95,7 +95,17 @@ async function runCycle() {
     console.error("Signal outcome tracking failed:", err.message);
   }
 
-  // Ongoing group-recorded trades: close at TP / SL once their signal hit one.
+  // Post-mortems of signals that hit TP / SL, and once a day the AI's summary.
+  try {
+    const research = require("./tradeResearch");
+    const n = await research.researchResolved();
+    if (n) pipelineStats.inc("research.done", n);
+    await research.dailySummary();
+  } catch (err) {
+    console.error("Trade research failed:", err.message);
+  }
+
+  // Trades following a signal (and taken signals not yet recorded): close at TP / SL once the signal hit one.
   try {
     const r = await require("./ongoingTrades").settle();
     pipelineStats.inc("trades.autoClosed", r.closed);
