@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import axios from "axios";
+import CopyImageButton from "./CopyImageButton";
 import { API_URL } from "../config/api";
 import { useAuth } from "../hooks/useAuth";
 
@@ -9,6 +10,7 @@ import { useAuth } from "../hooks/useAuth";
 function SignalAccuracy({ days = 30, card }) {
   const { headers } = useAuth();
   const [data, setData] = useState(null);
+  const boxRef = useRef(null); // the card, for "copy as picture"
 
   useEffect(() => {
     axios.get(`${API_URL}/api/notifications/signal-stats`, { headers, params: { days } })
@@ -22,8 +24,11 @@ function SignalAccuracy({ days = 30, card }) {
   const rows = [...data.rows].sort((a, b) => (b.wins + b.losses) - (a.wins + a.losses));
 
   return (
-    <div className={`${card} mt-6`}>
-      <h3 className="font-bold text-slate-900 dark:text-white">AI signal accuracy (last {days} days)</h3>
+    <div ref={boxRef} className={`${card} mt-6`}>
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="font-bold text-slate-900 dark:text-white">AI signal accuracy (last {days} days)</h3>
+        <CopyImageButton targetRef={boxRef} name="TradeMind-signal-accuracy" />
+      </div>
       <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Every forex/gold signal is checked against real prices: did it reach take profit or stop loss first? Counted whether or not you took it.</p>
       {decided === 0 ? (
         <p className="text-sm text-slate-500 dark:text-slate-400">No signals finished yet{data.pending ? ` — ${data.pending} being tracked` : ""}. Results appear as signals reach their target or stop.</p>

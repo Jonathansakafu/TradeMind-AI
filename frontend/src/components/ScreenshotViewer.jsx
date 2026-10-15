@@ -2,6 +2,7 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import { X, Maximize2 } from "lucide-react";
 import ImageLightbox from "./ImageLightbox";
+import CopyImageButton from "./CopyImageButton";
 
 // A trade's pictures: the chart at the close (how TP / SL was hit) and the
 // screenshot saved with the trade.
@@ -21,7 +22,10 @@ function ScreenshotViewer({ trade, onClose }) {
         <div className="p-3 space-y-4">
           {shots.map(([label, url], i) => (
             <figure key={url}>
-              <figcaption className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">{label}</figcaption>
+              <figcaption className="flex items-center justify-between text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">
+                {label}
+                <CopyImageButton url={url} name={`TradeMind-${trade.pair}-${label.replace(/\W+/g, "-")}`} label className="px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300" />
+              </figcaption>
               <button type="button" onClick={() => setFull(i)} aria-label={`${label} — full screen`} className="relative block w-full">
                 <img src={url} alt={label} className="w-full rounded-xl border border-slate-200 dark:border-slate-800" />
                 <span className="absolute right-2 bottom-2 flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-lg bg-black/60 text-white">

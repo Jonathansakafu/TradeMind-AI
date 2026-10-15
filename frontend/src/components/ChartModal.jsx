@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { X, Download, Loader2, Maximize2, Minimize2 } from "lucide-react";
 import SignalChart from "./SignalChart";
+import CopyImageButton from "./CopyImageButton";
 import { downloadBinaryFile } from "../utils/nativeDownload";
 
 // Full chart for a signal or trade: 1H / 15m, the drawing layers, the
@@ -67,6 +68,7 @@ function ChartModal({ notificationId, tradeId, query, title, onClose }) {
             <button type="button" onClick={() => setFull((f) => !f)} aria-label={full ? "Exit full screen" : "Full screen"} title={full ? "Exit full screen" : "Full screen"} className="p-2 rounded-lg text-slate-500 hover:text-slate-900 dark:hover:text-white">
               {full ? <Minimize2 size={17} /> : <Maximize2 size={17} />}
             </button>
+            <CopyImageButton getBlob={() => chartRef.current?.capture()} name={`TradeMind-${(title || "chart").replace(/\W+/g, "-")}-${tf}`} />
             <button type="button" onClick={download} disabled={saving} aria-label="Download chart" className="p-2 rounded-lg text-slate-500 hover:text-slate-900 dark:hover:text-white">
               {saving ? <Loader2 size={17} className="animate-spin" /> : <Download size={17} />}
             </button>

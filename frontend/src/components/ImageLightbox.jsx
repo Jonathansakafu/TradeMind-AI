@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { X, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Download, RotateCw } from "lucide-react";
+import CopyImageButton from "./CopyImageButton";
 
 // Full-screen picture viewer (added 2026-10-15): black background, the
 // picture as large as the screen allows; pinch or mouse-wheel to zoom (up
@@ -151,6 +152,7 @@ function ImageLightbox({ images, start = 0, onClose }) {
           <button type="button" onClick={() => { setRotated((r) => !r); reset(); }} aria-label={rotated ? "Turn back upright" : "Turn sideways"} aria-pressed={rotated} className={btn}><RotateCw size={18} /></button>
           <button type="button" onClick={() => zoomAt(1 / 1.5, 0, 0)} aria-label="Zoom out" className={btn}><ZoomOut size={18} /></button>
           <button type="button" onClick={() => zoomAt(1.5, 0, 0)} aria-label="Zoom in" className={btn}><ZoomIn size={18} /></button>
+          <CopyImageButton url={img.url} name="TradeMind-screenshot" className={`${btn} flex items-center gap-1`} dark />
           <a href={img.url} target="_blank" rel="noreferrer" aria-label="Open original" className={btn}><Download size={18} /></a>
           <button type="button" onClick={requestClose} aria-label="Close" className={btn}><X size={20} /></button>
         </div>

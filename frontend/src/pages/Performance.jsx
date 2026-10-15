@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { Link } from "react-router-dom";
 import axios from "axios";
 import { PieChart, ArrowLeft } from "lucide-react";
@@ -9,6 +9,7 @@ import { computeStats, filterTrades, formatMoney } from "../utils/tradeStats";
 import { formatRR, breakevenWinRate } from "../utils/riskReward";
 import SignalAccuracy from "../components/SignalAccuracy";
 import LessonsLearned from "../components/LessonsLearned";
+import CopyImageButton from "../components/CopyImageButton";
 import {
   OutcomeDonut, OutcomeBars, OutcomeLegend, TradeLine, BreakdownBars, TradeTable,
 } from "../components/PerformanceCharts";
@@ -70,6 +71,10 @@ const card = "min-w-0 bg-white dark:bg-slate-900 border border-slate-200 dark:bo
 
 function Performance() {
   const { headers } = useAuth();
+  // Chart cards that can be copied as pictures.
+  const outcomeRef = useRef(null);
+  const progressRef = useRef(null);
+  const breakdownRef = useRef(null);
   const [trades, setTrades] = useState(null);
   const [period, setPeriod] = usePref("period", "all");
   const [type, setType] = usePref("type", "all");
@@ -143,24 +148,30 @@ function Performance() {
 
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 sm:gap-6 mb-6">
               {/* Win / loss split */}
-              <div className={`${card} lg:col-span-2`}>
+              <div ref={outcomeRef} className={`${card} lg:col-span-2`}>
                 <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
                   <h3 className="font-bold text-slate-900 dark:text-white">Wins vs losses</h3>
-                  <Segmented label="Chart type" value={outcomeView} onChange={setOutcomeView}
-                    options={[["donut", "Pie"], ["bars", "Bars"]]} />
+                  <div className="flex items-center gap-1">
+                    <Segmented label="Chart type" value={outcomeView} onChange={setOutcomeView}
+                      options={[["donut", "Pie"], ["bars", "Bars"]]} />
+                    <CopyImageButton targetRef={outcomeRef} name="TradeMind-wins-vs-losses" />
+                  </div>
                 </div>
                 {outcomeView === "bars" ? <OutcomeBars stats={stats} /> : <OutcomeDonut stats={stats} />}
                 <div className="mt-4"><OutcomeLegend stats={stats} /></div>
               </div>
 
               {/* Over time */}
-              <div className={`${card} lg:col-span-3`}>
+              <div ref={progressRef} className={`${card} lg:col-span-3`}>
                 <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
                   <h3 className="font-bold text-slate-900 dark:text-white">
                     {progressView === "winRate" ? "Win rate over time" : progressView === "table" ? "Trade by trade" : "Cumulative P/L (equity curve)"}
                   </h3>
-                  <Segmented label="Chart type" value={progressView} onChange={setProgressView}
-                    options={[["equity", "Cumulative P/L"], ["winRate", "Cumulative win rate"], ["table", "Table"]]} />
+                  <div className="flex items-center gap-1">
+                    <Segmented label="Chart type" value={progressView} onChange={setProgressView}
+                      options={[["equity", "Cumulative P/L"], ["winRate", "Cumulative win rate"], ["table", "Table"]]} />
+                    <CopyImageButton targetRef={progressRef} name="TradeMind-performance-over-time" />
+                  </div>
                 </div>
                 {progressView === "table"
                   ? <TradeTable series={stats.series} />
@@ -169,11 +180,14 @@ function Performance() {
             </div>
 
             {/* Breakdown */}
-            <div className={card}>
+            <div ref={breakdownRef} className={card}>
               <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
                 <h3 className="font-bold text-slate-900 dark:text-white">Win rate by…</h3>
-                <Segmented label="Break down by" value={breakdownBy} onChange={setBreakdownBy}
-                  options={[["pair", "Pair"], ["direction", "Buy / Sell"], ["session", "Session"], ["weekday", "Weekday"]]} />
+                <div className="flex items-center gap-1">
+                  <Segmented label="Break down by" value={breakdownBy} onChange={setBreakdownBy}
+                    options={[["pair", "Pair"], ["direction", "Buy / Sell"], ["session", "Session"], ["weekday", "Weekday"]]} />
+                  <CopyImageButton targetRef={breakdownRef} name="TradeMind-win-rate-breakdown" />
+                </div>
               </div>
               <BreakdownBars rows={stats.breakdowns[breakdownBy] || []} />
             </div>

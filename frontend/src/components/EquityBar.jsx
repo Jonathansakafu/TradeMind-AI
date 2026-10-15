@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import CopyImageButton from "./CopyImageButton";
 import { Link } from "react-router-dom";
 import { ChevronDown, TrendingUp, TrendingDown } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
@@ -38,6 +39,7 @@ function EquityBar() {
   const { headers } = useAuth();
   const [period, setPeriod] = useState("today");
   const [open, setOpen] = useState(false);
+  const boxRef = useRef(null);
   const { data, current, peak, low, updatedAt } = useEquityLive(headers, period);
   const { settings } = useRiskSettings();
   const now = useNow(1000);
@@ -49,7 +51,7 @@ function EquityBar() {
   const label = period === "today" ? "Today" : "7 days";
 
   return (
-    <section className="mb-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden" aria-label="Equity">
+    <section ref={boxRef} className="mb-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden" aria-label="Equity">
       <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open}
         className="w-full flex items-center gap-3 px-3 py-2.5 text-left">
         <div className="min-w-0">
@@ -80,7 +82,10 @@ function EquityBar() {
                 </button>
               ))}
             </div>
-            <span className="text-[11px] text-slate-400">updated {ago != null && ago < 2 ? "just now" : `${ago}s ago`}</span>
+            <span className="flex items-center gap-1 text-[11px] text-slate-400">
+              updated {ago != null && ago < 2 ? "just now" : `${ago}s ago`}
+              <CopyImageButton targetRef={boxRef} name="TradeMind-equity" className="p-1 rounded-lg text-slate-500 hover:text-slate-900 dark:hover:text-white" />
+            </span>
           </div>
           <Curve points={data.points} peak={peak} low={low} />
           <div className="grid grid-cols-2 gap-2 text-sm">

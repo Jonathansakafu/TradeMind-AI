@@ -9,6 +9,7 @@ public class MainActivity extends BridgeActivity {
   public void onCreate(Bundle savedInstanceState) {
     WebView.setWebContentsDebuggingEnabled(true);
     registerPlugin(WakeWordPlugin.class); // "Hey TradeMind" wake word
+    registerPlugin(ImageClipboardPlugin.class); // copy charts / screenshots as images
     super.onCreate(savedInstanceState);
   }
 }

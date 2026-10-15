@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import CopyImageButton from "./CopyImageButton";
 import { closedTime, openedTime, fmtDuration } from "../utils/livePL";
 import { useNow } from "../hooks/useLiveQuotes";
 
@@ -51,6 +52,7 @@ function DaySummary({ trades }) {
     return [...set.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k);
   }, [trades]);
   const [chosen, setChosen] = useState(null);
+  const boxRef = useRef(null);
   const day = chosen && days.includes(chosen) ? chosen : days[0];
 
   const s = useMemo(() => {
@@ -74,7 +76,7 @@ function DaySummary({ trades }) {
   const isToday = day === todayKey;
 
   return (
-    <section className="mb-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4" aria-label="Day summary">
+    <section ref={boxRef} className="mb-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4" aria-label="Day summary">
       <div className="flex items-center justify-between gap-3 mb-3">
         <div>
           <p className="font-bold text-slate-900 dark:text-white">{isToday ? "Today" : new Date(day).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" })}</p>
@@ -84,6 +86,7 @@ function DaySummary({ trades }) {
         </div>
         <div className="text-right">
           <p className={`text-xl font-bold tabular-nums ${color(s.total)}`}>{money(s.total)}</p>
+          <CopyImageButton targetRef={boxRef} name={`TradeMind-day-${day}`} className="p-1 mr-1 rounded-lg text-slate-500 hover:text-slate-900 dark:hover:text-white align-middle" />
           <select value={day} onChange={(e) => setChosen(e.target.value)} aria-label="Day"
             className="mt-1 text-xs bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-slate-700 dark:text-slate-200">
             {days.slice(0, 60).map((k) => (

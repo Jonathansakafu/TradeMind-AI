@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import CopyImageButton from "./CopyImageButton";
 import { Link } from "react-router-dom";
 import { ChevronDown } from "lucide-react";
 import { useLiveQuotes, useNow } from "../hooks/useLiveQuotes";
@@ -64,6 +65,7 @@ function Position({ trade, quote }) {
 }
 
 function LivePositions({ trades, headers, balance, todayClosedPL }) {
+  const boxRef = useRef(null);
   const open = trades.filter((t) => !t.outcome && t.entryPrice);
   const { quotes, updatedAt } = useLiveQuotes(open.map((t) => t.pair), headers);
   if (!open.length) return null;
@@ -74,8 +76,9 @@ function LivePositions({ trades, headers, balance, todayClosedPL }) {
   const bal = Number(balance) || null;
 
   return (
-    <section className="mb-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden" aria-label="Open positions">
-      <div className="px-4 pt-4 pb-3 text-center">
+    <section ref={boxRef} className="mb-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden" aria-label="Open positions">
+      <div className="relative px-4 pt-4 pb-3 text-center">
+        <CopyImageButton targetRef={boxRef} name="TradeMind-positions" className="absolute right-2 top-2 p-1.5 rounded-lg text-slate-500 hover:text-slate-900 dark:hover:text-white" />
         <p className={`text-3xl font-bold tabular-nums ${priced.length ? plColor(total) : "text-slate-400"}`} aria-live="polite">
           {priced.length ? `${signed(total)} USD` : "…"}
         </p>
