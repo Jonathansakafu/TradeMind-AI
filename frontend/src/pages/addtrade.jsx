@@ -6,6 +6,7 @@ import { Upload, X, CheckCircle, Calculator, Camera, Sparkles, LineChart } from 
 import { API_URL } from "../config/api";
 import SnapshotCaptureModal from "../components/SnapshotCaptureModal";
 import ConfirmTradeModal from "../components/ConfirmTradeModal";
+import ImageLightbox from "../components/ImageLightbox";
 import { useAuth } from "../hooks/useAuth";
 import { RiskRewardText } from "../components/RiskReward";
 import { riskReward, breakevenWinRate } from "../utils/riskReward";
@@ -114,6 +115,7 @@ function AddTrade() {
   const exitFrom = signalData?.simOutcome === "win" && signalData?.takeProfit ? "tp"
     : signalData?.simOutcome === "loss" && signalData?.stopLoss ? "sl" : null;
   const [confirming, setConfirming] = useState(false);
+  const [fullShot, setFullShot] = useState(false);
 
   const [form, setForm] = useState({
     pair: signalData?.pair || "",
@@ -443,6 +445,7 @@ function AddTrade() {
             {preview ? (
               <div className="relative">
                 <img
+                  onClick={() => setFullShot(true)} role="button" aria-label="Screenshot — full screen"
                   src={preview} alt="preview"
                   className="w-full rounded-xl object-cover max-h-52 border border-slate-200 dark:border-slate-700"
                 />
@@ -500,6 +503,7 @@ function AddTrade() {
             )}
           </div>
 
+          {fullShot && preview && <ImageLightbox images={[{ url: preview, label: "Your screenshot" }]} onClose={() => setFullShot(false)} />}
           {confirming && (
             <ConfirmTradeModal
               form={form}

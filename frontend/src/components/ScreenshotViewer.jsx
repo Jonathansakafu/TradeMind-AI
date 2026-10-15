@@ -1,9 +1,12 @@
+import { useState } from "react";
 import { createPortal } from "react-dom";
-import { X } from "lucide-react";
+import { X, Maximize2 } from "lucide-react";
+import ImageLightbox from "./ImageLightbox";
 
 // A trade's pictures: the chart at the close (how TP / SL was hit) and the
 // screenshot saved with the trade.
 function ScreenshotViewer({ trade, onClose }) {
+  const [full, setFull] = useState(null); // index shown full screen
   const shots = [];
   if (trade.resultScreenshot?.url) shots.push(["At the close", trade.resultScreenshot.url]);
   if (trade.screenshot?.url && trade.screenshot.url !== trade.resultScreenshot?.url) shots.push([trade.resultScreenshot?.url ? "When recorded" : "Screenshot", trade.screenshot.url]);
@@ -16,14 +19,22 @@ function ScreenshotViewer({ trade, onClose }) {
           <button type="button" onClick={onClose} aria-label="Close" className="p-2 text-slate-500"><X size={18} /></button>
         </div>
         <div className="p-3 space-y-4">
-          {shots.map(([label, url]) => (
+          {shots.map(([label, url], i) => (
             <figure key={url}>
               <figcaption className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">{label}</figcaption>
-              <a href={url} target="_blank" rel="noreferrer"><img src={url} alt={label} className="w-full rounded-xl border border-slate-200 dark:border-slate-800" /></a>
+              <button type="button" onClick={() => setFull(i)} aria-label={`${label} — full screen`} className="relative block w-full">
+                <img src={url} alt={label} className="w-full rounded-xl border border-slate-200 dark:border-slate-800" />
+                <span className="absolute right-2 bottom-2 flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-lg bg-black/60 text-white">
+                  <Maximize2 size={12} /> Full screen
+                </span>
+              </button>
             </figure>
           ))}
         </div>
       </div>
+      {full != null && (
+        <ImageLightbox images={shots.map(([label, url]) => ({ label, url }))} start={full} onClose={() => setFull(null)} />
+      )}
     </div>,
     document.body
   );

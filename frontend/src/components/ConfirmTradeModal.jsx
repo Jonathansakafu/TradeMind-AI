@@ -3,6 +3,7 @@ import { domToBlob } from "modern-screenshot";
 import { X, CheckCircle, Pencil } from "lucide-react";
 import TradeSnapshot from "./TradeSnapshot";
 import SignalChart from "./SignalChart";
+import ImageLightbox from "./ImageLightbox";
 import { useTheme } from "../hooks/useTheme";
 import { calculatePL } from "../utils/tradePL";
 
@@ -15,6 +16,7 @@ function ConfirmTradeModal({ form, screenshotPreview, onChangePrices, onConfirm,
   const nodeRef = useRef(null);
   const chartRef = useRef(null);
   const [chartFailed, setChartFailed] = useState(false);
+  const [fullShot, setFullShot] = useState(false);
   const pl = calculatePL(form.pair, form.direction, form.entryPrice, form.exitPrice, form.lotSize);
   // The real candle chart with the signal's drawings (SignalChart); refreshed
   // shortly after the prices stop changing. Plain snapshot if it can't load.
@@ -112,7 +114,8 @@ function ConfirmTradeModal({ form, screenshotPreview, onChangePrices, onConfirm,
           <div>
             <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">{screenshotPreview ? "Your screenshot" : "Chart screenshot (generated)"}</p>
             {screenshotPreview ? (
-              <img src={screenshotPreview} alt="Trade screenshot" className="w-full rounded-xl object-cover max-h-60 border border-slate-200 dark:border-slate-700" />
+              <img src={screenshotPreview} alt="Trade screenshot" onClick={() => setFullShot(true)} role="button" aria-label="Screenshot — full screen"
+                className="w-full rounded-xl object-cover max-h-60 border border-slate-200 dark:border-slate-700 cursor-zoom-in" />
             ) : (
               <div className="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700">
                 {!chartFailed && (
@@ -151,6 +154,7 @@ function ConfirmTradeModal({ form, screenshotPreview, onChangePrices, onConfirm,
           </button>
         </div>
       </div>
+      {fullShot && screenshotPreview && <ImageLightbox images={[{ url: screenshotPreview, label: "Your screenshot" }]} onClose={() => setFullShot(false)} />}
     </div>
   );
 }
