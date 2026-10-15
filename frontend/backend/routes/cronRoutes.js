@@ -284,7 +284,8 @@ router.get("/rescore-signals", async (req, res) => {
         out.changed++;
         const k = `${n.simOutcome}→${r.simOutcome}`;
         out.transitions[k] = (out.transitions[k] || 0) + 1;
-        if (out.examples.length < 8) out.examples.push(`${n.pair} ${n.signal.toUpperCase()} ${n.entry} @${new Date(n.createdAt).toISOString().slice(5, 16)}: ${k}`);
+        const sameKind = out.examples.filter((e) => e.endsWith(k)).length;
+        if (sameKind < 3) out.examples.push(`${n.pair} ${n.signal.toUpperCase()} ${n.entry} SL ${n.stopLoss} TP ${n.takeProfit} @${new Date(n.createdAt).toISOString().slice(5, 16)} filled ${r.filledAt ? new Date(r.filledAt).toISOString().slice(5, 16) : "-"} ended ${new Date(r.at).toISOString().slice(5, 16)}: ${k}`);
       }
       if (dry) continue;
       const set = { simOutcome: r.simOutcome, simR: r.simR, simResolvedAt: new Date(r.at), simFilledAt: r.filledAt ? new Date(r.filledAt) : null, simRescored: true };

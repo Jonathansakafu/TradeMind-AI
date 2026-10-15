@@ -31,8 +31,9 @@ function resolve({ signal, entry, stopLoss, takeProfit, createdAt }, candles, no
   const risk = Math.abs(entry - stopLoss);
   if (!risk) return null;
   const start = new Date(createdAt).getTime();
-  // The candle the signal was sent in, and everything after it.
-  const after = candles.filter((c) => new Date(c.datetime).getTime() > start - 5 * 60 * 1000);
+  // The candle the signal was sent in, and everything after it up to 24 h
+  // (a re-score sees weeks of candles; a hit after the 24 h doesn't count).
+  const after = candles.filter((c) => { const t = new Date(c.datetime).getTime(); return t > start - 5 * 60 * 1000 && t <= start + EXPIRE_MS; });
   if (!after.length) return null;
   const isBuy = signal === "buy";
   const first = after[0];
