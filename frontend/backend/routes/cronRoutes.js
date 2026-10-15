@@ -269,11 +269,15 @@ router.get("/rescore-signals", async (req, res) => {
     const query = {
       simOutcome: { $exists: true }, simRescored: { $ne: true }, type: { $ne: "quick_trade" },
       signal: { $in: ["buy", "sell"] }, entry: { $gt: 0 }, createdAt: { $gte: new Date(Date.now() - days * 864e5) },
+      // Gold history comes from futures shifted by today's futures-spot gap
+      // (and the contract rolls), so old gold days can't be re-scored exactly.
+      pair: { $ne: "XAUUSD" },
     };
     const total = await Notification.countDocuments(query);
     const list = await Notification.find(query).sort({ createdAt: 1 }).limit(dry ? 5000 : limit).lean();
     const candlesBy = {};
-    const out = { checked: 0, changed: 0, transitions: {}, tradesCorrected: 0, tradesReopened: 0, tradesRemoved: 0, examples: [] };
+    const out = { checked: 0, changed: 0, transitions: {}, tradesCorrected: 0, tradesRemoved: 0, tradesToReview: 0, review: [], examples: [] };
+    const k = (n, r) => `${n.simOutcome}→${r.simOutcome}`;
     for (const n of list) {
       if (!candlesBy[n.pair]) candlesBy[n.pair] = await marketService.getYahooCandles(n.pair, { interval: "5m", range: "1mo" }).catch(() => []);
       const r = resolve(n, candlesBy[n.pair], Date.now());
@@ -282,31 +286,39 @@ router.get("/rescore-signals", async (req, res) => {
       const same = r.simOutcome === n.simOutcome && Math.abs((r.simR || 0) - (n.simR || 0)) < 0.01;
       if (!same) {
         out.changed++;
-        const k = `${n.simOutcome}→${r.simOutcome}`;
-        out.transitions[k] = (out.transitions[k] || 0) + 1;
-        const sameKind = out.examples.filter((e) => e.endsWith(k)).length;
-        if (sameKind < 3) out.examples.push(`${n.pair} ${n.signal.toUpperCase()} ${n.entry} SL ${n.stopLoss} TP ${n.takeProfit} @${new Date(n.createdAt).toISOString().slice(5, 16)} filled ${r.filledAt ? new Date(r.filledAt).toISOString().slice(5, 16) : "-"} ended ${new Date(r.at).toISOString().slice(5, 16)}: ${k}`);
+        const kind = k(n, r);
+        out.transitions[kind] = (out.transitions[kind] || 0) + 1;
+        const sameKind = out.examples.filter((e) => e.endsWith(kind)).length;
+        if (sameKind < 3) out.examples.push(`${n.pair} ${n.signal.toUpperCase()} ${n.entry} SL ${n.stopLoss} TP ${n.takeProfit} @${new Date(n.createdAt).toISOString().slice(5, 16)} filled ${r.filledAt ? new Date(r.filledAt).toISOString().slice(5, 16) : "-"} ended ${new Date(r.at).toISOString().slice(5, 16)}: ${kind}`);
+      }
+      const trades = same ? [] : await Trade.find({ notificationId: n._id, closedBy: "signal" });
+      for (const t of trades) {
+        // Trades the trader recorded themselves may have been entered at
+        // market price -- never rewritten automatically, only listed.
+        if (t.batchId !== "auto-taken") {
+          out.tradesToReview++;
+          if (out.review.length < 20) out.review.push(`${t.pair} ${t.direction} ${t.entryPrice} (signal ${n.createdAt.toISOString().slice(5, 16)}): ${k(n, r)}`);
+          continue;
+        }
+        if (r.simOutcome === "unfilled") {
+          out.tradesRemoved++;
+          if (dry) continue;
+          await Trade.deleteOne({ _id: t._id });
+          await Notification.updateOne({ _id: n._id }, { $unset: { tradeId: 1 } });
+          continue;
+        }
+        const risk = Math.abs(n.entry - n.stopLoss);
+        const exit = r.simOutcome === "win" ? n.takeProfit : r.simOutcome === "loss" ? n.stopLoss
+          : n.entry + (n.signal === "buy" ? 1 : -1) * r.simR * risk; // expired: the price after 24 h
+        out.tradesCorrected++;
+        if (dry) continue;
+        const pl = calculatePL(t.pair, t.direction, t.entryPrice, exit, t.lotSize || 0.01);
+        await Trade.updateOne({ _id: t._id }, { exitPrice: exit, profitLoss: pl?.pl ?? 0, outcome: pl?.outcome, closedAt: new Date(r.at) });
+        await ongoing.attachResultChart(t._id);
       }
       if (dry) continue;
       const set = { simOutcome: r.simOutcome, simR: r.simR, simResolvedAt: new Date(r.at), simFilledAt: r.filledAt ? new Date(r.filledAt) : null, simRescored: true };
       await Notification.updateOne({ _id: n._id }, same ? { $set: { simRescored: true, simFilledAt: set.simFilledAt } } : { $set: set, $unset: { research: 1, resultChartImage: 1 } });
-      if (same) continue;
-      for (const t of await Trade.find({ notificationId: n._id, closedBy: "signal" })) {
-        if (r.simOutcome === "win" || r.simOutcome === "loss") {
-          const exit = r.simOutcome === "win" ? n.takeProfit : n.stopLoss;
-          const pl = calculatePL(t.pair, t.direction, t.entryPrice, exit, t.lotSize || 0.01);
-          await Trade.updateOne({ _id: t._id }, { exitPrice: exit, profitLoss: pl?.pl ?? 0, outcome: pl?.outcome, closedAt: new Date(r.at) });
-          await ongoing.attachResultChart(t._id);
-          out.tradesCorrected++;
-        } else if (t.batchId === "auto-taken") {
-          await Trade.deleteOne({ _id: t._id });
-          await Notification.updateOne({ _id: n._id }, { $unset: { tradeId: 1 } });
-          out.tradesRemoved++;
-        } else {
-          await Trade.updateOne({ _id: t._id }, { $set: { status: "open", profitLoss: 0, expiryReminded: false }, $unset: { exitPrice: 1, outcome: 1, closedAt: 1, closedBy: 1, resultScreenshot: 1 } });
-          out.tradesReopened++;
-        }
-      }
     }
     res.json({ ...out, remaining: dry ? total : Math.max(0, total - list.length), dry });
   } catch (err) {
