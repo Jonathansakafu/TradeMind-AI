@@ -57,6 +57,21 @@ function lowerBound(arr, t) {
   return ans;
 }
 
+// The candle a moment falls in (last candle starting at or before it) --
+// exits / fills happen inside a candle, not at its start.
+function floorIdx(arr, t) {
+  let lo = 0, hi = arr.length - 1, ans = 0;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (arr[mid].time <= t) { ans = mid; lo = mid + 1; } else hi = mid - 1;
+  }
+  return ans;
+}
+
+// Numbered badges + a list under the chart instead of callout boxes when
+// boxes would crowd (narrow chart, or many steps).
+const badgesFor = (w, steps) => w < 980 || steps > 5;
+
 // Scale for bigger screens: 1 up to a laptop (~1280 px), 1.5 on a 1920
 // monitor, up to 3 on a 4K TV seen from the sofa.
 const scaleFor = (w) => Math.max(1, Math.min(3, w / 1280));
@@ -149,14 +164,13 @@ const SignalChart = forwardRef(function SignalChart({
     const markers = [];
     if (layers.swings) for (const s of data.swings) markers.push({ time: s.time, position: s.kind === "H" ? "aboveBar" : "belowBar", shape: "circle", size: 0, color: c.text, text: s.label });
     if (layers.liquidity) for (const sw of data.sweeps) markers.push({ time: sw.time, position: sw.side === "highs" ? "aboveBar" : "belowBar", shape: sw.side === "highs" ? "arrowDown" : "arrowUp", color: "#a855f7", text: "Sweep" });
-    if (data.result && layers.position) markers.push({ time: data.candles[lowerBound(data.candles, data.result.time)].time, position: "inBar", shape: "circle", color: data.result.outcome === "win" ? "#22c55e" : "#ef4444", text: data.result.outcome === "win" ? "TP hit" : data.result.outcome === "loss" ? "SL hit" : "Closed" });
     markers.sort((a, b) => a.time - b.time);
     createSeriesMarkers(candles, markers);
 
     // Show the build-up and the signal, with a little after it.
     const sigIdx = lowerBound(data.candles, data.signalTime);
     const narrowView = w0 < 560;
-    chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, sigIdx - (narrowView ? 32 : compact ? 55 : 70)), to: Math.min(data.candles.length + 3, sigIdx + (data.result ? Math.max(12, lowerBound(data.candles, data.result.time) - sigIdx + 6) : 20)) });
+    chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, sigIdx - (narrowView ? 32 : compact ? 55 : 70)), to: Math.min(data.candles.length + 3, sigIdx + (data.result ? Math.max(12, floorIdx(data.candles, data.result.time) - sigIdx + 6) : 20)) });
 
     chartRef.current = chart;
     seriesRef.current = candles;
@@ -218,6 +232,7 @@ const SignalChart = forwardRef(function SignalChart({
   const overlay = useOverlay(chartRef, seriesRef, boxRef, data, layers, dark, tick, [...drawings, ...(draft ? [draft] : [])]);
   const narrow = width < 560;
   const k = scaleFor(width);
+  const stepList = data ? badgesFor(width, data.steps.length) : false;
 
   if (error) return <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-6 text-sm text-slate-500 text-center">{error}</div>;
 
@@ -247,11 +262,12 @@ const SignalChart = forwardRef(function SignalChart({
         )}
         {!data && <div className="absolute inset-0 flex items-center justify-center"><Loader2 className="animate-spin text-green-500" /></div>}
         {/* Phones: the steps as a numbered list under the chart (numbered badges on it). */}
-        {data && narrow && !hideStepList && layers.steps && data.steps.length > 0 && (
-          <ol className="px-2.5 py-2 space-y-1 text-[11px] leading-snug" style={{ color: palette(dark).text }}>
+        {data && stepList && !hideStepList && layers.steps && data.steps.length > 0 && (
+          <ol className={`px-2.5 py-2 leading-snug ${narrow ? "space-y-1" : "grid gap-x-6 gap-y-1"}`}
+            style={{ color: palette(dark).text, fontSize: 11 * k, gridTemplateColumns: narrow ? undefined : "repeat(auto-fill, minmax(min(100%, 22rem), 1fr))" }}>
             {data.steps.map((st, i) => (
-              <li key={i} className="flex gap-1.5">
-                <span className="flex-shrink-0 w-4 h-4 rounded-full text-[9px] font-bold text-white flex items-center justify-center" style={{ background: palette(dark).callout }}>{i + 1}</span>
+              <li key={i} className="flex gap-1.5 items-start">
+                <span className="flex-shrink-0 rounded-full font-bold text-white flex items-center justify-center" style={{ background: palette(dark).callout, width: 16 * k, height: 16 * k, fontSize: 9 * k }}>{i + 1}</span>
                 <span>{st.text}</span>
               </li>
             ))}
@@ -307,7 +323,7 @@ function useOverlay(chartRef, seriesRef, boxRef, data, layers, dark, tick, mine)
   const step = data.candles.length > 1 ? data.candles[1].time - data.candles[0].time : 3600;
   const xOf = (t) => {
     if (t > data.candles.at(-1).time || t < data.candles[0].time) return chart.timeScale().logicalToCoordinate((t - data.candles[0].time) / step);
-    return chart.timeScale().logicalToCoordinate(lowerBound(data.candles, t));
+    return chart.timeScale().logicalToCoordinate(floorIdx(data.candles, t));
   };
   const yOf = (p) => (p == null ? null : series.priceToCoordinate(p));
   const xEnd = W;
@@ -370,11 +386,42 @@ function useOverlay(chartRef, seriesRef, boxRef, data, layers, dark, tick, mine)
   }
   if (layers.position && data.position) {
     const p = data.position;
-    const x1 = xOf(p.from), x2 = Math.min(xEnd, Math.max((x1 ?? 0) + 40 * k, xOf(p.to) ?? xEnd));
-    if (p.sl) rect(x1, yOf(p.entry), x2, yOf(p.sl), "rgba(239,68,68,0.22)");
-    if (p.tp) rect(x1, yOf(p.entry), x2, yOf(p.tp), "rgba(34,197,94,0.20)");
-    if (p.risk) label(x2 - 3, p.sl, `Risk ${p.risk}`, "#ef4444", "end", p.sl > p.entry ? -3 : 11);
-    if (p.reward) label(x2 - 3, p.tp, `Target ${p.reward}`, "#16a34a", "end", p.tp > p.entry ? -3 : 11);
+    const xs = xOf(p.sent);
+    if (p.unfilled) {
+      // Never entered: the planned levels only, no trade box.
+      hline(xs, xEnd, p.entry, c.text, "5 4", 1.2);
+      label(xEnd - 4, p.entry, "Entry never reached — no trade", c.text, "end");
+    } else {
+      // Signal sent before price reached the entry: dashed "waiting" line.
+      if (data.fill?.waited) {
+        hline(xs, xOf(data.fill.time), p.entry, c.text, "3 3", 1.2);
+        if (xs != null) label(xs + 3, p.entry, "waiting for entry", c.text, "start", 11);
+      }
+      const x1 = xOf(p.from), xExit = data.result ? xOf(data.result.time) : null;
+      const x2 = Math.min(xEnd, Math.max((x1 ?? 0) + 8 * k, xExit ?? xOf(p.to) ?? xEnd));
+      if (p.sl) rect(x1, yOf(p.entry), x2, yOf(p.sl), "rgba(239,68,68,0.22)");
+      if (p.tp) rect(x1, yOf(p.entry), x2, yOf(p.tp), "rgba(34,197,94,0.20)");
+      if (p.risk) label(x2 - 3, p.sl, `Risk ${p.risk}`, "#ef4444", "end", p.sl > p.entry ? -3 : 11);
+      if (p.reward) label(x2 - 3, p.tp, `Target ${p.reward}`, "#16a34a", "end", p.tp > p.entry ? -3 : 11);
+      // Where the entry was filled: on that candle, at the entry price.
+      if (data.fill) {
+        const fx = xOf(data.fill.time), fy = yOf(data.fill.price), up = data.direction === "buy";
+        if (fx != null && fy != null) {
+          const d = 6 * k;
+          els.push(<path key={key++} d={up ? `M${fx},${fy - d} L${fx - d},${fy + d} L${fx + d},${fy + d} Z` : `M${fx},${fy + d} L${fx - d},${fy - d} L${fx + d},${fy - d} Z`} fill={up ? "#22c55e" : "#ef4444"} stroke="#fff" strokeWidth={k} />);
+          if (data.fill.waited) label(fx, data.fill.price, "Filled", c.text, "middle", up ? 22 : -12);
+        }
+      }
+      // The exit: on the candle it happened in, at the exact TP / SL price.
+      if (data.result) {
+        const rx = xOf(data.result.time), ry = yOf(data.result.price);
+        const col = data.result.outcome === "win" ? "#22c55e" : data.result.outcome === "loss" ? "#ef4444" : "#94a3b8";
+        if (rx != null && ry != null) {
+          els.push(<circle key={key++} cx={rx} cy={ry} r={6 * k} fill={col} stroke="#fff" strokeWidth={1.5 * k} />);
+          els.push(<text key={key++} x={rx + 9 * k} y={ry + (data.result.price > data.position.entry ? -8 : 16) * k} fill={col} fontSize={11 * k} fontWeight="700">{data.result.label}</text>);
+        }
+      }
+    }
   }
   if (layers.structure) {
     // Major breaks, plus the last two internal ones (not on phones).
@@ -417,8 +464,8 @@ function useOverlay(chartRef, seriesRef, boxRef, data, layers, dark, tick, mine)
     data.steps.forEach((s, i) => {
       const ax = xOf(s.time), ay = yOf(s.price);
       if (ax == null || ay == null || ax < 0 || ax > W) return;
-      if (narrow) { // numbered badge; the text is listed under the chart
-        els.push(<g key={key++}><circle cx={ax} cy={ay} r="8" fill={c.callout} stroke="#fff" strokeWidth="1" /><text x={ax} y={ay + 3.5} fontSize="10" fontWeight="700" fill="#fff" textAnchor="middle">{i + 1}</text></g>);
+      if (badgesFor(boxRef.current.clientWidth, data.steps.length)) { // numbered badge; the text is listed under the chart
+        els.push(<g key={key++}><circle cx={ax} cy={ay} r={8 * k} fill={c.callout} stroke="#fff" strokeWidth={k} /><text x={ax} y={ay + 3.5 * k} fontSize={10 * k} fontWeight="700" fill="#fff" textAnchor="middle">{i + 1}</text></g>);
         return;
       }
       const above = i % 2 === 0;

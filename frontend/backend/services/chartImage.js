@@ -43,7 +43,7 @@ exports.render = (d, { width = 1600, height = 900, preset = "key" } = {}) => {
   // Candles in view: the build-up, the signal and what followed.
   const all = d.candles || [];
   const sigIdx = Math.max(0, all.findIndex((c) => c.time >= d.signalTime));
-  const endIdx = d.result ? Math.min(all.length - 1, Math.max(sigIdx + 8, all.findIndex((c) => c.time >= d.result.time) + 5)) : Math.min(all.length - 1, sigIdx + 25);
+  const endIdx = d.result ? Math.min(all.length - 1, Math.max(sigIdx + 8, all.findLastIndex((c) => c.time <= d.result.time) + 5)) : Math.min(all.length - 1, sigIdx + 25);
   const startIdx = Math.max(0, endIdx - 85);
   const view = all.slice(startIdx, endIdx + 1);
   if (!view.length) return canvas.toBuffer("image/png");
@@ -53,9 +53,10 @@ exports.render = (d, { width = 1600, height = 900, preset = "key" } = {}) => {
   const pad = (hi - lo) * 0.06 || 1;
   lo -= pad; hi += pad;
   const step = (R - L) / (view.length + 2);
+  // The candle a moment falls in (exits / fills happen inside a candle).
   const X = (t) => {
-    let i = view.findIndex((c) => c.time >= t);
-    if (i < 0) i = t > view.at(-1).time ? view.length - 1 : 0;
+    let i = view.findLastIndex((c) => c.time <= t);
+    if (i < 0) i = 0;
     return L + step * (i + 0.5);
   };
   const Y = (v) => T + ((hi - v) / (hi - lo)) * (B - T);
@@ -105,10 +106,15 @@ exports.render = (d, { width = 1600, height = 900, preset = "key" } = {}) => {
     box(X(ob.from), Y(ob.top), R, Y(ob.bottom), bull ? "rgba(59,130,246,0.15)" : "rgba(249,115,22,0.15)", bull ? "rgba(59,130,246,0.5)" : "rgba(249,115,22,0.5)");
     text(`${bull ? "Bull" : "Bear"} OB`, X(ob.from) + 3, Y(ob.top) + 11, bull ? "#3b82f6" : "#f97316", 10);
   }
-  if (p) {
-    const x1 = X(p.from), x2 = Math.max(x1 + 30, d.result ? X(d.result.time) : R - 4);
+  if (p && !p.unfilled) {
+    // From the moment the entry was reached to the exact exit candle.
+    const x1 = X(p.from), x2 = Math.max(x1 + 8 * k, d.result ? X(d.result.time) : R - 4);
     if (p.sl) box(x1, Y(p.entry), x2, Y(p.sl), "rgba(239,68,68,0.24)");
     if (p.tp) box(x1, Y(p.entry), x2, Y(p.tp), "rgba(34,197,94,0.22)");
+    if (d.fill?.waited) {
+      hline(X(p.sent), X(d.fill.time), p.entry, C.text, [3, 3], 1.2);
+      text("waiting for entry", X(p.sent) + 3 * k, Y(p.entry) + 13 * k, C.muted, 10, false);
+    }
   }
   for (const s of (d.structure || []).filter((x) => x.scope === "major")) {
     const col = s.dir === "bullish" ? C.green : C.red;
@@ -155,11 +161,21 @@ exports.render = (d, { width = 1600, height = 900, preset = "key" } = {}) => {
     text(`${label} ${fx(v)}`, R + 6 * k, Y(v) + 4 * k, label === "Entry" ? "#0b1220" : "#ffffff", 10);
   };
   if (p) { tag(p.sl, "SL", C.red); tag(p.tp, "TP", "#16a34a"); tag(p.entry, "Entry", "#e2e8f0"); }
+  if (d.fill && !p?.unfilled) {
+    const x = X(d.fill.time), y = Y(d.fill.price), up = d.direction === "buy", s6 = 6 * k;
+    g.fillStyle = up ? C.green : C.red;
+    g.beginPath();
+    if (up) { g.moveTo(x, y - s6); g.lineTo(x - s6, y + s6); g.lineTo(x + s6, y + s6); } else { g.moveTo(x, y + s6); g.lineTo(x - s6, y - s6); g.lineTo(x + s6, y - s6); }
+    g.closePath(); g.fill();
+  }
+  if (p?.unfilled) text("Entry never reached — no trade", R - 4 * k, Y(p.entry) - 5 * k, C.text, 11, true, "right");
   if (d.result) {
+    // Exactly at the TP / SL price, on the candle where it was hit.
     const x = X(d.result.time), y = Y(d.result.price);
     const col = d.result.outcome === "win" ? C.green : d.result.outcome === "loss" ? C.red : C.muted;
     g.fillStyle = col; g.beginPath(); g.arc(x, y, 6 * k, 0, Math.PI * 2); g.fill();
-    text(d.result.outcome === "win" ? "TP hit" : d.result.outcome === "loss" ? "SL hit" : "Closed", x + 9 * k, y - 7 * k, col, 11);
+    g.strokeStyle = "#fff"; g.lineWidth = 1.5 * k; g.stroke();
+    text(d.result.label || (d.result.outcome === "win" ? "TP hit" : d.result.outcome === "loss" ? "SL hit" : "Closed"), x + 9 * k, y + (d.result.price > (p?.entry ?? 0) ? -8 : 16) * k, col, 11);
   }
 
   // numbered badges on the chart, the steps underneath

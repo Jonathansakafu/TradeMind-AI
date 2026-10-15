@@ -1,0 +1,28 @@
+name: Re-score signals
+
+# One-off maintenance (2026-10-15): re-scores recent signals with the
+# entry-fill rule (GET /api/cron/rescore-signals). Run "dry" first.
+on:
+  workflow_dispatch:
+    inputs:
+      dry:
+        description: "Only count (1) or apply (0)"
+        required: true
+        default: "1"
+      days:
+        description: "How many days back"
+        required: true
+        default: "10"
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Re-score in batches
+        run: |
+          for i in $(seq 1 30); do
+            OUT=$(curl -sS -f --max-time 600 "https://trademind-ai-backend-2tnj.onrender.com/api/cron/rescore-signals?secret=${{ secrets.CRON_SECRET }}&days=${{ inputs.days }}&limit=600&dry=${{ inputs.dry }}")
+            echo "$OUT" | python3 -m json.tool
+            REMAINING=$(echo "$OUT" | python3 -c "import sys,json; print(json.load(sys.stdin)['remaining'])")
+            if [ "${{ inputs.dry }}" = "1" ] || [ "$REMAINING" = "0" ]; then break; fi
+          done

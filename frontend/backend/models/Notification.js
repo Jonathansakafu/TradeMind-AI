@@ -61,7 +61,10 @@ const notificationSchema = new mongoose.Schema({
   // Automatic result tracking (services/signalOutcomes.js), for every
   // forex/gold signal whether or not the trader took it: which of
   // take-profit / stop-loss price reached first.
-  simOutcome: { type: String, enum: ["win", "loss", "expired"] },
+  // unfilled = the entry was never reached (no trade); see signalOutcomes.resolve.
+  simOutcome: { type: String, enum: ["win", "loss", "expired", "unfilled"] },
+  simFilledAt: { type: Date }, // when price reached the entry
+  simRescored: { type: Boolean }, // re-scored with the entry-fill rule (2026-10-15)
   simR: { type: Number }, // result in R (risk units): +2.0 = won 2x the risk
   simResolvedAt: { type: Date },
   // Chart pictures (services/signalImage.js): at the signal, and after TP / SL.

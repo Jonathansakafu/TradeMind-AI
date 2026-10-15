@@ -54,6 +54,7 @@ async function loadSignal(user, { notificationId, tradeId, query }) {
       return {
         pair: t.pair, direction: t.direction, entry: t.entryPrice, sl: t.stopLoss, tp: t.takeProfit,
         at: n?.createdAt || t.openedAt || t.createdAt, exitPrice: t.exitPrice, exitAt: t.closedAt,
+        fillAt: n?.simFilledAt || null, unfilled: n?.simOutcome === "unfilled",
         outcome: t.outcome, confidence: n?.confidence, reasoning: n?.reasoning, lot: t.lotSize,
       };
     }
@@ -65,6 +66,7 @@ async function loadSignal(user, { notificationId, tradeId, query }) {
       return {
         pair: n.pair, direction: n.signal, entry: n.entry, sl: n.stopLoss, tp: n.takeProfit, at: n.createdAt,
         exitPrice: exit, exitAt: exit ? n.simResolvedAt : null, outcome: n.simOutcome, confidence: n.confidence, reasoning: n.reasoning,
+        fillAt: n.simFilledAt || null, unfilled: n.simOutcome === "unfilled",
       };
     }
   }
@@ -74,6 +76,7 @@ async function loadSignal(user, { notificationId, tradeId, query }) {
   return {
     pair: String(q.pair).toUpperCase(), direction: q.dir, entry: num(q.entry), sl: num(q.sl), tp: num(q.tp),
     at: q.at ? new Date(q.at) : new Date(), exitPrice: num(q.exit), exitAt: q.exitAt ? new Date(q.exitAt) : null, outcome: q.outcome || null,
+    fillAt: q.fillAt ? new Date(q.fillAt) : null,
   };
 }
 
@@ -109,7 +112,8 @@ exports.build = async (user, opts) => {
 
   // Window shown: ~90 candles before the signal, up to 40 after (or to now).
   const start = Math.max(0, upto - 90);
-  const endIdx = Math.min(c.length - 1, upto + (s.exitAt ? Math.max(8, c.findIndex((x) => x.t >= sec(s.exitAt)) - upto + 6) : 40));
+  const exitIdx = s.exitAt ? c.findLastIndex((x) => x.t <= sec(s.exitAt)) : -1;
+  const endIdx = Math.min(c.length - 1, exitIdx >= 0 ? Math.max(upto + 8, exitIdx + 6) : upto + 40);
   const view = c.slice(start, endIdx + 1);
   const inView = (i) => i >= start;
   const T = (i) => c[i]?.t;
@@ -185,11 +189,20 @@ exports.build = async (user, opts) => {
       time: T(Math.max(start, upto - 6)), price: range.mid,
     });
   }
+  const hhmm = (t) => new Date(t).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Africa/Dar_es_Salaam" });
+  const fillT = s.fillAt ? sec(s.fillAt) : null;
+  const waited = fillT && fillT - at > 10 * 60; // entry reached well after the signal was sent
   if (dir && s.entry) {
-    steps.push({ text: `${dir.toUpperCase()} at ${fmt(s.entry)} · SL ${fmt(s.sl)} · TP ${fmt(s.tp)}${rr ? ` · R:R 1:${rr.toFixed(1)}` : ""}`, time: sigT, price: s.entry });
+    steps.push({
+      text: `${dir.toUpperCase()} ${waited || s.unfilled ? "limit " : ""}at ${fmt(s.entry)} · SL ${fmt(s.sl)} · TP ${fmt(s.tp)}${rr ? ` · R:R 1:${rr.toFixed(1)}` : ""}${waited || s.unfilled ? ` (sent ${hhmm(s.at)} EAT, waiting for the price)` : ""}`,
+      time: sigT, price: s.entry,
+    });
   }
+  if (waited) steps.push({ text: `Entry filled at ${fmt(s.entry)} — ${hhmm(s.fillAt)} EAT`, time: fillT, price: s.entry });
+  if (s.unfilled) steps.push({ text: "Entry never reached in 24 h — no trade", time: c.at(-1).t, price: s.entry });
   if (s.exitPrice && s.exitAt) {
-    steps.push({ text: s.outcome === "win" ? `Hit take profit ${fmt(s.exitPrice)}` : s.outcome === "loss" ? `Hit stop loss ${fmt(s.exitPrice)}` : `Closed at ${fmt(s.exitPrice)}`, time: sec(s.exitAt), price: s.exitPrice });
+    const when = `${hhmm(s.exitAt)} EAT`;
+    steps.push({ text: s.outcome === "win" ? `Hit take profit ${fmt(s.exitPrice)} — ${when}` : s.outcome === "loss" ? `Hit stop loss ${fmt(s.exitPrice)} — ${when}` : `Closed at ${fmt(s.exitPrice)} — ${when}`, time: sec(s.exitAt), price: s.exitPrice });
   }
 
   // AI's own reasons from the signal notes (📌 Signal basis), if any.
@@ -206,8 +219,11 @@ exports.build = async (user, opts) => {
     fvgs: fvgs.map((g) => ({ dir: g.dir, top: g.top, bottom: g.bottom, from: T(g.i) })),
     orderBlock: ob ? { dir: ob.dir, top: ob.top, bottom: ob.bottom, from: T(ob.i) } : null,
     range, prevDay: pd, asian, news,
-    position: dir && s.entry ? { entry: s.entry, sl: s.sl, tp: s.tp, from: sigT, to: s.exitAt ? sec(s.exitAt) : view.at(-1).t, rr, risk: risk ? unit(risk) : null, reward: s.tp ? unit(Math.abs(s.tp - s.entry)) : null } : null,
-    result: s.exitPrice && s.exitAt ? { price: s.exitPrice, time: sec(s.exitAt), outcome: s.outcome } : null,
+    // The box starts when the entry was actually reached (or at the signal
+    // for a market entry) and ends at the exact exit time.
+    position: dir && s.entry ? { entry: s.entry, sl: s.sl, tp: s.tp, from: fillT || sigT, sent: sigT, to: s.exitAt ? sec(s.exitAt) : view.at(-1).t, rr, risk: risk ? unit(risk) : null, reward: s.tp ? unit(Math.abs(s.tp - s.entry)) : null, unfilled: !!s.unfilled } : null,
+    fill: fillT ? { time: fillT, price: s.entry, waited: !!waited } : null,
+    result: s.exitPrice && s.exitAt ? { price: s.exitPrice, time: sec(s.exitAt), outcome: s.outcome, label: `${s.outcome === "win" ? "TP hit" : s.outcome === "loss" ? "SL hit" : "Closed"} ${fmt(s.exitPrice)} · ${hhmm(s.exitAt)}` } : null,
     trend: { h4: h4Read.trend, h1: h1Read.trend, tf: tfRead.trend },
     atr: atrV, rsi: mc.rsi(hist.map((x) => x.close)), steps, basis: basisText,
   };

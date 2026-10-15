@@ -13,29 +13,65 @@ const MIN_AGE_MS = 5 * 60 * 1000;
 const EXPIRE_MS = 24 * 60 * 60 * 1000;
 const LOOKBACK_MS = 48 * 60 * 60 * 1000;
 
-// Pure: which level did price reach first after `startTime`? A candle that
-// touches both counts as a loss (can't know the order inside it -- the
-// conservative assumption).
+// Pure: the result of a signal from 5-minute candles (oldest first).
+// Fixed 2026-10-15: the entry must be reached first. A signal whose entry is
+// a level away from the price (a pullback / limit entry, e.g. BUY 1.32380
+// with GBPUSD at 1.3265) used to be scored from the moment it was sent --
+// its TP was already behind the price, so it showed "TP hit" while the
+// trade never started (price later fell through the entry and the SL).
+//   - market entry (within 0.15R of the price when sent, or inside the
+//     first candle): in at once
+//   - otherwise: filled by the first candle that touches the entry
+//   - after the fill: TP or SL, whichever price reaches first; a candle
+//     touching both counts as SL (order inside it unknown -- conservative);
+//     on a later fill candle only the SL can count (TP may have come first)
+//   - entry not reached within 24 h: "unfilled" (no trade -- neither a win
+//     nor a loss); filled but neither level within 24 h: "expired"
 function resolve({ signal, entry, stopLoss, takeProfit, createdAt }, candles, now = Date.now()) {
   const risk = Math.abs(entry - stopLoss);
   if (!risk) return null;
   const start = new Date(createdAt).getTime();
-  const after = candles.filter((c) => new Date(c.datetime).getTime() >= start - 60 * 1000);
-  for (const c of after) {
-    const hitSL = signal === "buy" ? c.low <= stopLoss : c.high >= stopLoss;
-    const hitTP = signal === "buy" ? c.high >= takeProfit : c.low <= takeProfit;
-    if (hitSL) return { simOutcome: "loss", simR: -1, at: c.datetime };
-    if (hitTP) return { simOutcome: "win", simR: Math.round((Math.abs(takeProfit - entry) / risk) * 100) / 100, at: c.datetime };
+  // The candle the signal was sent in, and everything after it.
+  const after = candles.filter((c) => new Date(c.datetime).getTime() > start - 5 * 60 * 1000);
+  if (!after.length) return null;
+  const isBuy = signal === "buy";
+  const first = after[0];
+  const fill = Math.abs(first.open - entry) <= 0.15 * risk || (first.low <= entry && entry <= first.high)
+    ? 0 : after.findIndex((c) => c.low <= entry && entry <= c.high);
+  if (fill < 0) {
+    return now - start > EXPIRE_MS ? { simOutcome: "unfilled", simR: 0, at: after[after.length - 1].datetime, filledAt: null } : null;
   }
-  if (now - start > EXPIRE_MS && after.length) {
+  const filledAt = after[fill].datetime;
+  for (let i = fill; i < after.length; i++) {
+    const c = after[i];
+    const hitSL = isBuy ? c.low <= stopLoss : c.high >= stopLoss;
+    const hitTP = isBuy ? c.high >= takeProfit : c.low <= takeProfit;
+    if (hitSL) return { simOutcome: "loss", simR: -1, at: c.datetime, filledAt };
+    if (hitTP && !(i === fill && fill > 0)) {
+      return { simOutcome: "win", simR: Math.round((Math.abs(takeProfit - entry) / risk) * 100) / 100, at: c.datetime, filledAt };
+    }
+  }
+  if (now - start > EXPIRE_MS) {
     const last = after[after.length - 1].close;
-    const r = ((last - entry) * (signal === "buy" ? 1 : -1)) / risk;
-    return { simOutcome: "expired", simR: Math.round(r * 100) / 100, at: after[after.length - 1].datetime };
+    const r = ((last - entry) * (isBuy ? 1 : -1)) / risk;
+    return { simOutcome: "expired", simR: Math.round(r * 100) / 100, at: after[after.length - 1].datetime, filledAt };
   }
   return null;
 }
 
 exports.resolve = resolve;
+
+// When price reached the entry (same rule as resolve), or null.
+function fillTime({ entry, stopLoss, createdAt }, candles) {
+  const risk = Math.abs(entry - stopLoss);
+  const start = new Date(createdAt).getTime();
+  const after = candles.filter((c) => new Date(c.datetime).getTime() > start - 5 * 60 * 1000);
+  if (!after.length || !risk) return null;
+  const first = after[0];
+  if (Math.abs(first.open - entry) <= 0.15 * risk || (first.low <= entry && entry <= first.high)) return first.datetime;
+  return after.find((c) => c.low <= entry && entry <= c.high)?.datetime || null;
+}
+exports.fillTime = fillTime;
 
 exports.evaluateOpenSignals = async () => {
   const now = Date.now();
@@ -45,7 +81,7 @@ exports.evaluateOpenSignals = async () => {
     signal: { $in: ["buy", "sell"] },
     entry: { $gt: 0 }, stopLoss: { $gt: 0 }, takeProfit: { $gt: 0 },
     createdAt: { $gte: new Date(now - LOOKBACK_MS), $lte: new Date(now - MIN_AGE_MS) },
-  }).select("user pair signal entry stopLoss takeProfit createdAt confidence type").limit(2000);
+  }).select("user pair signal entry stopLoss takeProfit createdAt confidence type simFilledAt").limit(2000);
   if (!open.length) return { checked: 0, resolved: 0 };
 
   const byPair = new Map();
@@ -66,10 +102,17 @@ exports.evaluateOpenSignals = async () => {
     if (!candles.length) continue;
     for (const n of list) {
       const r = resolve(n, candles, now);
-      if (!r) continue;
-      await Notification.updateOne({ _id: n._id }, { simOutcome: r.simOutcome, simR: r.simR, simResolvedAt: new Date(r.at) });
+      if (!r) {
+        // Still running: note when the entry was reached (shown as "Entered").
+        if (!n.simFilledAt) {
+          const f = fillTime(n, candles);
+          if (f) await Notification.updateOne({ _id: n._id }, { simFilledAt: new Date(f) });
+        }
+        continue;
+      }
+      await Notification.updateOne({ _id: n._id }, { simOutcome: r.simOutcome, simR: r.simR, simResolvedAt: new Date(r.at), simFilledAt: r.filledAt ? new Date(r.filledAt) : null });
       resolved++;
-      if (r.simOutcome !== "expired") justResolved.push({ n, r });
+      if (r.simOutcome === "win" || r.simOutcome === "loss") justResolved.push({ n, r });
     }
   }
   pipelineStats.inc("outcomes.resolved", resolved);

@@ -9,8 +9,11 @@ export function SignalResultBadge({ notification: n }) {
     win: ["✅ Hit take profit", "text-green-600 dark:text-green-400", r],
     loss: ["❌ Hit stop loss", "text-red-600 dark:text-red-400", r],
     expired: ["⌛ Neither hit in 24h", "text-slate-500 dark:text-slate-400", r],
+    unfilled: ["⏸ Entry never reached (no trade)", "text-slate-500 dark:text-slate-400", ""],
   };
-  const [label, cls, extra] = map[n.simOutcome] || ["⏳ Tracking result…", "text-slate-500 dark:text-slate-400", ""];
+  const [label, cls, extra] = map[n.simOutcome] || (n.simFilledAt
+    ? ["▶ Entered — running", "text-blue-600 dark:text-blue-400", ""]
+    : ["⏳ Waiting for the entry price…", "text-slate-500 dark:text-slate-400", ""]);
   return (
     <span className={`text-xs font-semibold ${cls}`} title="Checked automatically against real prices">
       Signal result: {label}{extra ? ` (${extra})` : ""}

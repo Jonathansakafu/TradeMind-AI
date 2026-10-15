@@ -49,6 +49,8 @@ async function alertClosed(userId, t, win, exit, pl, recorded) {
   }).catch((err) => console.error("Trade-closed alert failed:", err.message));
 }
 
+exports.attachResultChart = (id) => attachResultChart(id);
+
 exports.settle = async () => {
   let closed = 0, recorded = 0, reminded = 0, skippedManaged = 0;
 
@@ -75,12 +77,15 @@ exports.settle = async () => {
       closed++;
       await attachResultChart(t._id);
       await alertClosed(t.user, t, win, exit, r.pl, false);
-    } else if (n.simOutcome === "expired" && !t.expiryReminded) {
+    } else if ((n.simOutcome === "expired" || n.simOutcome === "unfilled") && !t.expiryReminded) {
       await Trade.updateOne({ _id: t._id }, { expiryReminded: true });
       reminded++;
+      const unfilled = n.simOutcome === "unfilled";
       await dispatchMessage(t.user, {
-        title: `⏳ ${label}: close it with your real exit`,
-        body: "The signal expired without hitting its take profit or stop loss, so TradeMind can't close this trade for you. Close it in Trade History with the price you exited at.",
+        title: unfilled ? `⏸ ${label}: entry never reached` : `⏳ ${label}: close it with your real exit`,
+        body: unfilled
+          ? "Price never came to this signal's entry in 24 hours, so the trade may never have opened. If your order wasn't filled, delete it in Trade History; otherwise close it with your real exit."
+          : "The signal expired without hitting its take profit or stop loss, so TradeMind can't close this trade for you. Close it in Trade History with the price you exited at.",
         url: "/history",
         id: `trade-expired-${t._id}`,
         email: false,

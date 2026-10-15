@@ -244,4 +244,73 @@ router.get("/rechart-trades", async (req, res) => {
   }
 });
 
+// One-off (2026-10-15): re-score recent signals with the entry-fill rule
+// (signalOutcomes.resolve) and correct what depended on the old result:
+// trades the system closed automatically from a signal (closedBy: signal)
+// get the corrected exit / P/L, or -- when the entry was never reached --
+// are reopened (removed if the system itself recorded them from a taken
+// signal); post-mortems and result charts are redone. Trades closed by the
+// trader are not touched. ?days=10 ?limit=800 ?dry=1; call until remaining = 0.
+router.get("/rescore-signals", async (req, res) => {
+  const configuredSecret = process.env.CRON_SECRET;
+  if (!configuredSecret || req.query.secret !== configuredSecret) {
+    return res.status(401).json({ message: "Invalid cron secret" });
+  }
+  try {
+    const Notification = require("../models/Notification");
+    const Trade = require("../models/Trade");
+    const marketService = require("../services/marketService");
+    const { resolve } = require("../services/signalOutcomes");
+    const { calculatePL } = require("../utils/tradePL");
+    const ongoing = require("../services/ongoingTrades");
+    const days = Math.min(30, Number(req.query.days) || 10);
+    const limit = Math.min(3000, Number(req.query.limit) || 800);
+    const dry = req.query.dry === "1";
+    const query = {
+      simOutcome: { $exists: true }, simRescored: { $ne: true }, type: { $ne: "quick_trade" },
+      signal: { $in: ["buy", "sell"] }, entry: { $gt: 0 }, createdAt: { $gte: new Date(Date.now() - days * 864e5) },
+    };
+    const total = await Notification.countDocuments(query);
+    const list = await Notification.find(query).sort({ createdAt: 1 }).limit(dry ? 5000 : limit).lean();
+    const candlesBy = {};
+    const out = { checked: 0, changed: 0, transitions: {}, tradesCorrected: 0, tradesReopened: 0, tradesRemoved: 0, examples: [] };
+    for (const n of list) {
+      if (!candlesBy[n.pair]) candlesBy[n.pair] = await marketService.getYahooCandles(n.pair, { interval: "5m", range: "1mo" }).catch(() => []);
+      const r = resolve(n, candlesBy[n.pair], Date.now());
+      out.checked++;
+      if (!r) continue;
+      const same = r.simOutcome === n.simOutcome && Math.abs((r.simR || 0) - (n.simR || 0)) < 0.01;
+      if (!same) {
+        out.changed++;
+        const k = `${n.simOutcome}→${r.simOutcome}`;
+        out.transitions[k] = (out.transitions[k] || 0) + 1;
+        if (out.examples.length < 8) out.examples.push(`${n.pair} ${n.signal.toUpperCase()} ${n.entry} @${new Date(n.createdAt).toISOString().slice(5, 16)}: ${k}`);
+      }
+      if (dry) continue;
+      const set = { simOutcome: r.simOutcome, simR: r.simR, simResolvedAt: new Date(r.at), simFilledAt: r.filledAt ? new Date(r.filledAt) : null, simRescored: true };
+      await Notification.updateOne({ _id: n._id }, same ? { $set: { simRescored: true, simFilledAt: set.simFilledAt } } : { $set: set, $unset: { research: 1, resultChartImage: 1 } });
+      if (same) continue;
+      for (const t of await Trade.find({ notificationId: n._id, closedBy: "signal" })) {
+        if (r.simOutcome === "win" || r.simOutcome === "loss") {
+          const exit = r.simOutcome === "win" ? n.takeProfit : n.stopLoss;
+          const pl = calculatePL(t.pair, t.direction, t.entryPrice, exit, t.lotSize || 0.01);
+          await Trade.updateOne({ _id: t._id }, { exitPrice: exit, profitLoss: pl?.pl ?? 0, outcome: pl?.outcome, closedAt: new Date(r.at) });
+          await ongoing.attachResultChart(t._id);
+          out.tradesCorrected++;
+        } else if (t.batchId === "auto-taken") {
+          await Trade.deleteOne({ _id: t._id });
+          await Notification.updateOne({ _id: n._id }, { $unset: { tradeId: 1 } });
+          out.tradesRemoved++;
+        } else {
+          await Trade.updateOne({ _id: t._id }, { $set: { status: "open", profitLoss: 0, expiryReminded: false }, $unset: { exitPrice: 1, outcome: 1, closedAt: 1, closedBy: 1, resultScreenshot: 1 } });
+          out.tradesReopened++;
+        }
+      }
+    }
+    res.json({ ...out, remaining: dry ? total : Math.max(0, total - list.length), dry });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 module.exports = router;

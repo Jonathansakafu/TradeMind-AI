@@ -116,7 +116,7 @@ function signalList(signals, trades, money) {
   const byId = new Map(trades.map((t) => [String(t._id), t]));
   const out = ["Today's TradeMind signals (oldest first, East Africa Time):"];
   signals.forEach((s, i) => {
-    const res = s.simOutcome === "win" ? "hit TP" : s.simOutcome === "loss" ? "hit SL" : s.simOutcome === "expired" ? "expired" : "still running";
+    const res = s.simOutcome === "win" ? "hit TP" : s.simOutcome === "loss" ? "hit SL" : s.simOutcome === "expired" ? "expired" : s.simOutcome === "unfilled" ? "entry never reached (no trade)" : s.simFilledAt ? "entered, still running" : "waiting for its entry price";
     const t = s.tradeId && byId.get(String(s.tradeId));
     const took = t ? `TAKEN -> trade ${t.outcome ? `${money(Number(t.profitLoss) || 0)} ${t.outcome}` : "ongoing"}` : s.taken ? "marked taken (no trade recorded)" : "not taken";
     out.push(`- S${i + 1} ${hhmm(s.createdAt)} ${s.pair} ${String(s.signal).toUpperCase()} entry ${fmtNum(s.entry)} SL ${fmtNum(s.stopLoss)} TP ${fmtNum(s.takeProfit)} — ${res} — ${took}`);
@@ -132,7 +132,7 @@ exports.build = async (userId, now = new Date()) => {
       .select("simOutcome simR createdAt").lean(),
     // Today's signals, oldest first, for "the first 5 signals today..." questions.
     Notification.find({ user: userId, signal: { $in: ["buy", "sell"] }, createdAt: { $gte: startOfDay(now) } })
-      .select("pair signal entry stopLoss takeProfit createdAt simOutcome taken tradeId type").sort({ createdAt: 1 }).limit(40).lean(),
+      .select("pair signal entry stopLoss takeProfit createdAt simOutcome simFilledAt taken tradeId type").sort({ createdAt: 1 }).limit(40).lean(),
   ]);
   const ccy = user?.riskSettings?.currency || "USD";
   const sym = { USD: "$", EUR: "€", GBP: "£" }[ccy];
