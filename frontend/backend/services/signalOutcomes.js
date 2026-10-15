@@ -19,14 +19,21 @@ const LOOKBACK_MS = 48 * 60 * 60 * 1000;
 // with GBPUSD at 1.3265) used to be scored from the moment it was sent --
 // its TP was already behind the price, so it showed "TP hit" while the
 // trade never started (price later fell through the entry and the SL).
-//   - market entry (within 0.15R of the price when sent, or inside the
-//     first candle): in at once
+//   - in at once when the price when sent is at the entry (within 0.15R,
+//     or inside the first candle) or already better than it (BUY below /
+//     SELL above the entry -- a trader just takes the market price)
+//   - waits when the price is worse than the entry (BUY above / SELL below
+//     it): a pullback / limit order
 //   - otherwise: filled by the first candle that touches the entry
 //   - after the fill: TP or SL, whichever price reaches first; a candle
 //     touching both counts as SL (order inside it unknown -- conservative);
 //     on a later fill candle only the SL can count (TP may have come first)
 //   - entry not reached within 24 h: "unfilled" (no trade -- neither a win
 //     nor a loss); filled but neither level within 24 h: "expired"
+const inAtOnce = (signal, entry, risk, first) => Math.abs(first.open - entry) <= 0.15 * risk
+  || (first.low <= entry && entry <= first.high)
+  || (signal === "buy" ? first.open < entry : first.open > entry);
+
 function resolve({ signal, entry, stopLoss, takeProfit, createdAt }, candles, now = Date.now()) {
   const risk = Math.abs(entry - stopLoss);
   if (!risk) return null;
@@ -37,7 +44,7 @@ function resolve({ signal, entry, stopLoss, takeProfit, createdAt }, candles, no
   if (!after.length) return null;
   const isBuy = signal === "buy";
   const first = after[0];
-  const fill = Math.abs(first.open - entry) <= 0.15 * risk || (first.low <= entry && entry <= first.high)
+  const fill = inAtOnce(signal, entry, risk, first)
     ? 0 : after.findIndex((c) => c.low <= entry && entry <= c.high);
   if (fill < 0) {
     return now - start > EXPIRE_MS ? { simOutcome: "unfilled", simR: 0, at: after[after.length - 1].datetime, filledAt: null } : null;
@@ -63,13 +70,13 @@ function resolve({ signal, entry, stopLoss, takeProfit, createdAt }, candles, no
 exports.resolve = resolve;
 
 // When price reached the entry (same rule as resolve), or null.
-function fillTime({ entry, stopLoss, createdAt }, candles) {
+function fillTime({ signal, entry, stopLoss, createdAt }, candles) {
   const risk = Math.abs(entry - stopLoss);
   const start = new Date(createdAt).getTime();
   const after = candles.filter((c) => new Date(c.datetime).getTime() > start - 5 * 60 * 1000);
   if (!after.length || !risk) return null;
   const first = after[0];
-  if (Math.abs(first.open - entry) <= 0.15 * risk || (first.low <= entry && entry <= first.high)) return first.datetime;
+  if (inAtOnce(signal, entry, risk, first)) return first.datetime;
   return after.find((c) => c.low <= entry && entry <= c.high)?.datetime || null;
 }
 exports.fillTime = fillTime;
