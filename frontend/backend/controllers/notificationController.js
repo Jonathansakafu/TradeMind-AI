@@ -502,6 +502,7 @@ exports.autoGenerate = async (userId) => {
           );
         }
         if (!analysis.signal || analysis.signal === "wait") {
+          pipelineStats.noteDecision(pair, `WAIT (${analysis.confidence ?? "?"}%): ${analysis.reasoning || ""}`);
           pipelineStats.inc("forex.wait");
           // WAIT while a release is ahead -- shows if news still holds signals back.
           if (newsCtx.upcoming?.length) pipelineStats.inc("forex.wait.newsAhead");
@@ -545,6 +546,7 @@ exports.autoGenerate = async (userId) => {
               pipelineStats.inc("rules.blocked");
               check.blocked.forEach((k) => pipelineStats.inc(`rules.blocked.${k}`));
               console.log(`🚫 ${pair} ${analysis.signal} blocked by rules: ${check.blocked.join(", ")}`);
+              pipelineStats.noteDecision(pair, `${analysis.signal.toUpperCase()} ${analysis.confidence ?? "?"}% blocked: ${check.rules.filter((r) => !r.passed && r.hard !== false).map((r) => `${r.label} — ${r.detail}`).join("; ")} | entry ${levels.entry} SL ${levels.stopLoss} TP ${levels.takeProfit}`);
               continue;
             }
 
@@ -558,6 +560,7 @@ exports.autoGenerate = async (userId) => {
               pipelineStats.inc("rules.blocked");
               guards.blocked.forEach((k) => pipelineStats.inc(`rules.blocked.${k}`));
               console.log(`🛡 ${pair} ${analysis.signal} held back: ${guards.blocked.join(", ")}`);
+              pipelineStats.noteDecision(pair, `${analysis.signal.toUpperCase()} held back: ${guards.rules.filter((r) => !r.passed).map((r) => `${r.label} — ${r.detail}`).join("; ")}`);
               continue;
             }
             if (check && guards) check.rules.push(...guards.rules);

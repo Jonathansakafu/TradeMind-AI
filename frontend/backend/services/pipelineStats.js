@@ -9,6 +9,9 @@ const bootedAt = new Date();
 const counters = {};
 const lastErrors = [];
 let lastCycle = null;
+// Last decision per pair ("why no signal?"): AI answer + rule details.
+// Market reasoning only -- no user or money data (the report is public).
+const lastDecisions = {};
 
 function inc(key, by = 1) {
   counters[key] = (counters[key] || 0) + by;
@@ -19,12 +22,16 @@ function recordError(where, message) {
   lastErrors.length = Math.min(lastErrors.length, 10);
 }
 
+function noteDecision(pair, text) {
+  lastDecisions[pair] = { at: new Date(), text: String(text).slice(0, 400) };
+}
+
 function setLastCycle(cycle) {
   lastCycle = cycle;
 }
 
 function snapshot() {
-  return { bootedAt, counters: { ...counters }, lastErrors: [...lastErrors], lastCycle };
+  return { bootedAt, counters: { ...counters }, lastErrors: [...lastErrors], lastCycle, lastDecisions: { ...lastDecisions } };
 }
 
-module.exports = { inc, recordError, setLastCycle, snapshot };
+module.exports = { inc, recordError, setLastCycle, snapshot, noteDecision };
