@@ -103,11 +103,10 @@ class VoiceAssistant {
   private boolean ttsReady = false;
   private boolean answerVoice = false;
   private boolean answered = false;
-  private boolean secondTry = false; // after "Proceed, I'm still listening"
   // After each answer it keeps listening for a follow-up (like Google's
-  // Continued Conversation, ~8 s); silence closes it, "thank you" ends it.
+  // Continued Conversation; 4.5 s); silence closes it, "thank you" ends it.
   private boolean followUp = false;
-  private static final long FOLLOW_UP_MS = 8000;
+  private static final long FOLLOW_UP_MS = 4500;
   private BroadcastReceiver unlockReceiver;
   private PowerManager.WakeLock screenOn;
   private int spokenUpTo = 0;
@@ -167,14 +166,11 @@ class VoiceAssistant {
       fail(msg("loginTitle"), msg("login"));
       return;
     }
-    if (speakAnswers && tts != null) {
-      greeting = true;
-      String[] clip = host.greetingClip(); // recorded in advance: plays at once
-      if (clip == null || !playClip(clip)) main.postDelayed(greetTimeout, 3000); // else greet() when the voice is ready
-    } else {
-      setStatus(greetingText(prefs.getString("appLang", lang)));
-      listen();
-    }
+    // Like Siri: a short chime and listening at once -- the greeting
+    // ("Yes, Jonathan?") is shown, not spoken (speaking it cost 1-3 s).
+    setStatus(greetingText(prefs.getString("appLang", lang)));
+    chime(true);
+    main.postDelayed(() -> { if (!finished && !recording) listen(); }, 200); // after the chime
   }
 
   void finish() {
@@ -259,6 +255,8 @@ class VoiceAssistant {
     head.setGravity(Gravity.CENTER_VERTICAL);
     orb = new OrbView(ctx);
     head.addView(orb, new LinearLayout.LayoutParams(dp(56), dp(56)));
+    orb.setContentDescription("End");
+    orb.setOnClickListener((v) -> finish()); // tap the orb: stop talking and close, like Siri
     LinearLayout titles = new LinearLayout(ctx);
     titles.setOrientation(LinearLayout.VERTICAL);
     titles.setPadding(dp(12), 0, dp(8), 0);
@@ -388,11 +386,11 @@ class VoiceAssistant {
 
   // ---------- listening ----------
 
-  // Silence: 5 s -> "Proceed, I'm still listening", 3 s more -> close.
+  // Silence: 6 s at first (4.5 s after an answer) -> close quietly.
   private void listen() {
     recording = true;
     thinking(false);
-    final long waitMs = followUp ? FOLLOW_UP_MS : secondTry ? 3000 : 5000;
+    final long waitMs = followUp ? FOLLOW_UP_MS : 6000;
     io.execute(() -> {
       byte[] wav = record(waitMs);
       recording = false;
@@ -400,13 +398,10 @@ class VoiceAssistant {
       main.post(() -> {
         if (finished) return;
         if (wav == null) {
-          if (followUp) {
-            if (speakAnswers) finish(); // conversation over: close quietly
-            else closeIn(15000); // silent mode: leave the answer up to read
-          } else if (secondTry) {
-            finish(); // still silent: close straight away
+          if (followUp && !speakAnswers) {
+            closeIn(15000); // silent mode: leave the answer up to read
           } else {
-            stillListening();
+            closeQuietly(); // nothing said: a soft tone and gone, like Siri
           }
         } else if (isLocked()) {
           waitForUnlock(wav);
@@ -431,13 +426,6 @@ class VoiceAssistant {
     thinking(true);
     main.postDelayed(() -> { if (answerText.length() == 0 && !finished) setStatus(msg("waking")); }, 6000);
     io.execute(() -> voiceAsk(wav));
-  }
-
-  private void stillListening() {
-    secondTry = true;
-    String text = sayInAppLanguage("still", "prompt"); // listen() again when spoken
-    setStatus(text);
-    if (text == null || !speaking) listen();
   }
 
   // ---------- locked phone ----------
@@ -532,6 +520,10 @@ class VoiceAssistant {
   private void farewell(String kind, String language) {
     if (finished) return;
     recording = false;
+    if ("stop".equals(kind)) { // "stop" / "cancel": gone at once, like Siri
+      closeQuietly();
+      return;
+    }
     String[] pair = FAREWELLS.containsKey(language) ? FAREWELLS.get(language) : FAREWELLS.get("en");
     String text = withName(prefs, pair["stop".equals(kind) ? 1 : 0]);
     thinking(false);
@@ -547,11 +539,11 @@ class VoiceAssistant {
       tts.setSpeechRate(1.0f);
       louder();
       if (tts.speak(text, TextToSpeech.QUEUE_FLUSH, loud(), "farewell") == TextToSpeech.SUCCESS) {
-        closeIn(6000); // safety net if the "done" callback never comes
+        closeIn(3000); // safety net if the "done" callback never comes
         return;
       }
     }
-    closeIn(2500);
+    closeIn(1500);
   }
 
   private static final Map<String, Map<String, String>> PHRASES = new HashMap<>();
@@ -592,7 +584,7 @@ class VoiceAssistant {
     sayAppText(msg("noHear"));
   }
 
-  // Records the question and stops ~0.7 s after the voice ends. The noise
+  // Records the question and stops ~0.6 s after the voice ends. The noise
   // level is learnt before and between words (the old fixed threshold took
   // boosted background noise for speech and never stopped). Sensitivity
   // (Settings) lowers the level that counts as a voice. 12 s at most; null
@@ -648,7 +640,7 @@ class VoiceAssistant {
           voice = Math.max(voice * 0.995, rms);
         }
         long elapsed = SystemClock.elapsedRealtime() - started;
-        if (spoke && quietMs >= 700) break;
+        if (spoke && quietMs >= 600) break;
         if (!spoke && elapsed > waitMs) break;
         if (elapsed > 12000) break;
       }
@@ -824,21 +816,15 @@ class VoiceAssistant {
   // same conversation (the server keeps the history).
   private void listenForFollowUp() {
     if (finished || recording) return;
-    if (!answered) { // an error / "didn't hear" message was spoken: close as before
-      closeIn(9000);
+    if (!answered) { // an error / "didn't hear" message was spoken: close soon
+      closeIn(3000);
       return;
     }
     followUp = true;
-    secondTry = false;
     main.removeCallbacks(closeLater);
     setStatus(msg("followUp"));
     level(0.2f);
-    try {
-      android.media.ToneGenerator tone = new android.media.ToneGenerator(AudioManager.STREAM_MUSIC, 35);
-      tone.startTone(android.media.ToneGenerator.TONE_PROP_BEEP, 90);
-      main.postDelayed(tone::release, 300);
-    } catch (Exception ignored) {
-    }
+    chime(true);
     main.postDelayed(() -> { if (!finished && !recording) listen(); }, 250); // after the tone and the voice's echo
   }
 
@@ -901,7 +887,7 @@ class VoiceAssistant {
     for (int i = 0; i < parts.size(); i++) {
       tts.speak(parts.get(i), TextToSpeech.QUEUE_ADD, loud(), (i == parts.size() - 1 ? "last" : "part") + (partNo++));
     }
-    if (parts.isEmpty()) closeIn(9000);
+    if (parts.isEmpty()) closeIn(3000);
   }
 
   // ---------- speaking ----------
@@ -1223,6 +1209,23 @@ class VoiceAssistant {
     } catch (Exception ignored) {
     }
     savedVolume = -1;
+  }
+
+  // Short tone: rising = listening, falling = closing.
+  private void chime(boolean listening) {
+    try {
+      android.media.ToneGenerator tone = new android.media.ToneGenerator(AudioManager.STREAM_MUSIC, 35);
+      tone.startTone(listening ? android.media.ToneGenerator.TONE_PROP_BEEP : android.media.ToneGenerator.TONE_PROP_ACK, listening ? 90 : 120);
+      main.postDelayed(tone::release, 400);
+    } catch (Exception ignored) {
+    }
+  }
+
+  private void closeQuietly() {
+    if (finished) return;
+    recording = false;
+    chime(false);
+    main.postDelayed(this::finish, 250);
   }
 
   private void closeIn(long ms) {

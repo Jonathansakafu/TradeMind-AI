@@ -368,7 +368,8 @@ async function answerOverSSE(req, res, sse, { question, conversationId, voice })
     const [retrievedChunks, bookSummary, userData] = await Promise.all([
       voice ? withTimeout(retrieval.catch(() => []), 1200, []) : retrieval,
       voice ? withTimeout(ragService.getBookConceptSummary(req.user._id).catch(() => ""), 800, "") : ragService.getBookConceptSummary(req.user._id),
-      userDataContext.build(req.user._id).catch((err) => { console.error("userDataContext:", err.message); return ""; }),
+      // Voice: capped so the spoken answer starts fast (Siri-style).
+      (voice ? (p) => withTimeout(p, 2500, "") : (p) => p)(userDataContext.build(req.user._id).catch((err) => { console.error("userDataContext:", err.message); return ""; })),
     ]);
     if (sse.closed) return res.end();
 
