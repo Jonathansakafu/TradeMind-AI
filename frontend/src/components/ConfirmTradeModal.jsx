@@ -119,7 +119,7 @@ function ConfirmTradeModal({ form, screenshotPreview, onChangePrices, onConfirm,
             ) : (
               <div className="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700">
                 {!chartFailed && (
-                  <SignalChart ref={chartRef} query={chartQuery} height={260} compact onError={() => setChartFailed(true)} />
+                  <SignalChart ref={chartRef} query={chartQuery} height={260} compact preset="key" onError={() => setChartFailed(true)} />
                 )}
                 <div style={chartFailed ? undefined : { position: "fixed", left: -10000, top: 0, width: 480 }} aria-hidden={!chartFailed}>
                 <TradeSnapshot

@@ -23,17 +23,22 @@ const C = {
   green: "#22c55e", red: "#ef4444", purple: "#a855f7",
 };
 
-exports.render = (d, { width = 1080, height = 640 } = {}) => {
+// 16:9 HD by default (sharp on tablets, computers and TVs); the "key" view
+// (position, steps, main structure, S/R, news, result) keeps it readable --
+// the interactive chart in the app has every other drawing on switches.
+exports.render = (d, { width = 1600, height = 900, preset = "key" } = {}) => {
+  const k = width / 1080; // text and spacing scale with the picture
+  const full = preset === "full";
   fonts();
   const steps = d.steps || [];
-  const stepsH = Math.min(7, steps.length) * 22 + (steps.length ? 14 : 0);
+  const stepsH = (Math.min(7, steps.length) * 22 + (steps.length ? 14 : 0)) * k;
   const canvas = createCanvas(width, height);
   const g = canvas.getContext("2d");
   g.fillStyle = C.bg;
   g.fillRect(0, 0, width, height);
 
-  const L = 14, R = width - 86, T = 56, B = height - stepsH - 34;
-  const font = (px, bold) => `${px}px ${bold ? "TMSansBold" : "TMSans"}`;
+  const L = 14 * k, R = width - 86 * k, T = 56 * k, B = height - stepsH - 34 * k;
+  const font = (px, bold) => `${Math.round(px * k)}px ${bold ? "TMSansBold" : "TMSans"}`;
 
   // Candles in view: the build-up, the signal and what followed.
   const all = d.candles || [];
@@ -59,17 +64,18 @@ exports.render = (d, { width = 1080, height = 640 } = {}) => {
 
   // grid + price axis
   g.font = font(12);
-  for (let k = 0; k <= 5; k++) {
-    const v = lo + ((hi - lo) * k) / 5, y = Y(v);
+  for (let j = 0; j <= 5; j++) {
+    const v = lo + ((hi - lo) * j) / 5, y = Y(v);
     g.strokeStyle = C.grid; g.lineWidth = 1;
     g.beginPath(); g.moveTo(L, y); g.lineTo(R, y); g.stroke();
-    g.fillStyle = C.muted; g.fillText(fx(v), R + 8, y + 4);
+    g.fillStyle = C.muted; g.fillText(fx(v), R + 8 * k, y + 4 * k);
   }
   // time axis
-  for (let k = 0; k < view.length; k += Math.max(1, Math.round(view.length / 6))) {
-    const t = new Date(view[k].time * 1000);
+  const kk = k;
+  for (let i2 = 0; i2 < view.length; i2 += Math.max(1, Math.round(view.length / 6))) {
+    const t = new Date(view[i2].time * 1000);
     g.fillStyle = C.muted;
-    g.fillText(`${t.getUTCDate()}/${t.getUTCMonth() + 1} ${String(t.getUTCHours()).padStart(2, "0")}:00`, Math.max(L, Math.min(R - 70, L + step * (k + 0.5) - 26)), B + 18);
+    g.fillText(`${t.getUTCDate()}/${t.getUTCMonth() + 1} ${String(t.getUTCHours()).padStart(2, "0")}:00`, Math.max(L, Math.min(R - 70 * kk, L + step * (i2 + 0.5) - 26 * kk)), B + 18 * kk);
   }
 
   const box = (x1, y1, x2, y2, fill, stroke) => {
@@ -78,7 +84,7 @@ exports.render = (d, { width = 1080, height = 640 } = {}) => {
   };
   const hline = (x1, x2, v, color, dash = [], w = 1) => {
     if (v == null || v < lo || v > hi) return;
-    g.save(); g.setLineDash(dash); g.strokeStyle = color; g.lineWidth = w;
+    g.save(); g.setLineDash(dash.map((v) => v * k)); g.strokeStyle = color; g.lineWidth = w * k;
     g.beginPath(); g.moveTo(x1, Y(v)); g.lineTo(x2, Y(v)); g.stroke(); g.restore();
   };
   const text = (s, x, y, color, px = 11, bold = true, align = "left") => {
@@ -87,14 +93,14 @@ exports.render = (d, { width = 1080, height = 640 } = {}) => {
 
   // levels and zones
   for (const l of [...(d.levels?.supports || []).slice(0, 2), ...(d.levels?.resistances || []).slice(0, 2)]) hline(L, R, l.price, C.level, [], 1.5);
-  if (d.prevDay) { hline(L, R, d.prevDay.high, C.muted, [6, 4]); text("PDH", L + 2, Y(d.prevDay.high) - 3, C.muted, 10); hline(L, R, d.prevDay.low, C.muted, [6, 4]); text("PDL", L + 2, Y(d.prevDay.low) + 11, C.muted, 10); }
-  if (d.range) { hline(X(d.range.from), R, d.range.mid, "#64748b", [4, 4]); text("50% EQ", R - 4, Y(d.range.mid) - 3, "#64748b", 10, true, "right"); }
-  for (const f of d.fvgs || []) {
+  if (full && d.prevDay) { hline(L, R, d.prevDay.high, C.muted, [6, 4]); text("PDH", L + 2, Y(d.prevDay.high) - 3, C.muted, 10); hline(L, R, d.prevDay.low, C.muted, [6, 4]); text("PDL", L + 2, Y(d.prevDay.low) + 11, C.muted, 10); }
+  if (full && d.range) { hline(X(d.range.from), R, d.range.mid, "#64748b", [4, 4]); text("50% EQ", R - 4, Y(d.range.mid) - 3, "#64748b", 10, true, "right"); }
+  for (const f of full ? d.fvgs || [] : []) {
     if (f.top < lo || f.bottom > hi) continue;
     box(X(f.from), Y(f.top), R, Y(f.bottom), f.dir === "bullish" ? "rgba(34,197,94,0.10)" : "rgba(239,68,68,0.10)");
     text("FVG", X(f.from) + 3, Y(f.top) + 11, f.dir === "bullish" ? "#16a34a" : "#dc2626", 10);
   }
-  if (d.orderBlock && d.orderBlock.bottom < hi && d.orderBlock.top > lo) {
+  if (full && d.orderBlock && d.orderBlock.bottom < hi && d.orderBlock.top > lo) {
     const ob = d.orderBlock, bull = ob.dir === "bullish";
     box(X(ob.from), Y(ob.top), R, Y(ob.bottom), bull ? "rgba(59,130,246,0.15)" : "rgba(249,115,22,0.15)", bull ? "rgba(59,130,246,0.5)" : "rgba(249,115,22,0.5)");
     text(`${bull ? "Bull" : "Bear"} OB`, X(ob.from) + 3, Y(ob.top) + 11, bull ? "#3b82f6" : "#f97316", 10);
@@ -115,7 +121,7 @@ exports.render = (d, { width = 1080, height = 640 } = {}) => {
   view.forEach((c, i) => {
     const x = L + step * (i + 0.5);
     const col = c.close >= c.open ? C.up : C.down;
-    g.strokeStyle = col; g.lineWidth = 1;
+    g.strokeStyle = col; g.lineWidth = Math.max(1, k * 0.9);
     g.beginPath(); g.moveTo(x, Y(c.high)); g.lineTo(x, Y(c.low)); g.stroke();
     g.fillStyle = col;
     const yo = Y(c.open), yc = Y(c.close);
@@ -123,11 +129,11 @@ exports.render = (d, { width = 1080, height = 640 } = {}) => {
   });
 
   // swing labels, sweeps, news
-  for (const s of d.swings || []) {
+  for (const s of full ? d.swings || [] : []) {
     if (s.time < view[0].time) continue;
     text(s.label, X(s.time), s.kind === "H" ? Y(s.price) - 6 : Y(s.price) + 14, C.text, 9, true, "center");
   }
-  for (const sw of d.sweeps || []) {
+  for (const sw of full ? d.sweeps || [] : []) {
     if (sw.time < view[0].time) continue;
     text(sw.side === "highs" ? "▼ sweep" : "▲ sweep", X(sw.time), sw.side === "highs" ? Y(sw.price) - 16 : Y(sw.price) + 26, C.purple, 9, true, "center");
   }
@@ -145,35 +151,35 @@ exports.render = (d, { width = 1080, height = 640 } = {}) => {
   const tag = (v, label, color) => {
     if (v == null) return;
     hline(L, R, v, color, label === "Entry" ? [5, 4] : [], 1);
-    g.fillStyle = color; g.fillRect(R + 2, Y(v) - 9, 82, 18);
-    text(`${label} ${fx(v)}`, R + 6, Y(v) + 4, label === "Entry" ? "#0b1220" : "#ffffff", 10);
+    g.fillStyle = color; g.fillRect(R + 2 * k, Y(v) - 9 * k, 82 * k, 18 * k);
+    text(`${label} ${fx(v)}`, R + 6 * k, Y(v) + 4 * k, label === "Entry" ? "#0b1220" : "#ffffff", 10);
   };
   if (p) { tag(p.sl, "SL", C.red); tag(p.tp, "TP", "#16a34a"); tag(p.entry, "Entry", "#e2e8f0"); }
   if (d.result) {
     const x = X(d.result.time), y = Y(d.result.price);
     const col = d.result.outcome === "win" ? C.green : d.result.outcome === "loss" ? C.red : C.muted;
-    g.fillStyle = col; g.beginPath(); g.arc(x, y, 6, 0, Math.PI * 2); g.fill();
-    text(d.result.outcome === "win" ? "TP hit" : d.result.outcome === "loss" ? "SL hit" : "Closed", x + 9, y - 7, col, 11);
+    g.fillStyle = col; g.beginPath(); g.arc(x, y, 6 * k, 0, Math.PI * 2); g.fill();
+    text(d.result.outcome === "win" ? "TP hit" : d.result.outcome === "loss" ? "SL hit" : "Closed", x + 9 * k, y - 7 * k, col, 11);
   }
 
   // numbered badges on the chart, the steps underneath
   steps.forEach((s, i) => {
     if (s.time < view[0].time || s.price < lo || s.price > hi) return;
     const x = X(s.time), y = Y(s.price);
-    g.fillStyle = C.callout; g.beginPath(); g.arc(x, y, 9, 0, Math.PI * 2); g.fill();
-    g.strokeStyle = "#fff"; g.lineWidth = 1; g.stroke();
-    text(String(i + 1), x, y + 4, "#ffffff", 11, true, "center");
+    g.fillStyle = C.callout; g.beginPath(); g.arc(x, y, 9 * k, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = "#fff"; g.lineWidth = k; g.stroke();
+    text(String(i + 1), x, y + 4 * k, "#ffffff", 11, true, "center");
   });
   steps.slice(0, 7).forEach((s, i) => {
-    const y = B + 40 + i * 22;
-    g.fillStyle = C.callout; g.beginPath(); g.arc(L + 9, y - 4, 9, 0, Math.PI * 2); g.fill();
-    text(String(i + 1), L + 9, y, "#ffffff", 11, true, "center");
-    text(s.text.length > 110 ? `${s.text.slice(0, 107)}…` : s.text, L + 26, y, C.text, 13, false);
+    const y = B + 40 * k + i * 22 * k;
+    g.fillStyle = C.callout; g.beginPath(); g.arc(L + 9 * k, y - 4 * k, 9 * k, 0, Math.PI * 2); g.fill();
+    text(String(i + 1), L + 9 * k, y, "#ffffff", 11, true, "center");
+    text(s.text.length > 110 ? `${s.text.slice(0, 107)}…` : s.text, L + 26 * k, y, C.text, 13, false);
   });
 
   // header
-  text(`${d.pair} · ${String(d.tf).toUpperCase()} · TradeMind AI`, L, 22, "#ffffff", 16);
-  if (d.direction) text(`${d.direction.toUpperCase()}${d.confidence ? ` ${d.confidence}%` : ""}`, L + g.measureText(`${d.pair} · ${String(d.tf).toUpperCase()} · TradeMind AI`).width + 12, 22, d.direction === "buy" ? C.green : C.red, 16);
-  text(`4H ${d.trend?.h4} · 1H ${d.trend?.h1}${p?.rr ? ` · R:R 1:${p.rr.toFixed(1)}` : ""}${p?.risk ? ` · risk ${p.risk} · target ${p.reward}` : ""}`, L, 42, C.muted, 12, false);
+  text(`${d.pair} · ${String(d.tf).toUpperCase()} · TradeMind AI`, L, 22 * k, "#ffffff", 16);
+  if (d.direction) text(`${d.direction.toUpperCase()}${d.confidence ? ` ${d.confidence}%` : ""}`, L + g.measureText(`${d.pair} · ${String(d.tf).toUpperCase()} · TradeMind AI`).width + 12 * k, 22 * k, d.direction === "buy" ? C.green : C.red, 16);
+  text(`4H ${d.trend?.h4} · 1H ${d.trend?.h1}${p?.rr ? ` · R:R 1:${p.rr.toFixed(1)}` : ""}${p?.risk ? ` · risk ${p.risk} · target ${p.reward}` : ""}`, L, 42 * k, C.muted, 12, false);
   return canvas.toBuffer("image/png");
 };

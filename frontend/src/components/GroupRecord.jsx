@@ -287,6 +287,7 @@ export function GroupRecordFlow({ signals, lot, headers, onClose, onFinished }) 
               key={current.id}
               ref={chartRef}
               compact
+              preset="key"
               height={380}
               query={{
                 pair: current.pair, dir: current.direction, entry: current.entryPrice, sl: current.stopLoss, tp: current.takeProfit,

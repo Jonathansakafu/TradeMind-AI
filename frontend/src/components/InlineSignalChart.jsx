@@ -20,7 +20,7 @@ function InlineSignalChart({ notification, onOpen }) {
   return (
     <div ref={boxRef} className="relative mb-4 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800" style={{ minHeight: 210 }}>
       {visible && (
-        <SignalChart key={`${notification._id}-${notification.simOutcome || "open"}`} notificationId={notification._id} height={210} compact hideStepList />
+        <SignalChart key={`${notification._id}-${notification.simOutcome || "open"}`} notificationId={notification._id} height={210} compact hideStepList preset="key" />
       )}
       {/* Whole chart is the "open full chart" button (no scrolling inside a card). */}
       <button type="button" onClick={onOpen} aria-label="Open the full chart" className="absolute inset-0 z-10">
