@@ -113,6 +113,32 @@ router.get("/health", async (req, res) => {
       },
       users,
       usersWithPushDevices: pushUsers,
+      // How signals played out over the last 48 h (auto-scored against real
+      // prices; no money figures -- this report is public in Actions logs).
+      signalResults48h: await (async () => {
+        const rows = await Notification.aggregate([
+          { $match: { createdAt: { $gte: new Date(now - 48 * 3600e3) }, signal: { $in: ["buy", "sell"] }, type: { $ne: "quick_trade" } } },
+          { $group: {
+            _id: { pair: "$pair", signal: "$signal", day: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt", timezone: "+03:00" } } },
+            sent: { $sum: 1 },
+            tp: { $sum: { $cond: [{ $eq: ["$simOutcome", "win"] }, 1, 0] } },
+            sl: { $sum: { $cond: [{ $eq: ["$simOutcome", "loss"] }, 1, 0] } },
+            expired: { $sum: { $cond: [{ $eq: ["$simOutcome", "expired"] }, 1, 0] } },
+            r: { $sum: { $ifNull: ["$simR", 0] } },
+            avgConf: { $avg: "$confidence" },
+          } },
+          { $sort: { "_id.day": 1, "_id.pair": 1 } },
+        ]);
+        const hours = await Notification.aggregate([
+          { $match: { createdAt: { $gte: new Date(now - 48 * 3600e3) }, simOutcome: "loss", type: { $ne: "quick_trade" } } },
+          { $group: { _id: { $dateToString: { format: "%m-%d %H:00", date: "$createdAt", timezone: "+03:00" } }, n: { $sum: 1 }, pairs: { $addToSet: { $concat: ["$pair", " ", "$signal"] } } } },
+          { $sort: { _id: 1 } },
+        ]);
+        return {
+          byDayPairSide: rows.map((r) => `${r._id.day} ${r._id.pair} ${r._id.signal}: sent ${r.sent}, TP ${r.tp}, SL ${r.sl}, expired ${r.expired}, ${r.r >= 0 ? "+" : ""}${r.r.toFixed(1)}R, avg conf ${Math.round(r.avgConf || 0)}%`),
+          stopLossesByHourEAT: hours.map((h) => `${h._id}: ${h.n} (${h.pairs.join(", ")})`),
+        };
+      })().catch((err) => ({ error: err.message })),
       // Should both be 0 a cycle after a signal hits TP / SL (services/ongoingTrades.js).
       tradesFollowingSignals: await (async () => {
         const Trade = require("../models/Trade");
