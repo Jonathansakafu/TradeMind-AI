@@ -87,6 +87,15 @@ async function runCycle() {
     // Pumzika sekunde 5 kati ya users
     await new Promise((resolve) => setTimeout(resolve, 5000));
   }
+  // Trail the stops of open strategy signals (services/ruleStrategy.js)
+  // before scoring, so the score uses the stop the trader was told.
+  try {
+    const moved = await require("./ruleStrategy").updateTrailingStops();
+    if (moved) pipelineStats.inc("strategy.stopsTrailed", moved);
+  } catch (err) {
+    console.error("Trailing stops failed:", err.message);
+  }
+
   // Score earlier signals against real prices (TP or SL first?).
   try {
     const { resolved } = await signalOutcomes.evaluateOpenSignals();

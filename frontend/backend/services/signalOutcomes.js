@@ -11,7 +11,9 @@ const pipelineStats = require("./pipelineStats");
 
 const MIN_AGE_MS = 5 * 60 * 1000;
 const EXPIRE_MS = 24 * 60 * 60 * 1000;
-const LOOKBACK_MS = 48 * 60 * 60 * 1000;
+// 72 h so a strategy signal held for 48 h (services/ruleStrategy.js) is
+// still picked up when it closes.
+const LOOKBACK_MS = 72 * 60 * 60 * 1000;
 
 // Pure: the result of a signal from 5-minute candles (oldest first).
 // Fixed 2026-10-15: the entry must be reached first. A signal whose entry is
@@ -34,7 +36,46 @@ const inAtOnce = (signal, entry, risk, first) => Math.abs(first.open - entry) <=
   || (first.low <= entry && entry <= first.high)
   || (signal === "buy" ? first.open < entry : first.open > entry);
 
-function resolve({ signal, entry, stopLoss, takeProfit, createdAt }, candles, now = Date.now()) {
+// Strategy signals (services/ruleStrategy.js) trail their stop: each
+// candle is checked against the stop in force when it started
+// (stopHistory), R is measured from the first stop, a stop hit beyond the
+// entry is a win, and the trade closes at market after maxHoldHours.
+function resolveManaged(n, candles, now) {
+  const { signal, entry, takeProfit, createdAt, initialStopLoss } = n;
+  const risk = Math.abs(entry - initialStopLoss);
+  if (!risk) return null;
+  const start = new Date(createdAt).getTime();
+  const holdMs = (n.maxHoldHours || 48) * 3600e3;
+  const after = candles.filter((c) => { const t = new Date(c.datetime).getTime(); return t > start - 5 * 60 * 1000 && t < start + holdMs; });
+  if (!after.length) return null;
+  const isBuy = signal === "buy";
+  const fill = inAtOnce(signal, entry, risk, after[0]) ? 0 : after.findIndex((c) => c.low <= entry && entry <= c.high);
+  if (fill < 0) return now - start > holdMs ? { simOutcome: "unfilled", simR: 0, at: after[after.length - 1].datetime, filledAt: null } : null;
+  const filledAt = after[fill].datetime;
+  const history = (n.stopHistory || []).map((h) => ({ t: new Date(h.at).getTime(), price: h.price })).sort((a, b) => a.t - b.t);
+  const rOf = (px) => Math.round((((px - entry) * (isBuy ? 1 : -1)) / risk) * 100) / 100;
+  for (let i = fill; i < after.length; i++) {
+    const c = after[i], t = new Date(c.datetime).getTime();
+    let stop = initialStopLoss;
+    for (const h of history) if (h.t <= t) stop = h.price;
+    if (isBuy ? c.low <= stop : c.high >= stop) {
+      const r = rOf(stop);
+      return { simOutcome: r > 0 ? "win" : "loss", simR: r, at: c.datetime, filledAt, exit: stop };
+    }
+    if ((isBuy ? c.high >= takeProfit : c.low <= takeProfit) && !(i === fill && fill > 0)) {
+      return { simOutcome: "win", simR: rOf(takeProfit), at: c.datetime, filledAt, exit: takeProfit };
+    }
+  }
+  if (now - start > holdMs) {
+    const last = after[after.length - 1].close;
+    return { simOutcome: "expired", simR: rOf(last), at: after[after.length - 1].datetime, filledAt, exit: last };
+  }
+  return null;
+}
+
+function resolve(n, candles, now = Date.now()) {
+  if (n.strategy && n.initialStopLoss) return resolveManaged(n, candles, now);
+  const { signal, entry, stopLoss, takeProfit, createdAt } = n;
   const risk = Math.abs(entry - stopLoss);
   if (!risk) return null;
   const start = new Date(createdAt).getTime();
@@ -89,7 +130,7 @@ exports.evaluateOpenSignals = async () => {
     signal: { $in: ["buy", "sell"] },
     entry: { $gt: 0 }, stopLoss: { $gt: 0 }, takeProfit: { $gt: 0 },
     createdAt: { $gte: new Date(now - LOOKBACK_MS), $lte: new Date(now - MIN_AGE_MS) },
-  }).select("user pair signal entry stopLoss takeProfit createdAt confidence type simFilledAt").limit(2000);
+  }).select("user pair signal entry stopLoss takeProfit createdAt confidence type simFilledAt strategy initialStopLoss stopHistory maxHoldHours").limit(2000);
   if (!open.length) return { checked: 0, resolved: 0 };
 
   const byPair = new Map();
@@ -118,9 +159,12 @@ exports.evaluateOpenSignals = async () => {
         }
         continue;
       }
-      await Notification.updateOne({ _id: n._id }, { simOutcome: r.simOutcome, simR: r.simR, simResolvedAt: new Date(r.at), simFilledAt: r.filledAt ? new Date(r.filledAt) : null });
+      await Notification.updateOne({ _id: n._id }, {
+        simOutcome: r.simOutcome, simR: r.simR, simResolvedAt: new Date(r.at), simFilledAt: r.filledAt ? new Date(r.filledAt) : null,
+        ...(r.exit != null ? { simExitPrice: r.exit } : {}),
+      });
       resolved++;
-      if (r.simOutcome === "win" || r.simOutcome === "loss") justResolved.push({ n, r });
+      if (r.simOutcome === "win" || r.simOutcome === "loss" || (n.strategy && r.simOutcome === "expired")) justResolved.push({ n, r });
     }
   }
   pipelineStats.inc("outcomes.resolved", resolved);
@@ -177,6 +221,14 @@ exports.statsTextByPair = async (userId) => {
 // its take profit or stop loss (added 2026-10-14). Only signals from the
 // last 24 h that resolved in the last 3 h (no flood after a pause); push
 // only; Settings switch "signalResults" (on unless turned off).
+// "TP" / "SL" / "trailing stop" / "48 h time limit" for a resolved signal.
+function exitLabel(n, r) {
+  if (r.simOutcome === "expired") return { short: "time limit", long: `${n.maxHoldHours || 24} h time limit, market price` };
+  if (r.exit != null && r.exit !== n.takeProfit && r.simOutcome === "win") return { short: "trailing stop", long: "trailing stop" };
+  return r.simOutcome === "win" ? { short: "TP", long: "take profit" } : { short: "SL", long: "stop loss" };
+}
+exports.exitLabel = exitLabel;
+
 exports.sendResultAlerts = async (list, now = Date.now()) => {
   const { dispatchMessage, hasChannels } = require("./notifyDispatcher");
   const signalImage = require("./signalImage");
@@ -187,11 +239,12 @@ exports.sendResultAlerts = async (list, now = Date.now()) => {
     const win = r.simOutcome === "win";
     const fresh = await Notification.findById(n._id).lean();
     const image = await signalImage.withTimeout(signalImage.forNotification(fresh, { result: true }).catch(() => null), 10000);
-    const exit = win ? n.takeProfit : n.stopLoss;
+    const exit = r.exit ?? (win ? n.takeProfit : n.stopLoss);
     const rr = r.simR != null ? ` (${r.simR >= 0 ? "+" : ""}${r.simR}R)` : "";
+    const how = exitLabel(n, r);
     await dispatchMessage(n.user, {
-      title: `${win ? "✅" : "🛑"} ${n.pair} ${String(n.signal).toUpperCase()} hit ${win ? "TP" : "SL"}${rr}`,
-      body: `Entry ${n.entry} → ${win ? "take profit" : "stop loss"} ${exit}. Tap to see how price got there.`,
+      title: `${win ? "✅" : r.simOutcome === "expired" ? "⏱" : "🛑"} ${n.pair} ${String(n.signal).toUpperCase()} ${r.simOutcome === "expired" ? "time limit — close it" : `hit ${how.short}`}${rr}`,
+      body: `Entry ${n.entry} → ${how.long} ${exit}. Tap to see how price got there.`,
       url: "/notifications",
       id: `result-${n._id}`,
       email: false,

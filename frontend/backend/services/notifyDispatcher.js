@@ -233,6 +233,11 @@ async function sendEmail(user, notification, msg) {
 
 // ---------- Entry points ----------
 
+// Backtested strategy signals (services/ruleStrategy.js) always pass: their
+// "confidence" is the tested win rate (~43%), which is low by design -- the
+// edge is wins larger than losses -- and would sit under any floor.
+const passesEmailFloor = (n, minConf) => n.source === "strategy" || (n.confidence ?? 0) >= minConf;
+
 // options.test: ignore the user's on/off toggles and email confidence
 // floor, and return per-channel results -- backs Settings' "Send test".
 async function dispatchNotification(notification, options = {}) {
@@ -245,7 +250,7 @@ async function dispatchNotification(notification, options = {}) {
   // The signal's chart picture (services/signalImage.js). Never holds an
   // alert back: at most 6 s, otherwise it goes out without the picture.
   const willSend = ((prefs.push !== false) && ((user.fcmTokens || []).length || (user.pushSubscriptions || []).length))
-    || (prefs.email && (notification.confidence ?? 0) >= (prefs.emailMinConfidence ?? 70));
+    || (prefs.email && passesEmailFloor(notification, prefs.emailMinConfidence ?? 70));
   if (!options.test && willSend) {
     msg.image = notification.chartImage || await require("./signalImage").withTimeout(
       require("./signalImage").forNotification(notification).catch((err) => { console.error("Signal chart picture failed:", err.message); return null; }),
@@ -262,7 +267,7 @@ async function dispatchNotification(notification, options = {}) {
       .catch((err) => { results.android = { sent: 0, error: err.message }; }));
   }
   const minConf = prefs.emailMinConfidence ?? 70;
-  if (options.test || (prefs.email && (notification.confidence ?? 0) >= minConf)) {
+  if (options.test || (prefs.email && passesEmailFloor(notification, minConf))) {
     tasks.push(sendEmail(user, notification, msg).then((r) => { results.email = r; })
       .catch((err) => { results.email = { sent: false, error: err.message }; }));
   }

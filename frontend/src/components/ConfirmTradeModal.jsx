@@ -107,7 +107,7 @@ function ConfirmTradeModal({ form, screenshotPreview, onChangePrices, onConfirm,
           </div>
           {form.exitFilledFrom && (
             <p className="text-xs text-amber-700 dark:text-amber-400">
-              Exit filled with the signal's {form.exitFilledFrom === "tp" ? "take profit" : "stop loss"} because TradeMind saw price hit it. Change it if you closed at a different price.
+              Exit filled with the signal's {form.exitFilledFrom === "signal" ? "recorded exit" : form.exitFilledFrom === "tp" ? "take profit" : "stop loss"} because TradeMind saw price hit it. Change it if you closed at a different price.
             </p>
           )}
 

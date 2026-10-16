@@ -112,8 +112,10 @@ function AddTrade() {
   const [signalData] = useState(getSignalData);
   // TradeMind scored the signal against real prices: it hit the take profit
   // (win) or the stop loss (loss) -- so the exit is known, like the entry.
-  const exitFrom = signalData?.simOutcome === "win" && signalData?.takeProfit ? "tp"
-    : signalData?.simOutcome === "loss" && signalData?.stopLoss ? "sl" : null;
+  // Strategy signals record their exact exit (trailed stop / time limit).
+  const exitFrom = signalData?.simExitPrice != null && signalData?.simOutcome !== "unfilled" ? "signal"
+    : signalData?.simOutcome === "win" && signalData?.takeProfit ? "tp"
+      : signalData?.simOutcome === "loss" && signalData?.stopLoss ? "sl" : null;
   const [confirming, setConfirming] = useState(false);
   const [fullShot, setFullShot] = useState(false);
 
@@ -122,9 +124,9 @@ function AddTrade() {
     direction: signalData?.signal === "buy" ? "buy"
       : signalData?.signal === "sell" ? "sell" : "",
     entryPrice: signalData?.entry ? String(signalData.entry) : "",
-    exitPrice: exitFrom === "tp" ? String(signalData.takeProfit) : exitFrom === "sl" ? String(signalData.stopLoss) : "",
+    exitPrice: exitFrom === "signal" ? String(signalData.simExitPrice) : exitFrom === "tp" ? String(signalData.takeProfit) : exitFrom === "sl" ? String(signalData.stopLoss) : "",
     exitFilledFrom: exitFrom, // shown in the confirmation; cleared when the trader edits the exit
-    stopLoss: signalData?.stopLoss ? String(signalData.stopLoss) : "",
+    stopLoss: (signalData?.initialStopLoss ?? signalData?.stopLoss) ? String(signalData.initialStopLoss ?? signalData.stopLoss) : "",
     takeProfit: signalData?.takeProfit ? String(signalData.takeProfit) : "",
     lotSize: "0.01", // default; changeable here or in the confirmation
     setup: "",
@@ -316,10 +318,10 @@ function AddTrade() {
               Review and adjust if needed before saving
             </p>
             {exitFrom && (
-              <p className={`text-xs font-semibold mt-1.5 ${exitFrom === "tp" ? "text-green-600 dark:text-green-400" : "text-red-500"}`}>
-                {exitFrom === "tp" ? "🎯 This signal hit its take profit" : "🛑 This signal hit its stop loss"}
+              <p className={`text-xs font-semibold mt-1.5 ${exitFrom === "tp" || (exitFrom === "signal" && signalData.simOutcome === "win") ? "text-green-600 dark:text-green-400" : "text-red-500"}`}>
+                {exitFrom === "signal" ? `${signalData.simOutcome === "win" ? "🎯" : signalData.simOutcome === "loss" ? "🛑" : "⌛"} This signal closed at ${signalData.simExitPrice}` : exitFrom === "tp" ? "🎯 This signal hit its take profit" : "🛑 This signal hit its stop loss"}
                 {signalData.simResolvedAt ? ` on ${new Date(signalData.simResolvedAt).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}` : ""}
-                {" "}— exit price filled with {exitFrom === "tp" ? "TP" : "SL"}.
+                {" "}— exit price filled with {exitFrom === "signal" ? "that price" : exitFrom === "tp" ? "TP" : "SL"}.
               </p>
             )}
           </div>

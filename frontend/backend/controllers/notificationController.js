@@ -18,6 +18,15 @@ const signalOutcomes = require("../services/signalOutcomes");
 const signalNotes = require("../services/signalNotes");
 const newsContext = require("../services/newsContext");
 const pipelineStats = require("../services/pipelineStats");
+const ruleStrategy = require("../services/ruleStrategy");
+
+// Automatic signals come from backtested rules (services/ruleStrategy.js);
+// pairs without one get none. The old AI-picked signals lost on almost
+// every trade in live results (2026-10-14/16) and can be brought back per
+// pair with AI_AUTO_SIGNAL_PAIRS="EURUSD,GBPUSD"; AI news-impact signals
+// (untested too) with AI_NEWS_SIGNALS=1.
+const AI_AUTO_SIGNAL_PAIRS = (process.env.AI_AUTO_SIGNAL_PAIRS || "").split(",").map((p) => p.trim().toUpperCase()).filter(Boolean);
+const AI_NEWS_SIGNALS = process.env.AI_NEWS_SIGNALS === "1";
 
 // Forex zitatumika kama zinapatikana tu
 const FOREX_PAIRS = ["EURUSD", "GBPUSD", "XAUUSD"];
@@ -414,17 +423,20 @@ exports.autoGenerate = async (userId) => {
     // notifications and the same "no clear setup" message.
     let lastError = null;
 
+    // The AI inputs below are only needed when some pair still uses the AI.
+    const usesAi = AI_NEWS_SIGNALS || pairsToAnalyze.some((p) => !ruleStrategy.has(p) && AI_AUTO_SIGNAL_PAIRS.includes(p));
+
     // Pata news mara moja tu
     let newsArticles = [];
     try {
-      newsArticles = await newsService.getForexNews();
+      if (usesAi) newsArticles = await newsService.getForexNews();
     } catch (err) {
       console.error("News fetch failed:", err.message);
     }
 
     // Fetched once per cycle, not per pair -- same reasoning as the Quick
     // Trade path above.
-    const [bookSummary, learnedSummary, signalStatsByPair] = await Promise.all([
+    const [bookSummary, learnedSummary, signalStatsByPair] = !usesAi ? [null, null, {}] : await Promise.all([
       ragService.getBookConceptSummary(userId),
       learningService.getLearnedSummary(userId),
       // How this user's past signals actually played out, per pair --
@@ -435,6 +447,12 @@ exports.autoGenerate = async (userId) => {
     for (const pair of pairsToAnalyze) {
       try {
         const currentPrice = prices[pair] || null;
+        if (ruleStrategy.has(pair)) {
+          const n = await createStrategySignal(userId, pair, currentPrice);
+          if (n) notifications.push(n);
+          continue;
+        }
+        if (!AI_AUTO_SIGNAL_PAIRS.includes(pair)) continue;
         // Stock tickers aren't currency pairs -- the 3+3 slash split below
         // is meaningless for them (and actively wrong: "AAPL" -> "AAP/L").
         const formattedPair = STOCK_PAIRS.includes(pair) ? pair : pair.slice(0, 3) + "/" + pair.slice(3);
@@ -642,7 +660,7 @@ exports.autoGenerate = async (userId) => {
     }
 
     try {
-      await createNewsImpactNotifications(userId, newsArticles, prices, "forex");
+      if (AI_NEWS_SIGNALS) await createNewsImpactNotifications(userId, newsArticles, prices, "forex");
     } catch (err) {
       console.error("News impact notification error:", err.message);
     }
@@ -657,6 +675,56 @@ exports.autoGenerate = async (userId) => {
     return { count: 0, reason: `error: ${err.message}` };
   }
 };
+
+// One strategy signal for this user when the last closed 1H candle is a
+// setup: one trade per pair at a time and one signal per setup candle (as
+// in the backtest), none inside the high-impact news window.
+async function createStrategySignal(userId, pair, price) {
+  const sig = await ruleStrategy.getSignal(pair, price);
+  if (!sig.signal) {
+    pipelineStats.noteDecision(pair, `Strategy: ${sig.reason}`);
+    return null;
+  }
+  const s = sig.strategy;
+  const busy = await Notification.exists({
+    user: userId, pair, strategy: s.key,
+    $or: [{ simOutcome: { $exists: false } }, { createdAt: { $gte: sig.barTime } }],
+  });
+  if (busy) {
+    pipelineStats.inc("strategy.busy");
+    return null;
+  }
+  const events = await economicCalendar.getHighImpactEvents().catch(() => null);
+  const ccys = economicCalendar.currenciesFor(pair);
+  const now = new Date();
+  const near = (events || []).find((e) => ccys.includes(e.currency)
+    && e.time - now <= economicCalendar.QUIET_BEFORE_MS && now - e.time <= economicCalendar.quietAfterMs(e));
+  if (near) {
+    pipelineStats.inc("strategy.newsBlocked");
+    pipelineStats.noteDecision(pair, `Strategy ${sig.signal.toUpperCase()} held back: ${near.currency} ${near.title} at ${near.time.toISOString().slice(11, 16)} UTC`);
+    return null;
+  }
+  const notification = await Notification.create({
+    user: userId,
+    pair,
+    signal: sig.signal,
+    entry: sig.entry,
+    stopLoss: sig.stopLoss,
+    initialStopLoss: sig.stopLoss,
+    takeProfit: sig.takeProfit,
+    maxHoldHours: s.maxHoldHours,
+    strategy: s.key,
+    reasoning: ruleStrategy.reasoningFor(sig, pair) + goldPriceNote(pair),
+    // The tested win rate -- see notifyDispatcher's passesEmailFloor.
+    confidence: s.backtest.winRate,
+    source: "strategy",
+    sourceLabel: `Tested strategy · ${s.label}`,
+    read: false,
+  });
+  pipelineStats.inc("strategy.created");
+  pipelineStats.noteDecision(pair, `Strategy ${sig.signal.toUpperCase()} sent: entry ${sig.entry} SL ${sig.stopLoss} TP ${sig.takeProfit}`);
+  return notification;
+}
 
 // Get notifications
 // Piggybacks forex/MT5 signal generation on this endpoint's own poll --

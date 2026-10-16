@@ -39,10 +39,20 @@ async function attachResultChart(tradeId) {
   }
 }
 
-async function alertClosed(userId, t, win, exit, pl, recorded) {
+// Where a signal's scored trade closed: the recorded exit (a trailed stop
+// or the time limit on strategy signals), else its TP / SL.
+const exitOf = (n) => n.simExitPrice ?? (n.simOutcome === "win" ? n.takeProfit : n.stopLoss);
+// Strategy signals trail their stop, so the trade still carries the first one.
+const signalStop = (n) => n.initialStopLoss ?? n.stopLoss;
+// Settled automatically: TP / SL, plus a strategy signal's time limit.
+const settles = (n) => n.simOutcome === "win" || n.simOutcome === "loss" || (n.strategy && n.simOutcome === "expired");
+
+async function alertClosed(userId, t, n, exit, pl, recorded) {
+  const how = require("./signalOutcomes").exitLabel(n, { simOutcome: n.simOutcome, exit });
+  const good = pl >= 0;
   await dispatchMessage(userId, {
-    title: `${win ? "✅" : "🛑"} ${t.pair} ${String(t.direction).toUpperCase()} closed at ${win ? "TP" : "SL"} ${money(pl)}`,
-    body: `${recorded ? "Recorded from the signal you took and closed" : "Closed automatically"}: price hit the ${win ? "take profit" : "stop loss"} (${exit}). It now counts in your performance.`,
+    title: `${good ? "✅" : "🛑"} ${t.pair} ${String(t.direction).toUpperCase()} closed at ${how.short} ${money(pl)}`,
+    body: `${recorded ? "Recorded from the signal you took and closed" : "Closed automatically"}: ${how.long} (${exit}). It now counts in your performance.`,
     url: "/history",
     id: `trade-closed-${t._id}`,
     email: false,
@@ -56,17 +66,17 @@ exports.settle = async () => {
 
   // 1. Open trades that follow a signal.
   const open = await Trade.find({ status: "open", notificationId: { $exists: true, $ne: null } })
-    .populate("notificationId", "simOutcome simResolvedAt stopLoss takeProfit")
+    .populate("notificationId", "simOutcome simResolvedAt stopLoss takeProfit initialStopLoss simExitPrice strategy maxHoldHours")
     .limit(500);
   for (const t of open) {
     const n = t.notificationId;
     if (!n || !n.simOutcome) continue;
     const label = `${t.pair} ${String(t.direction).toUpperCase()}`;
-    if (n.simOutcome === "win" || n.simOutcome === "loss") {
+    if (settles(n)) {
       // The trader moved SL / TP away from the signal: they manage it.
-      if (!t.locked && (!same(t.stopLoss, n.stopLoss) || !same(t.takeProfit, n.takeProfit))) { skippedManaged++; continue; }
-      const win = n.simOutcome === "win";
-      const exit = win ? n.takeProfit : n.stopLoss;
+      const moved = !(same(t.stopLoss, signalStop(n)) || same(t.stopLoss, n.stopLoss)) || !same(t.takeProfit, n.takeProfit);
+      if (!t.locked && moved) { skippedManaged++; continue; }
+      const exit = exitOf(n);
       const r = calculatePL(t.pair, t.direction, t.entryPrice, exit, t.lotSize || 0.01);
       if (!r) continue;
       const res = await Trade.updateOne(
@@ -76,7 +86,7 @@ exports.settle = async () => {
       if (!res.modifiedCount) continue;
       closed++;
       await attachResultChart(t._id);
-      await alertClosed(t.user, t, win, exit, r.pl, false);
+      await alertClosed(t.user, t, n, exit, r.pl, false);
     } else if ((n.simOutcome === "expired" || n.simOutcome === "unfilled") && !t.expiryReminded) {
       await Trade.updateOne({ _id: t._id }, { expiryReminded: true });
       reminded++;
@@ -97,7 +107,7 @@ exports.settle = async () => {
   const taken = await Notification.find({
     taken: true,
     $or: [{ tradeId: { $exists: false } }, { tradeId: null }],
-    simOutcome: { $in: ["win", "loss"] },
+    $and: [{ $or: [{ simOutcome: { $in: ["win", "loss"] } }, { strategy: { $exists: true, $ne: null }, simOutcome: "expired" }] }],
     signal: { $in: ["buy", "sell"] },
     type: { $ne: "quick_trade" },
     entry: { $gt: 0 },
@@ -105,13 +115,12 @@ exports.settle = async () => {
   }).limit(200);
   for (const n of taken) {
     if (await Trade.exists({ user: n.user, notificationId: n._id })) continue;
-    const win = n.simOutcome === "win";
-    const exit = win ? n.takeProfit : n.stopLoss;
+    const exit = exitOf(n);
     const r = calculatePL(n.pair, n.signal, n.entry, exit, 0.01);
     if (!r) continue;
     const t = await Trade.create({
       user: n.user, pair: n.pair, direction: n.signal, type: "forex",
-      entryPrice: n.entry, stopLoss: n.stopLoss, takeProfit: n.takeProfit, lotSize: 0.01,
+      entryPrice: n.entry, stopLoss: signalStop(n), takeProfit: n.takeProfit, lotSize: 0.01,
       exitPrice: exit, profitLoss: r.pl, outcome: r.outcome, status: "closed", closedBy: "signal",
       openedAt: n.takenAt && n.takenAt < (n.simResolvedAt || Date.now()) ? n.createdAt : n.createdAt,
       closedAt: n.simResolvedAt || new Date(), session: sessionAt(n.createdAt),
@@ -121,7 +130,7 @@ exports.settle = async () => {
     await Notification.updateOne({ _id: n._id }, { tradeId: t._id });
     recorded++;
     await attachResultChart(t._id);
-    await alertClosed(n.user, t, win, exit, r.pl, true);
+    await alertClosed(n.user, t, n, exit, r.pl, true);
   }
   return { closed, recorded, reminded, skippedManaged };
 };

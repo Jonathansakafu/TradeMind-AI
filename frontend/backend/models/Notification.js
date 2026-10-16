@@ -15,7 +15,7 @@ const notificationSchema = new mongoose.Schema({
   confidence: { type: Number },
   source: {
     type: String,
-    enum: ["past_trades", "books", "ai_auto", "tradingview", "news_impact"],
+    enum: ["past_trades", "books", "ai_auto", "tradingview", "news_impact", "strategy"],
     default: "ai_auto",
   },
   sourceLabel: { type: String },
@@ -67,6 +67,15 @@ const notificationSchema = new mongoose.Schema({
   simRescored: { type: Boolean }, // re-scored with the entry-fill rule (2026-10-15)
   simR: { type: Number }, // result in R (risk units): +2.0 = won 2x the risk
   simResolvedAt: { type: Date },
+  // Rule-based, backtested signals (services/ruleStrategy.js): the stop
+  // trails the price, so stopLoss changes; initialStopLoss is the risk (1R)
+  // and stopHistory is every move (scored with the stop in force at the time).
+  strategy: { type: String },
+  initialStopLoss: { type: Number },
+  stopHistory: { type: [{ at: Date, price: Number, _id: false }], default: undefined },
+  trailAlertedStop: { type: Number },
+  maxHoldHours: { type: Number },
+  simExitPrice: { type: Number }, // where the scored trade closed
   // Chart pictures (services/signalImage.js): at the signal, and after TP / SL.
   chartImage: { type: String },
   resultChartImage: { type: String },

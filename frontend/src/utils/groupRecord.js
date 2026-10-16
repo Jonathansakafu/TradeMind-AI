@@ -25,7 +25,7 @@ function sessionAt(date) {
 }
 
 export function tradeFromSignal(n, lot) {
-  const exit = n.simOutcome === "win" ? n.takeProfit : n.simOutcome === "loss" ? n.stopLoss : null;
+  const exit = n.simExitPrice ?? (n.simOutcome === "win" ? n.takeProfit : n.simOutcome === "loss" ? n.stopLoss : null);
   const pl = exit != null ? calculatePL(n.pair, n.signal, n.entry, exit, lot) : null;
   return {
     id: n._id,

@@ -140,6 +140,8 @@ function Notifications() {
           // Add Trade can fill the exit price and times.
           simOutcome: n.simOutcome,
           simResolvedAt: n.simResolvedAt,
+          simExitPrice: n.simExitPrice,
+          initialStopLoss: n.initialStopLoss,
           createdAt: n.createdAt,
         }
       }
