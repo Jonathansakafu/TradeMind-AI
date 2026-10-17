@@ -448,8 +448,7 @@ exports.autoGenerate = async (userId) => {
       try {
         const currentPrice = prices[pair] || null;
         if (ruleStrategy.has(pair)) {
-          const n = await createStrategySignal(userId, pair, currentPrice);
-          if (n) notifications.push(n);
+          notifications.push(...await createStrategySignals(userId, pair, currentPrice));
           continue;
         }
         if (!AI_AUTO_SIGNAL_PAIRS.includes(pair)) continue;
@@ -676,15 +675,23 @@ exports.autoGenerate = async (userId) => {
   }
 };
 
-// One strategy signal for this user when the last closed 1H candle is a
-// setup: one trade per pair at a time and one signal per setup candle (as
-// in the backtest), none inside the high-impact news window.
-async function createStrategySignal(userId, pair, price) {
-  const sig = await ruleStrategy.getSignal(pair, price);
-  if (!sig.signal) {
-    pipelineStats.noteDecision(pair, `Strategy: ${sig.reason}`);
-    return null;
+// Strategy signals for this user: each of the pair's strategies whose last
+// closed candle is a setup -- one open trade per strategy and one signal
+// per setup candle (as in the backtest), none inside the high-impact news
+// window.
+async function createStrategySignals(userId, pair, price) {
+  const results = await ruleStrategy.getSignals(pair, price);
+  const created = [];
+  for (const sig of results) {
+    const n = sig.signal ? await createStrategySignal(userId, pair, sig) : null;
+    if (n) created.push(n);
   }
+  const summary = results.map((r) => `${r.strategy.label}: ${r.signal ? r.signal.toUpperCase() : r.reason}`).join(" | ");
+  if (!created.length) pipelineStats.noteDecision(pair, `Strategies — ${summary}`);
+  return created;
+}
+
+async function createStrategySignal(userId, pair, sig) {
   const s = sig.strategy;
   const busy = await Notification.exists({
     user: userId, pair, strategy: s.key,
@@ -701,7 +708,7 @@ async function createStrategySignal(userId, pair, price) {
     && e.time - now <= economicCalendar.QUIET_BEFORE_MS && now - e.time <= economicCalendar.quietAfterMs(e));
   if (near) {
     pipelineStats.inc("strategy.newsBlocked");
-    pipelineStats.noteDecision(pair, `Strategy ${sig.signal.toUpperCase()} held back: ${near.currency} ${near.title} at ${near.time.toISOString().slice(11, 16)} UTC`);
+    pipelineStats.noteDecision(pair, `${s.label} ${sig.signal.toUpperCase()} held back: ${near.currency} ${near.title} at ${near.time.toISOString().slice(11, 16)} UTC`);
     return null;
   }
   const notification = await Notification.create({
@@ -722,7 +729,7 @@ async function createStrategySignal(userId, pair, price) {
     read: false,
   });
   pipelineStats.inc("strategy.created");
-  pipelineStats.noteDecision(pair, `Strategy ${sig.signal.toUpperCase()} sent: entry ${sig.entry} SL ${sig.stopLoss} TP ${sig.takeProfit}`);
+  pipelineStats.noteDecision(pair, `${s.label} ${sig.signal.toUpperCase()} sent: entry ${sig.entry} SL ${sig.stopLoss} TP ${sig.takeProfit}`);
   return notification;
 }
 
