@@ -13,9 +13,10 @@
 // XAUUSD, 3 setups. 2026-10-17: the user found stops and targets too far
 // (3.5 ATR stops = ~$58 on 1H / ~$107 on 4H, 4R targets up to ~$430), so
 // every setup now has a tighter stop and a fixed, nearer target -- no
-// trailing -- chosen by the same two-period test. Together ~2.9
-// signals/week, ~55% wins, PF 1.69 / 1.68, every year positive, worst
-// combined losing run ~14R (smaller R in dollars than before).
+// trailing -- chosen by the same two-period test. Every target is 2R (the
+// user risks a fixed amount, e.g. $8, for 2x it; lot size does the rest,
+// see utils/lotSize.js). Together ~2.8 signals/week, ~52% wins, PF 1.68 /
+// 1.65, worst combined losing run ~13R.
 //   1. trend pullback (1H): in 07-17 UTC Mon-Fri, a 1H candle takes RSI(2)
 //      under 10 (over 90 in a downtrend) on the trend side of the 1H EMA200.
 //      Stop 2.5 x 1H ATR (~$42), target 2R. PF 1.50 / 1.47.
@@ -24,7 +25,7 @@
 //      PF 1.95 / 2.38.
 //   3. pin bar (4H): a hammer (lower wick >= 2/3 of the range, body <= 1/3)
 //      in an uptrend / shooting star in a downtrend. Stop 2.5 x 4H ATR
-//      (~$77), target 1R. PF 1.79 / 1.54.
+//      (~$77), target 2R. PF 1.71 / 1.44.
 // Dropped: the 4H inside bar breakout -- it only held up with a 3.5 ATR
 // stop; every tighter version lost on the unseen period.
 // All close after 48 h. The JS setups match the Python backtest's exactly.
@@ -54,8 +55,8 @@ exports.STRATEGIES = {
     },
     {
       key: "gold_4h_pin_bar", label: "Gold 4H pin bar", tf: "4h", setup: "pin",
-      stopAtr: 2.5, targetR: 1, trailAtr: null, maxHoldHours: 48,
-      backtest: { winRate: 63, profitFactor: 1.7, tradesPerWeek: 0.9, maxDrawdownR: 3.5 },
+      stopAtr: 2.5, targetR: 2, trailAtr: null, maxHoldHours: 48,
+      backtest: { winRate: 55, profitFactor: 1.6, tradesPerWeek: 0.85, maxDrawdownR: 4 },
     },
   ],
 };

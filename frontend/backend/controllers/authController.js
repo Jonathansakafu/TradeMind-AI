@@ -244,6 +244,8 @@ const getRiskSettings = async (req, res) => {
       balance: rs.balance ?? null,
       currency: rs.currency || "USD",
       riskPercent: rs.riskPercent ?? 1,
+      riskAmount: rs.riskAmount ?? null,
+      accountType: rs.accountType || "standard",
       dailyLossLimitPercent: rs.dailyLossLimitPercent ?? 3,
       todayPL,
       dailyLimitHit: limit != null && todayPL <= -limit,
@@ -255,7 +257,7 @@ const getRiskSettings = async (req, res) => {
 
 const updateRiskSettings = async (req, res) => {
   try {
-    const { balance, riskPercent, dailyLossLimitPercent, currency } = req.body || {};
+    const { balance, riskPercent, riskAmount, accountType, dailyLossLimitPercent, currency } = req.body || {};
     const set = {};
     const num = (v, min, max) => {
       const n = Number(v);
@@ -263,10 +265,12 @@ const updateRiskSettings = async (req, res) => {
     };
     if (balance !== undefined) set["riskSettings.balance"] = balance === null || balance === "" ? undefined : num(balance, 1, 1e9);
     if (riskPercent !== undefined) set["riskSettings.riskPercent"] = num(riskPercent, 0.1, 10);
+    if (riskAmount !== undefined) set["riskSettings.riskAmount"] = riskAmount === null || riskAmount === "" ? undefined : num(riskAmount, 0.01, 1e7);
+    if (accountType !== undefined) set["riskSettings.accountType"] = ["standard", "cent"].includes(accountType) ? accountType : undefined;
     if (dailyLossLimitPercent !== undefined) set["riskSettings.dailyLossLimitPercent"] = num(dailyLossLimitPercent, 0.5, 50);
     if (currency) set["riskSettings.currency"] = String(currency).slice(0, 3).toUpperCase();
-    const bad = Object.entries(set).find(([k, v]) => v === undefined && k !== "riskSettings.balance");
-    if (bad) return res.status(400).json({ message: "Risk % must be 0.1-10 and daily loss limit 0.5-50%" });
+    const bad = Object.entries(set).find(([k, v]) => v === undefined && k !== "riskSettings.balance" && !(k === "riskSettings.riskAmount" && (riskAmount === null || riskAmount === "")));
+    if (bad) return res.status(400).json({ message: "Risk % must be 0.1-10, risk amount above 0, account type standard or cent, and daily loss limit 0.5-50%" });
     await User.updateOne({ _id: req.user._id }, { $set: set });
     res.json({ success: true });
   } catch (error) {

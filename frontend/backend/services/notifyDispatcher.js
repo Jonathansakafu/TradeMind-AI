@@ -3,6 +3,7 @@ const User = require("../models/User");
 const AppConfig = require("../models/AppConfig");
 const { sendSignalEmail } = require("../utils/sendEmail");
 const pipelineStats = require("./pipelineStats");
+const { suggestedLot } = require("../utils/lotSize");
 
 // Fans a freshly created Notification out to channels that reach the
 // trader when the app isn't open: browser Web Push, Android push (FCM),
@@ -93,7 +94,17 @@ function fmtPrice(n) {
   return Number(n).toLocaleString("en-US", { maximumFractionDigits: n < 10 ? 5 : 2 });
 }
 
-function buildMessage(notification) {
+// "💼 0.19 lot (cent) → SL −$7.98 · TP +$15.96" from Settings → Risk.
+function lotLine(notification, rs) {
+  if (!rs || notification.type === "quick_trade" || !["buy", "sell"].includes(notification.signal)) return null;
+  const s = suggestedLot({ ...notification.toObject?.() ?? notification, stopLoss: notification.initialStopLoss ?? notification.stopLoss }, rs);
+  if (!s) return null;
+  const cur = rs.currency || "USD";
+  if (s.tooSmall) return `💼 Smallest lot risks ${cur} ${s.minRisk.toFixed(2)} — over your ${cur} ${s.riskAmount.toFixed(2)}${s.cent ? "" : " (a cent account fixes this)"}`;
+  return `💼 ${s.lot.toFixed(2)} lot${s.cent ? " (cent)" : ""} → SL −${cur} ${s.actualRisk.toFixed(2)}${s.reward ? ` · TP +${cur} ${s.reward.toFixed(2)}` : ""}`;
+}
+
+function buildMessage(notification, riskSettings) {
   const side = notification.signal === "buy" ? "🟢 BUY" : notification.signal === "sell" ? "🔴 SELL" : "⏸ WAIT";
   const conf = notification.confidence != null ? ` · ${Math.round(notification.confidence)}%` : "";
   const title = `${side} ${notification.pair || ""}${conf}`.trim();
@@ -109,6 +120,8 @@ function buildMessage(notification) {
     ].filter(Boolean);
     if (levels.length) parts.push(levels.join(" · "));
   }
+  const lot = lotLine(notification, riskSettings);
+  if (lot) parts.push(lot);
   if (notification.sourceLabel) parts.push(notification.sourceLabel);
   const body = parts.join("\n");
 
@@ -242,11 +255,11 @@ const passesEmailFloor = (n, minConf) => n.source === "strategy" || (n.confidenc
 // floor, and return per-channel results -- backs Settings' "Send test".
 async function dispatchNotification(notification, options = {}) {
   const user = await User.findById(notification.user)
-    .select("email notificationPrefs +pushSubscriptions +fcmTokens");
+    .select("email notificationPrefs riskSettings +pushSubscriptions +fcmTokens");
   if (!user) return null;
 
   const prefs = user.notificationPrefs || {};
-  const msg = buildMessage(notification);
+  const msg = buildMessage(notification, user.riskSettings);
   // The signal's chart picture (services/signalImage.js). Never holds an
   // alert back: at most 6 s, otherwise it goes out without the picture.
   const willSend = ((prefs.push !== false) && ((user.fcmTokens || []).length || (user.pushSubscriptions || []).length))

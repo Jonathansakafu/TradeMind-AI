@@ -103,6 +103,10 @@ const userSchema = new mongoose.Schema(
       balance: { type: Number },
       currency: { type: String, default: "USD" },
       riskPercent: { type: Number, default: 1 },
+      // Fixed amount per trade (e.g. 8 = lose $8 at SL); overrides riskPercent.
+      riskAmount: { type: Number },
+      // "cent": lots are 1/100 of a standard lot (small accounts).
+      accountType: { type: String, enum: ["standard", "cent"], default: "standard" },
       dailyLossLimitPercent: { type: Number, default: 3 },
     },
 

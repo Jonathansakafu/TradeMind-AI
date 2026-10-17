@@ -32,24 +32,27 @@ export function SignalResultBadge({ notification: n }) {
 export function LotSuggestion({ notification: n, settings, compact = false }) {
   if (n.type === "quick_trade" || !n.stopLoss || n.signal === "wait") return null;
   if (!settings) return null;
-  if (!settings.balance) {
-    return <p className="text-xs text-slate-500 dark:text-slate-400">💼 Set your balance in Settings → Risk to see a lot size</p>;
+  if (!settings.balance && !settings.riskAmount) {
+    return <p className="text-xs text-slate-500 dark:text-slate-400">💼 Set your risk per trade in Settings → Risk to see a lot size</p>;
   }
   // Sized on the first stop (the risk taken), not a later trailed one.
   const s = suggestedLot({ ...n, stopLoss: n.initialStopLoss ?? n.stopLoss }, settings);
   if (!s) return null;
   const cur = settings.currency || "USD";
+  const limit = settings.riskAmount ? `${cur} ${Number(settings.riskAmount).toFixed(2)}` : `${settings.riskPercent}% limit`;
   if (s.tooSmall) {
-    const minRisk = s.riskAmount / (s.lotRaw || 1e-9) * 0.01;
     return (
       <p className="text-xs text-amber-600 dark:text-amber-400">
-        💼 The smallest lot (0.01) risks {cur} {minRisk.toFixed(2)} ({((minRisk / settings.balance) * 100).toFixed(1)}% of balance) — more than your {settings.riskPercent}% limit
+        💼 The smallest lot (0.01) loses {cur} {s.minRisk.toFixed(2)} at the stop — more than your {limit}
+        {settings.balance ? ` (${((s.minRisk / settings.balance) * 100).toFixed(0)}% of balance)` : ""}{s.cent ? "" : ". A cent account (Settings → Risk) can trade it at your size."}
       </p>
     );
   }
   return (
     <p className={`text-xs text-slate-700 dark:text-slate-300 ${compact ? "" : "font-medium"}`}>
-      💼 Suggested lot <span className="font-bold font-mono">{s.lot.toFixed(2)}</span> · risks {cur} {s.actualRisk.toFixed(2)} ({settings.riskPercent}% of {cur} {Number(settings.balance).toLocaleString()})
+      💼 Lot <span className="font-bold font-mono">{s.lot.toFixed(2)}</span>{s.cent ? " (cent account)" : ""} ·
+      {" "}<span className="text-red-600 dark:text-red-400">SL −{cur} {s.actualRisk.toFixed(2)}</span>
+      {s.reward ? <> · <span className="text-green-600 dark:text-green-400">TP +{cur} {s.reward.toFixed(2)}</span></> : null}
     </p>
   );
 }
