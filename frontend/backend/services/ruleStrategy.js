@@ -7,25 +7,28 @@
 // spread costs, stop checked before target inside a candle. Entry at the
 // next price after the setup candle closes; one open trade per setup.
 //
-// "Trend" (all but the inside bar): 4H EMA50 above EMA200 and the last
-// closed 4H close above EMA50 = up (mirror for down).
+// "Trend": 4H EMA50 above EMA200 and the last closed 4H close above EMA50
+// = up (mirror for down).
 //
-// XAUUSD, 4 setups (2026-10-17: 4H price action setups added at the user's
-// request; together ~3.8 signals/week, ~50% wins, PF 1.64 / 1.61, every
-// year positive, worst combined drawdown ~9R -- they often lose together):
+// XAUUSD, 3 setups. 2026-10-17: the user found stops and targets too far
+// (3.5 ATR stops = ~$58 on 1H / ~$107 on 4H, 4R targets up to ~$430), so
+// every setup now has a tighter stop and a fixed, nearer target -- no
+// trailing -- chosen by the same two-period test. Together ~2.9
+// signals/week, ~55% wins, PF 1.69 / 1.68, every year positive, worst
+// combined losing run ~14R (smaller R in dollars than before).
 //   1. trend pullback (1H): in 07-17 UTC Mon-Fri, a 1H candle takes RSI(2)
 //      under 10 (over 90 in a downtrend) on the trend side of the 1H EMA200.
-//      Stop 3.5 ATR trailed 3.5 ATR, 4R cap. PF 1.71 / 1.72.
+//      Stop 2.5 x 1H ATR (~$42), target 2R. PF 1.50 / 1.47.
 //   2. 4-day breakout (4H): a 4H close beyond the high (low) of the previous
-//      24 4H candles, with the trend. Stop beyond the breakout candle
-//      (+0.2 ATR, at least 1 ATR), target 2R, no trailing. PF 1.63 / 1.70.
+//      24 4H candles, with the trend. Stop 1.5 x 4H ATR (~$46), target 2R.
+//      PF 1.95 / 2.38.
 //   3. pin bar (4H): a hammer (lower wick >= 2/3 of the range, body <= 1/3)
-//      in an uptrend / shooting star in a downtrend. Stop 3.5 ATR trailed,
-//      4R cap. PF 1.54 / 1.49.
-//   4. inside bar breakout (4H): a candle inside the one before it, then a
-//      close beyond that mother candle's high / low (no trend filter). Stop
-//      3.5 ATR trailed, 4R cap. PF 1.60 / 1.43.
+//      in an uptrend / shooting star in a downtrend. Stop 2.5 x 4H ATR
+//      (~$77), target 1R. PF 1.79 / 1.54.
+// Dropped: the 4H inside bar breakout -- it only held up with a 3.5 ATR
+// stop; every tighter version lost on the unseen period.
 // All close after 48 h. The JS setups match the Python backtest's exactly.
+// trailAtr (stop trailed after every closed candle) is supported but unused.
 //
 // EURUSD / GBPUSD: no rule tested (RSI pullback, Donchian breakout, EMA
 // resumption, pin bar, engulfing, inside bar, 24h high/low break; 1H and
@@ -41,23 +44,18 @@ exports.STRATEGIES = {
   XAUUSD: [
     {
       key: "gold_trend_pullback", label: "Gold trend pullback", tf: "1h", setup: "pullback",
-      rsiExtreme: 10, sessionUtc: [7, 17], stop: "atr", stopAtr: 3.5, trailAtr: 3.5, capR: 4, maxHoldHours: 48,
-      backtest: { winRate: 43, profitFactor: 1.7, tradesPerWeek: 1.2, maxDrawdownR: 4 },
+      rsiExtreme: 10, sessionUtc: [7, 17], stopAtr: 2.5, targetR: 2, trailAtr: null, maxHoldHours: 48,
+      backtest: { winRate: 49, profitFactor: 1.5, tradesPerWeek: 1.2, maxDrawdownR: 10 },
     },
     {
       key: "gold_4h_breakout", label: "Gold 4-day breakout", tf: "4h", setup: "breakout",
-      lookback: 24, stop: "structure", capR: 2, trailAtr: null, maxHoldHours: 48,
-      backtest: { winRate: 50, profitFactor: 1.65, tradesPerWeek: 0.8, maxDrawdownR: 6 },
+      lookback: 24, stopAtr: 1.5, targetR: 2, trailAtr: null, maxHoldHours: 48,
+      backtest: { winRate: 55, profitFactor: 2.0, tradesPerWeek: 0.75, maxDrawdownR: 8 },
     },
     {
       key: "gold_4h_pin_bar", label: "Gold 4H pin bar", tf: "4h", setup: "pin",
-      stop: "atr", stopAtr: 3.5, trailAtr: 3.5, capR: 4, maxHoldHours: 48,
-      backtest: { winRate: 54, profitFactor: 1.5, tradesPerWeek: 0.85, maxDrawdownR: 3 },
-    },
-    {
-      key: "gold_4h_inside_bar", label: "Gold 4H inside bar breakout", tf: "4h", setup: "inside",
-      stop: "atr", stopAtr: 3.5, trailAtr: 3.5, capR: 4, maxHoldHours: 48,
-      backtest: { winRate: 53, profitFactor: 1.55, tradesPerWeek: 0.9, maxDrawdownR: 3.5 },
+      stopAtr: 2.5, targetR: 1, trailAtr: null, maxHoldHours: 48,
+      backtest: { winRate: 63, profitFactor: 1.7, tradesPerWeek: 0.9, maxDrawdownR: 3.5 },
     },
   ],
 };
@@ -133,38 +131,30 @@ function setupAt(bars, X, i, s) {
   const b = bars[i], p = bars[i - 1], A = X.A[i];
   const trend = trendAt(X, i);
   const atrStop = () => s.stopAtr * A;
+  if (!trend) return null;
   if (s.setup === "pullback") {
     const d = new Date(b.t), h = d.getUTCHours(), wd = d.getUTCDay();
-    if (wd === 0 || wd === 6 || h < s.sessionUtc[0] || h >= s.sessionUtc[1] || !trend) return null;
+    if (wd === 0 || wd === 6 || h < s.sessionUtc[0] || h >= s.sessionUtc[1]) return null;
     const r = X.r2[i], c = X.c[i];
     const ok = trend === 1 ? r < s.rsiExtreme && c > X.e200[i] : r > 100 - s.rsiExtreme && c < X.e200[i];
     return ok ? { dir: trend, atr: A, risk: atrStop(), detail: `RSI(2) ${r.toFixed(0)}` } : null;
   }
   if (s.setup === "breakout") {
-    if (!trend || i < s.lookback) return null;
+    if (i < s.lookback) return null;
     const prev = bars.slice(i - s.lookback, i);
     const hi = Math.max(...prev.map((x) => x.high)), lo = Math.min(...prev.map((x) => x.low));
     const dir = b.close > hi && p.close <= hi ? 1 : b.close < lo && p.close >= lo ? -1 : 0;
     if (!dir || dir !== trend) return null;
-    const ext = dir === 1 ? b.low : b.high;
-    return { dir, atr: A, risk: Math.max(Math.abs(b.close - ext) + 0.2 * A, A), detail: `closed ${dir === 1 ? "above the 4-day high" : "below the 4-day low"} ${round(dir === 1 ? hi : lo, b.close)}` };
+    return { dir, atr: A, risk: atrStop(), detail: `closed ${dir === 1 ? "above the 4-day high" : "below the 4-day low"} ${round(dir === 1 ? hi : lo, b.close)}` };
   }
   if (s.setup === "pin") {
     const range = b.high - b.low;
-    if (!trend || range <= 0) return null;
+    if (range <= 0) return null;
     const body = Math.abs(b.close - b.open);
     const dir = Math.min(b.open, b.close) - b.low >= (2 / 3) * range && body <= range / 3 ? 1
       : b.high - Math.max(b.open, b.close) >= (2 / 3) * range && body <= range / 3 ? -1 : 0;
     if (!dir || dir !== trend) return null;
     return { dir, atr: A, risk: atrStop(), detail: dir === 1 ? `hammer rejecting ${round(b.low, b.close)}` : `shooting star rejecting ${round(b.high, b.close)}` };
-  }
-  if (s.setup === "inside") {
-    if (i < 2) return null;
-    const m = bars[i - 2], ib = p;
-    if (!(ib.high < m.high && ib.low > m.low)) return null;
-    const dir = b.close > m.high ? 1 : b.close < m.low ? -1 : 0;
-    if (!dir) return null;
-    return { dir, atr: A, risk: atrStop(), detail: `closed ${dir === 1 ? "above" : "below"} the mother candle's ${dir === 1 ? "high" : "low"} ${round(dir === 1 ? m.high : m.low, b.close)}` };
   }
   return null;
 }
@@ -234,7 +224,7 @@ async function evaluate(pair, s, livePrice, now) {
     barTime: new Date(bars[i].t),
     entry: round(entry, entry),
     stopLoss: round(entry - dir * setup.risk, entry),
-    takeProfit: round(entry + dir * s.capR * setup.risk, entry),
+    takeProfit: round(entry + dir * s.targetR * setup.risk, entry),
     atr: setup.atr,
     detail: setup.detail,
   };
@@ -250,15 +240,15 @@ const WHAT = {
   pullback: (buy) => `${buy ? "dipped" : "spiked"} hard against the trend on the 1H chart — a pullback inside the trend`,
   breakout: (buy) => `broke out ${buy ? "above" : "below"} the last 4 days' range with a 4H close, in the trend's direction`,
   pin: (buy) => `printed a ${buy ? "hammer (long lower wick: sellers rejected)" : "shooting star (long upper wick: buyers rejected)"} on the 4H chart, in the trend's direction`,
-  inside: (buy) => `broke ${buy ? "up" : "down"} out of a 4H inside bar (a quiet candle inside the one before it)`,
 };
 
 exports.reasoningFor = (sig, pair) => {
   const s = sig.strategy, buy = sig.signal === "buy", bt = s.backtest;
-  const trend = s.setup === "inside" ? "" : ` ${pair} is in a 4H ${buy ? "up" : "down"}trend (EMA50 ${buy ? "above" : "below"} EMA200) and`;
+  const trend = ` ${pair} is in a 4H ${buy ? "up" : "down"}trend (EMA50 ${buy ? "above" : "below"} EMA200) and`;
+  const tf = s.tf.toUpperCase();
   const manage = s.trailAtr
-    ? `Stop ${s.stopAtr}× the ${s.tf.toUpperCase()} range (ATR ${round(sig.atr, sig.entry)}) away. TradeMind trails the stop ${s.trailAtr}× ATR behind the best price after every ${s.tf.toUpperCase()} candle and sends "move stop" alerts — follow them. Target ${s.capR}R`
-    : `Stop just beyond the breakout candle, target ${s.capR}R — no trailing, leave it`;
+    ? `Stop ${s.stopAtr}× the ${tf} range (ATR ${round(sig.atr, sig.entry)}) away. TradeMind trails the stop ${s.trailAtr}× ATR behind the best price after every ${tf} candle and sends "move stop" alerts — follow them. Target ${s.targetR}R`
+    : `Stop ${s.stopAtr}× the ${tf} range (ATR ${round(sig.atr, sig.entry)}) = ${round(Math.abs(sig.entry - sig.stopLoss), sig.entry)} away, target ${s.targetR === 1 ? "the same distance" : `${s.targetR}× that`} (${round(Math.abs(sig.takeProfit - sig.entry), sig.entry)}). Set both and leave them`;
   return `${s.label}:${trend} price ${WHAT[s.setup](buy)} (${sig.detail}).`
     + `\n\n🛡 Managing it: ${manage}; close the trade after ${s.maxHoldHours} h if neither is hit.`
     + `\n\n📊 Tested on 2+ years of real prices: about ${bt.tradesPerWeek} trades a week, ~${bt.winRate}% winners, `
