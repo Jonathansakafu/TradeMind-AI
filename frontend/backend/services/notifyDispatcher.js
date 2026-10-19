@@ -131,7 +131,8 @@ function buildMessage(notification, riskSettings) {
     ? Math.max(60, (notification.expiresInMinutes || 5) * 60)
     : 6 * 60 * 60;
 
-  return { title, body, url: "/notifications", id: String(notification._id), ttlSeconds };
+  // Tapping the alert opens this signal on the Notifications page.
+  return { title, body, url: `/notifications?id=${notification._id}`, id: String(notification._id), ttlSeconds };
 }
 
 // ---------- Channel senders ----------

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import axios from "axios";
 import MainLayout from "../layouts/MainLayout";
 import {
@@ -78,6 +78,37 @@ function Notifications() {
   const { settings: riskSettings } = useRiskSettings();
   const [filter, setFilter] = useState(() => (searchParams.get("filter") === "taken" ? "taken" : "all"));
   const [takenList, setTakenList] = useState(null);
+
+  // ?id=<notification> (from the bell or a push alert): show that alert --
+  // switch to "All", scroll to its card and highlight it for a few seconds.
+  // Keyed by the navigation (location.key), so opening the same alert
+  // again repeats it. Picked up during render (React's pattern for
+  // reacting to a changed input), the effects below only touch the DOM,
+  // the server and the timer.
+  const location = useLocation();
+  const focusId = searchParams.get("id");
+  const [focus, setFocus] = useState({ key: null, id: null });
+  if (focusId && focus.key !== location.key) {
+    setFocus({ key: location.key, id: focusId });
+    setFilter("all");
+  }
+  const [highlightDone, setHighlightDone] = useState(null);
+  const focusTarget = focus.id ? notifications.find((n) => n._id === focus.id) : null;
+  const focusMissing = !!focus.id && !loading && !focusTarget;
+  const highlightId = focusTarget && highlightDone !== focus.key ? focus.id : null;
+  const scrolledFor = useRef(null);
+  useEffect(() => {
+    if (!focusTarget || scrolledFor.current === focus.key) return;
+    scrolledFor.current = focus.key;
+    const key = focus.key, id = focusTarget._id;
+    if (!focusTarget.read) axios.put(`${API_URL}/api/notifications/${id}/read`, {}, { headers }).then(() => refetchNotifications()).catch(() => {});
+    // After the "All" list has rendered, and again once the charts above
+    // it have loaded (they change height and push the card out of place).
+    const toCard = () => document.getElementById(`notif-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setTimeout(toCard, 80);
+    setTimeout(toCard, 900);
+    setTimeout(() => setHighlightDone(key), 4000);
+  }, [focusTarget, focus.key, headers, refetchNotifications]);
   const [sendingId, setSendingId] = useState(null);
 
   // "Taken" shows every signal the trader took, not just ones among the
@@ -297,6 +328,12 @@ function Notifications() {
         ))}
       </div>
 
+      {focusMissing && (
+        <p className="mb-4 text-sm text-amber-600 dark:text-amber-400">
+          That alert isn't in your latest 20 any more (deleted or older) — showing the newest ones.
+        </p>
+      )}
+
       {/* Content */}
       {loading || (filter === "taken" && takenList === null) ? (
         <div className="flex justify-center py-20">
@@ -322,10 +359,12 @@ function Notifications() {
           {filtered.map((n) => (
             <div
               key={n._id}
+              id={`notif-${n._id}`}
               // @container: the card's insides adapt to the card's own
               // width (e.g. price tiles 2x2 when narrow, 4 across when wide).
-              className={`@container relative min-w-0 bg-white dark:bg-slate-900 border rounded-2xl p-4 @sm:p-5 transition ${
-                selecting && selected.has(n._id) ? "border-green-500 ring-2 ring-green-500/40"
+              className={`@container relative min-w-0 scroll-mt-24 bg-white dark:bg-slate-900 border rounded-2xl p-4 @sm:p-5 transition ${
+                highlightId === n._id ? "border-green-500 ring-4 ring-green-500/50 shadow-lg"
+                : selecting && selected.has(n._id) ? "border-green-500 ring-2 ring-green-500/40"
                 : !n.read ? "border-slate-300 dark:border-slate-700 shadow-lg" : "border-slate-200 dark:border-slate-800 dark:opacity-75"
               }`}
             >

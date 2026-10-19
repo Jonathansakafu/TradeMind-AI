@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 import {
   Bell, X, ShoppingCart,
@@ -36,6 +36,7 @@ function NotificationBell() {
 
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -54,6 +55,15 @@ function NotificationBell() {
     } catch (err) {
       console.error(err);
     }
+  };
+
+  // Opens this alert on the Notifications page (scrolled to and
+  // highlighted there; each click is a new navigation, so clicking the
+  // same alert again works too).
+  const openNotification = (n) => {
+    if (!n.read) markAsRead(n._id);
+    setOpen(false);
+    navigate(`/notifications?id=${n._id}`);
   };
 
   const markAllAsRead = async () => {
@@ -155,7 +165,7 @@ function NotificationBell() {
               notifications.map((n) => (
                 <div
                   key={n._id}
-                  onClick={() => !n.read && markAsRead(n._id)}
+                  onClick={() => openNotification(n)}
                   className={`px-5 py-4 border-b border-slate-200 dark:border-slate-800 cursor-pointer transition hover:bg-slate-100 dark:hover:bg-slate-800/50 ${
                     !n.read ? "bg-slate-100/60 dark:bg-slate-800/20" : ""
                   }`}

@@ -245,7 +245,7 @@ exports.sendResultAlerts = async (list, now = Date.now()) => {
     await dispatchMessage(n.user, {
       title: `${win ? "✅" : r.simOutcome === "expired" ? "⏱" : "🛑"} ${n.pair} ${String(n.signal).toUpperCase()} ${r.simOutcome === "expired" ? "time limit — close it" : `hit ${how.short}`}${rr}`,
       body: `Entry ${n.entry} → ${how.long} ${exit}. Tap to see how price got there.`,
-      url: "/notifications",
+      url: `/notifications?id=${n._id}`,
       id: `result-${n._id}`,
       email: false,
       pref: "signalResults",
