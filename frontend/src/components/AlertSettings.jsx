@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import axios from "axios";
-import { Clock, Mail, Send, Smartphone, CandlestickChart } from "lucide-react";
+import { Clock, Mail, Send, Smartphone, CandlestickChart, Eye } from "lucide-react";
 import { API_URL } from "../config/api";
 import { useAuth } from "../hooks/useAuth";
 import { disablePush, enablePush, getPushState } from "../utils/pushNotifications";
@@ -195,6 +195,25 @@ function AlertSettings() {
             checked={status?.prefs?.signalResults !== false}
             disabled={!status || busy}
             onChange={(e) => updatePrefs({ signalResults: e.target.checked })}
+          />
+        </label>
+
+        {/* Daily "still watching" */}
+        <label className="flex items-center justify-between gap-3 cursor-pointer">
+          <span className="min-w-0">
+            <span className="font-semibold flex items-center gap-2 text-slate-900 dark:text-white">
+              <Eye size={16} /> Daily "still watching"
+            </span>
+            <span className="text-sm text-slate-500 dark:text-slate-400">
+              On weekdays with no gold signal, one message at 17:00 UTC: the trend and what each setup is waiting for
+            </span>
+          </span>
+          <input
+            type="checkbox"
+            className="h-5 w-5 accent-green-500 shrink-0"
+            checked={status?.prefs?.dailyStatus !== false}
+            disabled={!status || busy}
+            onChange={(e) => updatePrefs({ dailyStatus: e.target.checked })}
           />
         </label>
 

@@ -75,6 +75,8 @@ const userSchema = new mongoose.Schema(
       newsCountdown: { type: Boolean, default: true },
       // "TP hit / SL hit" alerts with the result chart (signalOutcomes.sendResultAlerts).
       signalResults: { type: Boolean, default: true },
+      // End-of-day "no gold setup today — still watching" (services/dailyStatus.js).
+      dailyStatus: { type: Boolean, default: true },
     },
 
     // Per-user daily email counter backing EMAIL_DAILY_CAP in

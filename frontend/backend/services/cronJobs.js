@@ -131,6 +131,14 @@ async function runCycle() {
     console.error("Morning brief failed:", err.message);
   }
 
+  // End-of-day "no gold setup today — still watching" message.
+  try {
+    const r = await require("./dailyStatus").maybeSendDailyStatus();
+    if (r) pipelineStats.inc("status.sent", r.sent);
+  } catch (err) {
+    console.error("Daily status failed:", err.message);
+  }
+
   // Heads-up 15-45 min before high-impact news for trades users have on.
   try {
     const { sent } = await newsWarnings.sendPreNewsWarnings();
