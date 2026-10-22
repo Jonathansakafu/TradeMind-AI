@@ -230,7 +230,7 @@ function trailedStop({ dir, stop }, barsSinceEntry, atrs, trailAtr, entry) {
 const decimalsFor = (p) => (p >= 100 ? 2 : p >= 10 ? 3 : 5);
 function round(n, ref) { return Number(Number(n).toFixed(decimalsFor(ref))); }
 
-exports._internals = { ema, atr, rsi, fourHour, indicators, trendAt, trendOf4h, setupAt, trailedStop };
+exports._internals = { ema, atr, rsi, fourHour, fourHourBuckets, indicators, trendAt, trendOf4h, setupAt, trailedStop };
 
 // What each of the pair's setups is waiting for, from the latest closed
 // candles -- the daily "still watching" message (services/dailyStatus.js).
@@ -287,9 +287,32 @@ async function closedBars(pair, tf = "1h", now = Date.now()) {
     hit.bars.then((b) => { if (!b.length) cache.delete(pair); }, () => cache.delete(pair));
   }
   const all = await hit.bars;
-  if (tf === "1h") return all.filter((b) => b.t + HOUR <= now);
-  const { h4 } = fourHour(all.filter((b) => b.t + HOUR <= now));
-  return h4.filter((b) => b.t + 4 * HOUR <= now).map(({ t, open, high, low, close }) => ({ t, open, high, low, close }));
+  const hours = all.filter((b) => b.t + HOUR <= now);
+  if (tf === "1h") return hours;
+  // Every 4H bucket whose 4 hours are over -- including the newest one.
+  // (Fixed 2026-10-22: built with fourHour(), which leaves out its last
+  // bucket, the just-closed 4H candle only appeared an hour later, by
+  // which time it was "not fresh" -- so no 4H setup could ever fire; a
+  // fair value gap SELL on Oct 20 16:00 UTC was missed.) A bucket whose
+  // last hour hasn't arrived from Yahoo yet waits up to 15 min for it.
+  return fourHourBuckets(hours).filter((b) => b.t + 4 * HOUR <= now
+    && (b.lastHour >= b.t + 3 * HOUR || now - (b.t + 4 * HOUR) > 15 * 60e3))
+    .map(({ t, open, high, low, close }) => ({ t, open, high, low, close }));
+}
+
+// Pure: 1H candles grouped into UTC 4-hour candles, all buckets kept (the
+// same grouping as fourHour); lastHour = start of the bucket's last 1H candle.
+function fourHourBuckets(bars) {
+  const out = [];
+  for (const b of bars) {
+    const t = Math.floor(b.t / (4 * HOUR)) * 4 * HOUR;
+    const cur = out[out.length - 1];
+    if (!cur || cur.t !== t) out.push({ t, open: b.open, high: b.high, low: b.low, close: b.close, lastHour: b.t });
+    else {
+      cur.high = Math.max(cur.high, b.high); cur.low = Math.min(cur.low, b.low); cur.close = b.close; cur.lastHour = b.t;
+    }
+  }
+  return out;
 }
 exports.closedBars = closedBars;
 
@@ -302,7 +325,9 @@ async function evaluate(pair, s, livePrice, now) {
   const i = bars.length - 1;
   // A candle that closed long ago is stale (server asleep, market closed):
   // the backtest entered on the very next price.
-  if (now - (bars[i].t + TF_MS[s.tf]) > 50 * 60e3) return { strategy: s, signal: null, reason: "no fresh candle" };
+  if (now - (bars[i].t + TF_MS[s.tf]) > 50 * 60e3) {
+    return { strategy: s, signal: null, reason: `no fresh candle (last ${s.tf.toUpperCase()} closed ${new Date(bars[i].t + TF_MS[s.tf]).toISOString().slice(5, 16).replace("T", " ")} UTC)` };
+  }
   const X = indicators(bars);
   const setup = setupAt(bars, X, i, s);
   if (!setup) return { strategy: s, signal: null, reason: "no setup" };
