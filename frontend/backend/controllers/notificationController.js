@@ -676,9 +676,9 @@ exports.autoGenerate = async (userId) => {
 };
 
 // Strategy signals for this user: each of the pair's strategies whose last
-// closed candle is a setup -- one open trade per strategy and one signal
-// per setup candle (as in the backtest), none inside the high-impact news
-// window.
+// closed candle is a setup -- up to the strategy's maxOpen trades running
+// and one signal per setup candle (as in the backtest), none inside the
+// high-impact news window.
 async function createStrategySignals(userId, pair, price) {
   const results = await ruleStrategy.getSignals(pair, price);
   const created = [];
@@ -693,11 +693,13 @@ async function createStrategySignals(userId, pair, price) {
 
 async function createStrategySignal(userId, pair, sig) {
   const s = sig.strategy;
-  const busy = await Notification.exists({
-    user: userId, pair, strategy: s.key,
-    $or: [{ simOutcome: { $exists: false } }, { createdAt: { $gte: sig.barTime } }],
-  });
-  if (busy) {
+  // Up to s.maxOpen trades of this setup running at once (as backtested),
+  // and never two signals from the same setup candle.
+  const [running, sameCandle] = await Promise.all([
+    Notification.countDocuments({ user: userId, pair, strategy: s.key, simOutcome: { $exists: false } }),
+    Notification.exists({ user: userId, pair, strategy: s.key, createdAt: { $gte: sig.barTime } }),
+  ]);
+  if (sameCandle || running >= (s.maxOpen || 1)) {
     pipelineStats.inc("strategy.busy");
     return null;
   }

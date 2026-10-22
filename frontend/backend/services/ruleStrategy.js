@@ -10,35 +10,38 @@
 // "Trend": 4H EMA50 above EMA200 and the last closed 4H close above EMA50
 // = up (mirror for down).
 //
-// XAUUSD, 3 setups. 2026-10-17: the user found stops and targets too far
-// (3.5 ATR stops = ~$58 on 1H / ~$107 on 4H, 4R targets up to ~$430), so
-// every setup now has a tighter stop and a fixed, nearer target -- no
-// trailing -- chosen by the same two-period test. Every target is 2R (the
-// user risks a fixed amount, e.g. $8, for 2x it; lot size does the rest,
-// see utils/lotSize.js). Together (with 4. below) ~3.5 signals/week, ~52%
-// wins, PF 1.63 / 1.68, worst combined losing run ~18R.
+// XAUUSD. 2026-10-17: the user found stops and targets too far (3.5 ATR
+// stops = ~$58 on 1H / ~$107 on 4H, 4R targets up to ~$430), so every
+// setup has a tighter stop and a fixed 2R target -- no trailing (the user
+// risks a fixed amount, e.g. $8, for 2x it; lot size does the rest, see
+// utils/lotSize.js). 2026-10-22: re-checked on Dukascopy spot gold (15m,
+// 2024-05 -> 2026-10) as well as Yahoo futures; the user asked for more
+// signals. Now, on spot data: ~7.8 signals/week, ~46% wins, PF 1.55 / 1.28,
+// worst combined losing run ~35R (setups often lose together).
 //   1. trend pullback (1H): in 07-17 UTC Mon-Fri, a 1H candle takes RSI(2)
 //      under 10 (over 90 in a downtrend) on the trend side of the 1H EMA200.
-//      Stop 2.5 x 1H ATR (~$42), target 2R. PF 1.50 / 1.47.
+//      Stop 2.5 x 1H ATR (~$42), target 2R. Up to 2 open. PF 1.80 / 1.30.
 //   2. 4-day breakout (4H): a 4H close beyond the high (low) of the previous
 //      24 4H candles, with the trend. Stop 1.5 x 4H ATR (~$46), target 2R.
-//      PF 1.95 / 2.38.
+//      Up to 2 open. PF 1.63 / 1.27.
 //   3. pin bar (4H): a hammer (lower wick >= 2/3 of the range, body <= 1/3)
 //      in an uptrend / shooting star in a downtrend. Stop 2.5 x 4H ATR
-//      (~$77), target 2R. PF 1.71 / 1.44.
-//   4. fair value gap (4H, added 2026-10-20): a 3-candle gap of at least
-//      0.3 ATR (candle 3's low above candle 1's high, mirror for bearish)
-//      stays live for 30 candles until a close through it; the first
-//      candle that trades back into it and closes on its side, with the
-//      trend, is the entry. Stop 2 x 4H ATR (~$51), target 2R.
-//      PF 1.44 / 1.71. With it: ~3.5 signals/week, PF 1.63 / 1.68, worst
-//      combined losing run ~18R.
-// Tested and rejected the same day (lost on the unseen period): order
-// blocks, supply / demand zones, engulfing (1H / 4H, with and without the
-// trend), and all of the above on EURUSD, GBPUSD, AUDUSD, NZDUSD, BTC, ETH.
-// Dropped: the 4H inside bar breakout -- it only held up with a 3.5 ATR
-// stop; every tighter version lost on the unseen period.
-// All close after 48 h. The JS setups match the Python backtest's exactly.
+//      (~$77), target 2R. PF 1.66 / 1.45.
+//   4. 1-day breakout (15m, added 2026-10-22): a 15m close beyond the high
+//      (low) of the previous 96 15m candles (24 h), with the 4H trend. Stop
+//      2.5 x 15m ATR (~$15), target 2R. PF 1.36 / 1.26. Only 15m version
+//      that passed (pullback, pin bar, FVG and a 6 h breakout on 15m didn't).
+// maxOpen: trades one setup may have running at once; a second open trade
+// (pullback, 4H breakout) adds ~1.4 signals/week at the same PF but deepens
+// the worst losing run (16R -> 35R with the 15m setup).
+// Removed 2026-10-22: the 4H fair value gap (added 2026-10-20) -- PF 1.44 /
+// 1.71 on Yahoo futures but 1.00 / 1.06 on spot gold: not a real edge.
+// Tested and rejected (lost on the unseen period): order blocks, supply /
+// demand zones, engulfing (1H / 4H, with and without the trend), and all
+// setups on EURUSD, GBPUSD, AUDUSD, NZDUSD, BTC, ETH. Also the 4H inside bar
+// breakout -- it only held up with a 3.5 ATR stop.
+// All close after 48 h. Backtests run this file's setupAt, so the tested
+// rules are the live rules.
 // trailAtr (stop trailed after every closed candle) is supported but unused.
 //
 // EURUSD / GBPUSD: no rule tested (RSI pullback, Donchian breakout, EMA
@@ -49,29 +52,29 @@
 const marketService = require("./marketService");
 
 const HOUR = 3600e3;
-const TF_MS = { "1h": HOUR, "4h": 4 * HOUR };
+const TF_MS = { "15m": HOUR / 4, "1h": HOUR, "4h": 4 * HOUR };
 
 exports.STRATEGIES = {
   XAUUSD: [
     {
       key: "gold_trend_pullback", label: "Gold trend pullback", tf: "1h", setup: "pullback",
-      rsiExtreme: 10, sessionUtc: [7, 17], stopAtr: 2.5, targetR: 2, trailAtr: null, maxHoldHours: 48,
-      backtest: { winRate: 49, profitFactor: 1.5, tradesPerWeek: 1.2, maxDrawdownR: 10 },
+      rsiExtreme: 10, sessionUtc: [7, 17], stopAtr: 2.5, targetR: 2, trailAtr: null, maxHoldHours: 48, maxOpen: 2,
+      backtest: { winRate: 49, profitFactor: 1.5, tradesPerWeek: 2.2, maxDrawdownR: 17 },
     },
     {
       key: "gold_4h_breakout", label: "Gold 4-day breakout", tf: "4h", setup: "breakout",
-      lookback: 24, stopAtr: 1.5, targetR: 2, trailAtr: null, maxHoldHours: 48,
-      backtest: { winRate: 55, profitFactor: 2.0, tradesPerWeek: 0.75, maxDrawdownR: 8 },
+      lookback: 24, stopAtr: 1.5, targetR: 2, trailAtr: null, maxHoldHours: 48, maxOpen: 2,
+      backtest: { winRate: 48, profitFactor: 1.45, tradesPerWeek: 1.6, maxDrawdownR: 12 },
     },
     {
       key: "gold_4h_pin_bar", label: "Gold 4H pin bar", tf: "4h", setup: "pin",
-      stopAtr: 2.5, targetR: 2, trailAtr: null, maxHoldHours: 48,
-      backtest: { winRate: 55, profitFactor: 1.6, tradesPerWeek: 0.85, maxDrawdownR: 4 },
+      stopAtr: 2.5, targetR: 2, trailAtr: null, maxHoldHours: 48, maxOpen: 1,
+      backtest: { winRate: 56, profitFactor: 1.55, tradesPerWeek: 0.75, maxDrawdownR: 5 },
     },
     {
-      key: "gold_4h_fvg", label: "Gold 4H fair value gap", tf: "4h", setup: "fvg",
-      fvgMinAtr: 0.3, fvgLife: 30, stopAtr: 2.0, targetR: 2, trailAtr: null, maxHoldHours: 48,
-      backtest: { winRate: 50, profitFactor: 1.55, tradesPerWeek: 0.75, maxDrawdownR: 7 },
+      key: "gold_15m_day_breakout", label: "Gold 15m 1-day breakout", tf: "15m", setup: "breakout",
+      lookback: 96, stopAtr: 2.5, targetR: 2, trailAtr: null, maxHoldHours: 48, maxOpen: 1,
+      backtest: { winRate: 41, profitFactor: 1.3, tradesPerWeek: 3.2, maxDrawdownR: 11 },
     },
   ],
 };
@@ -133,15 +136,30 @@ function indicators(bars) {
   return { c, A: atr(bars), e200: ema(c, 200), r2: rsi(c, 2), h4, closedIdx, e4_50: ema(c4, 50), e4_200: ema(c4, 200) };
 }
 
-// Trend from 4H candle k (closed).
-function trendOf4h(X, k) {
+// Trend from 4H candle k (closed), given its closes and EMA50 / EMA200.
+function trendFrom(c4, e50, e200, k) {
   if (k < 200) return 0;
-  if (X.e4_50[k] > X.e4_200[k] && X.h4[k].close > X.e4_50[k]) return 1;
-  if (X.e4_50[k] < X.e4_200[k] && X.h4[k].close < X.e4_50[k]) return -1;
+  if (e50[k] > e200[k] && c4[k] > e50[k]) return 1;
+  if (e50[k] < e200[k] && c4[k] < e50[k]) return -1;
   return 0;
 }
+const trendOf4h = (X, k) => trendFrom(X.h4.map((b) => b.close), X.e4_50, X.e4_200, k);
 // The trend candle i trades in: from the last 4H candle closed before it.
-const trendAt = (X, i) => trendOf4h(X, X.closedIdx[i]);
+// X.trendFn (15m setups, live) takes the trend from the long 1H-built 4H
+// history instead of the short 15m history -- same buckets, same rule.
+const trendAt = (X, i) => (X.trendFn ? X.trendFn(i) : trendFrom(X.c4 ??= X.h4.map((b) => b.close), X.e4_50, X.e4_200, X.closedIdx[i]));
+
+// Pure: trend for candles of any timeframe from closed 4H candles h4 (the
+// last one that closed before the candle started), as trendAt does.
+function trendFnFrom4h(bars, h4) {
+  const c4 = h4.map((b) => b.close), e50 = ema(c4, 50), e200 = ema(c4, 200);
+  return (i) => {
+    const start = Math.floor(bars[i].t / (4 * HOUR)) * 4 * HOUR;
+    let lo = 0, hi = h4.length - 1, k = -1;
+    while (lo <= hi) { const m = (lo + hi) >> 1; if (h4[m].t < start) { k = m; lo = m + 1; } else hi = m - 1; }
+    return trendFrom(c4, e50, e200, k);
+  };
+}
 
 // Pure: is closed candle i a setup for strategy s? Returns
 // { dir, atr, risk, detail } (risk = stop distance in price) or null.
@@ -163,7 +181,7 @@ function setupAt(bars, X, i, s) {
     const hi = Math.max(...prev.map((x) => x.high)), lo = Math.min(...prev.map((x) => x.low));
     const dir = b.close > hi && p.close <= hi ? 1 : b.close < lo && p.close >= lo ? -1 : 0;
     if (!dir || dir !== trend) return null;
-    return { dir, atr: A, risk: atrStop(), detail: `closed ${dir === 1 ? "above the 4-day high" : "below the 4-day low"} ${round(dir === 1 ? hi : lo, b.close)}` };
+    return { dir, atr: A, risk: atrStop(), detail: `closed ${dir === 1 ? "above" : "below"} the ${spanOf(s)} ${dir === 1 ? "high" : "low"} ${round(dir === 1 ? hi : lo, b.close)}` };
   }
   if (s.setup === "pin") {
     const range = b.high - b.low;
@@ -174,46 +192,7 @@ function setupAt(bars, X, i, s) {
     if (!dir || dir !== trend) return null;
     return { dir, atr: A, risk: atrStop(), detail: dir === 1 ? `hammer rejecting ${round(b.low, b.close)}` : `shooting star rejecting ${round(b.high, b.close)}` };
   }
-  if (s.setup === "fvg") {
-    // Gaps depend on everything before i, so all entries are found in one
-    // pass over the candles and kept on X (it belongs to these bars).
-    X.fvg ??= fvgEntries(bars, X, s);
-    const hit = X.fvg.entries.get(i);
-    if (!hit || hit.dir !== trend) return null;
-    return { dir: hit.dir, atr: A, risk: atrStop(), detail: `back into the ${hit.dir === 1 ? "bullish" : "bearish"} gap ${round(hit.bottom, b.close)}–${round(hit.top, b.close)}` };
-  }
   return null;
-}
-
-// Pure: entries = candle index -> { dir, top, bottom } for every candle
-// that is the first to trade back into a live fair value gap and close on
-// its side; live = gaps still waiting after the last candle.
-// Same order as the backtest: existing gaps are checked (expired after
-// fvgLife candles, dropped on a close through them, used up on the first
-// touch) before the candle's own new gap is added.
-function fvgEntries(bars, X, s) {
-  const out = new Map();
-  let gaps = [];
-  for (let i = 3; i < bars.length; i++) {
-    const b = bars[i];
-    const keep = [];
-    for (const g of gaps) {
-      if (i - g.born > s.fvgLife) continue;
-      if ((g.dir === 1 && b.close < g.bottom) || (g.dir === -1 && b.close > g.top)) continue;
-      const touched = g.dir === 1 ? b.low <= g.top : b.high >= g.bottom;
-      if (touched && i > g.born) {
-        const held = g.dir === 1 ? b.close > g.bottom : b.close < g.top;
-        if (held && trendAt(X, i) === g.dir && !out.has(i)) out.set(i, g);
-        continue;
-      }
-      keep.push(g);
-    }
-    gaps = keep;
-    const a = bars[i - 2], minGap = s.fvgMinAtr * X.A[i];
-    if (b.low > a.high && b.low - a.high >= minGap) gaps.push({ dir: 1, top: b.low, bottom: a.high, born: i });
-    if (b.high < a.low && a.low - b.high >= minGap) gaps.push({ dir: -1, top: a.low, bottom: b.high, born: i });
-  }
-  return { entries: out, live: gaps.filter((g) => bars.length - 1 - g.born < s.fvgLife) };
 }
 
 // Pure: the stop after the closed candles since entry. Only ever tightens.
@@ -227,10 +206,14 @@ function trailedStop({ dir, stop }, barsSinceEntry, atrs, trailAtr, entry) {
   return sl;
 }
 
+// "15-minute" / "1H" / "4H" for messages.
+const tfName = (tf) => (tf === "15m" ? "15-minute" : tf.toUpperCase());
+// "4-day" / "24-hour": how far back a breakout setup looks.
+const spanOf = (s) => (s.tf === "15m" ? "24-hour" : "4-day");
 const decimalsFor = (p) => (p >= 100 ? 2 : p >= 10 ? 3 : 5);
 function round(n, ref) { return Number(Number(n).toFixed(decimalsFor(ref))); }
 
-exports._internals = { ema, atr, rsi, fourHour, fourHourBuckets, indicators, trendAt, trendOf4h, setupAt, trailedStop };
+exports._internals = { ema, atr, rsi, fourHour, fourHourBuckets, indicators, trendAt, trendOf4h, trendFnFrom4h, setupAt, trailedStop };
 
 // What each of the pair's setups is waiting for, from the latest closed
 // candles -- the daily "still watching" message (services/dailyStatus.js).
@@ -253,15 +236,12 @@ exports.watchText = async (pair, price, now = Date.now()) => {
   for (const s of list) {
     if (s.setup === "pullback") wants.push(`a sharp 1H ${up ? "dip (RSI(2) under 10)" : "spike (RSI(2) over 90)"} between 07:00 and 17:00 UTC`);
     if (s.setup === "breakout") {
-      const prev = b4.slice(k - s.lookback + 1, k + 1);
-      wants.push(`a 4H close ${up ? `above ${f(Math.max(...prev.map((b) => b.high)))}` : `below ${f(Math.min(...prev.map((b) => b.low)))}`}`);
+      const bars = s.tf === "4h" ? b4 : await closedBars(pair, s.tf, now).catch(() => []);
+      if (bars.length < s.lookback) continue;
+      const prev = bars.slice(-s.lookback);
+      wants.push(`a ${tfName(s.tf)} close ${up ? `above ${f(Math.max(...prev.map((b) => b.high)))}` : `below ${f(Math.min(...prev.map((b) => b.low)))}`} (${spanOf(s)} ${up ? "high" : "low"})`);
     }
     if (s.setup === "pin") wants.push(`a 4H ${up ? "hammer" : "shooting star"}`);
-    if (s.setup === "fvg") {
-      const live = fvgEntries(b4, X4, s).live.filter((g) => g.dir === trend)
-        .sort((a, b) => Math.abs(px - (a.top + a.bottom) / 2) - Math.abs(px - (b.top + b.bottom) / 2));
-      wants.push(live.length ? `a return into the ${up ? "bullish" : "bearish"} gap ${f(live[0].bottom)}–${f(live[0].top)}` : `a new ${up ? "bullish" : "bearish"} fair value gap`);
-    }
   }
   return `${head}. Waiting for ${wants.slice(0, -1).join(", ")}${wants.length > 1 ? " or " : ""}${wants.at(-1)}.`;
 };
@@ -277,6 +257,7 @@ const toBars = (candles) => candles
 // one Yahoo request.
 const cache = new Map();
 async function closedBars(pair, tf = "1h", now = Date.now()) {
+  if (tf === "15m") return closed15m(pair, now);
   let hit = cache.get(pair);
   if (!hit || now - hit.at >= 5 * 60e3) {
     hit = {
@@ -316,6 +297,19 @@ function fourHourBuckets(bars) {
 }
 exports.closedBars = closedBars;
 
+// Closed 15m candles (Yahoo keeps 60 days; one month is plenty for a 96-
+// candle lookback -- the trend comes from the 1H-built 4H history).
+async function closed15m(pair, now) {
+  const key = `${pair}:15m`;
+  let hit = cache.get(key);
+  if (!hit || now - hit.at >= 2 * 60e3) {
+    hit = { at: now, bars: marketService.getYahooCandles(pair, { interval: "15m", range: "1mo" }).then(toBars) };
+    cache.set(key, hit);
+    hit.bars.then((b) => { if (!b.length) cache.delete(key); }, () => cache.delete(key));
+  }
+  return (await hit.bars).filter((b) => b.t + TF_MS["15m"] <= now);
+}
+
 // One strategy's setup on its last closed candle, priced at the live price
 // -- or { signal: null, reason }. Same for every user.
 async function evaluate(pair, s, livePrice, now) {
@@ -325,10 +319,11 @@ async function evaluate(pair, s, livePrice, now) {
   const i = bars.length - 1;
   // A candle that closed long ago is stale (server asleep, market closed):
   // the backtest entered on the very next price.
-  if (now - (bars[i].t + TF_MS[s.tf]) > 50 * 60e3) {
+  if (now - (bars[i].t + TF_MS[s.tf]) > Math.min(50 * 60e3, TF_MS[s.tf])) {
     return { strategy: s, signal: null, reason: `no fresh candle (last ${s.tf.toUpperCase()} closed ${new Date(bars[i].t + TF_MS[s.tf]).toISOString().slice(5, 16).replace("T", " ")} UTC)` };
   }
   const X = indicators(bars);
+  if (s.tf === "15m") X.trendFn = trendFnFrom4h(bars, await closedBars(pair, "4h", now));
   const setup = setupAt(bars, X, i, s);
   if (!setup) return { strategy: s, signal: null, reason: "no setup" };
   const entry = livePrice || bars[i].close;
@@ -354,19 +349,18 @@ exports.getSignals = async (pair, livePrice, now = Date.now()) => {
 
 const WHAT = {
   pullback: (buy) => `${buy ? "dipped" : "spiked"} hard against the trend on the 1H chart — a pullback inside the trend`,
-  breakout: (buy) => `broke out ${buy ? "above" : "below"} the last 4 days' range with a 4H close, in the trend's direction`,
+  breakout: (buy, s) => `broke out ${buy ? "above" : "below"} the last ${s.tf === "15m" ? "24 hours'" : "4 days'"} range with a ${tfName(s.tf)} close, in the 4H trend's direction`,
   pin: (buy) => `printed a ${buy ? "hammer (long lower wick: sellers rejected)" : "shooting star (long upper wick: buyers rejected)"} on the 4H chart, in the trend's direction`,
-  fvg: (buy) => `came back into a ${buy ? "bullish" : "bearish"} fair value gap on the 4H chart (an imbalance left by a fast move) and held it, in the trend's direction`,
 };
 
 exports.reasoningFor = (sig, pair) => {
   const s = sig.strategy, buy = sig.signal === "buy", bt = s.backtest;
   const trend = ` ${pair} is in a 4H ${buy ? "up" : "down"}trend (EMA50 ${buy ? "above" : "below"} EMA200) and`;
-  const tf = s.tf.toUpperCase();
+  const tf = tfName(s.tf);
   const manage = s.trailAtr
     ? `Stop ${s.stopAtr}× the ${tf} range (ATR ${round(sig.atr, sig.entry)}) away. TradeMind trails the stop ${s.trailAtr}× ATR behind the best price after every ${tf} candle and sends "move stop" alerts — follow them. Target ${s.targetR}R`
     : `Stop ${s.stopAtr}× the ${tf} range (ATR ${round(sig.atr, sig.entry)}) = ${round(Math.abs(sig.entry - sig.stopLoss), sig.entry)} away, target ${s.targetR === 1 ? "the same distance" : `${s.targetR}× that`} (${round(Math.abs(sig.takeProfit - sig.entry), sig.entry)}). Set both and leave them`;
-  return `${s.label}:${trend} price ${WHAT[s.setup](buy)} (${sig.detail}).`
+  return `${s.label}:${trend} price ${WHAT[s.setup](buy, s)} (${sig.detail}).`
     + `\n\n🛡 Managing it: ${manage}; close the trade after ${s.maxHoldHours} h if neither is hit.`
     + `\n\n📊 Tested on 2+ years of real prices: about ${bt.tradesPerWeek} trades a week, ~${bt.winRate}% winners, `
     + `profit factor ${bt.profitFactor} (more won than lost), deepest losing run ~${bt.maxDrawdownR}R. `
