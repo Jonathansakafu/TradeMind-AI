@@ -88,6 +88,11 @@ const notificationSchema = new mongoose.Schema({
     minutes: Number,
     at: Date,
   },
+  // Shared signals (controllers/notificationController.js broadcast): every
+  // user gets a copy with the same broadcastId; one copy per signal is
+  // primary and is what generation counts (dedup, open setups, track record).
+  broadcastId: { type: String },
+  primary: { type: Boolean },
 }, { timestamps: true });
 
 notificationSchema.index({ user: 1, createdAt: -1 });
@@ -95,6 +100,8 @@ notificationSchema.index({ pair: 1, type: 1, createdAt: -1 });
 notificationSchema.index({ tradingSessionId: 1, botStatus: 1 });
 notificationSchema.index({ user: 1, taken: 1, createdAt: -1 });
 notificationSchema.index({ simOutcome: 1, type: 1, createdAt: -1 });
+notificationSchema.index({ primary: 1, pair: 1, createdAt: -1 });
+notificationSchema.index({ broadcastId: 1 });
 
 // Push/email the trader for every newly created notification (not on
 // later saves like marking read or a bot status update). Hooked here

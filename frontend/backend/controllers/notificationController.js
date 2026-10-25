@@ -1,6 +1,7 @@
 const crypto = require("crypto");
 const signalGuards = require("../services/signalGuards");
 const Notification = require("../models/Notification");
+const User = require("../models/User");
 const Trade = require("../models/Trade");
 const TradingSession = require("../models/TradingSession");
 const MT5Signal = require("../models/MT5Signal");
@@ -37,7 +38,6 @@ const STOCK_PAIRS = marketService.STOCK_SYMBOLS;
 // loss limit (Settings -> Risk). Only gates MT5 auto-sending; signals and
 // alerts still arrive so the trader stays informed.
 async function dailyLossLimitHit(userId) {
-  const User = require("../models/User");
   const u = await User.findById(userId).select("riskSettings");
   const rs = u?.riskSettings;
   if (!rs?.balance || !rs?.dailyLossLimitPercent) return false;
@@ -60,7 +60,40 @@ function goldPriceNote(pair) {
   return `\n\n💰 Gold price used: ${g.price.toFixed(2)} (${g.source}, ${time} UTC)`;
 }
 
-const LIMIT_STOPPED_STATUSES = ["stopped_profit", "stopped_risk", "stopped_trades"];
+// Every signal goes to every user (2026-10-25): one copy each, so read /
+// taken / delete and history stay per user, all sharing a broadcastId. The
+// first copy is marked primary, and the generation checks below (dedup,
+// open setups, loss brake, track record) read primary copies only -- each
+// signal counts once however many users there are.
+const SHARED = { primary: true };
+
+async function broadcast(fields) {
+  const users = await User.find({}).select("_id").sort({ _id: 1 }).lean();
+  const broadcastId = crypto.randomUUID();
+  const copies = [];
+  for (const [i, u] of users.entries()) {
+    copies.push(await Notification.create({ ...fields, user: u._id, broadcastId, primary: i === 0 }));
+  }
+  return copies;
+}
+
+// Signals from before shared generation have no primary copy. The busiest
+// user's are taken as the shared record, so dedup, open setups and the
+// track record carry over instead of restarting empty.
+let primaryChecked = false;
+async function ensureSharedRecord() {
+  if (primaryChecked) return;
+  if (!(await Notification.exists(SHARED))) {
+    const [top] = await Notification.aggregate([
+      { $match: { createdAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } } },
+      { $group: { _id: "$user", n: { $sum: 1 } } },
+      { $sort: { n: -1 } },
+      { $limit: 1 },
+    ]);
+    if (top) await Notification.updateMany({ user: top._id }, { primary: true });
+  }
+  primaryChecked = true;
+}
 
 // Pocket Option/Expert Option OTC instruments (e.g. "EUR/USD OTC") are
 // broker-generated synthetic prices with no independent public data feed —
@@ -111,7 +144,7 @@ const NEWS_IMPACT_CANDIDATE_PAIRS = [...FOREX_PAIRS];
 const NEWS_IMPACT_CANDIDATES = 3;
 const NEWS_IMPACT_DEDUP_WINDOW_MS = 3 * 60 * 60 * 1000;
 
-async function createNewsImpactNotifications(userId, newsArticles, prices, type) {
+async function createNewsImpactNotifications(newsArticles, prices, type) {
   if (!newsArticles.length) return 0;
 
   let created = 0;
@@ -135,7 +168,7 @@ async function createNewsImpactNotifications(userId, newsArticles, prices, type)
       // this file -- a fast-moving news cycle shouldn't re-alert the same
       // pair/direction call on every generation cycle while it's still current.
       const existing = await Notification.findOne({
-        user: userId,
+        ...SHARED,
         source: "news_impact",
         pair,
         signal: signalType,
@@ -161,8 +194,7 @@ async function createNewsImpactNotifications(userId, newsArticles, prices, type)
         }
       }
 
-      await Notification.create({
-        user: userId,
+      await broadcast({
         pair,
         signal: signalType,
         entry: levels.entry,
@@ -201,8 +233,8 @@ async function generateQuickTradeSignals(userId, session) {
   // regardless of which pair is being analyzed, and it's a Mongo query
   // (cheap), but no reason to repeat it up to ~10x per cycle.
   const [bookSummary, learnedSummary] = await Promise.all([
-    ragService.getBookConceptSummary(userId),
-    learningService.getLearnedSummary(userId),
+    ragService.getBookConceptSummary(userId, { allUsers: true }),
+    learningService.getSharedLearnedSummary(),
   ]);
 
   // Previously hardcoded to [] below -- Quick Trade signals had no news
@@ -315,7 +347,7 @@ async function generateQuickTradeSignals(userId, session) {
   }
 
   try {
-    await createNewsImpactNotifications(userId, newsArticles, prices, "quick_trade");
+    await createNewsImpactNotifications(newsArticles, prices, "quick_trade");
   } catch (err) {
     console.error("Quick Trade news impact notification error:", err.message);
   }
@@ -328,6 +360,21 @@ async function generateQuickTradeSignals(userId, session) {
 // at a 10-minute cadence for this repo, confirmed live: real gaps were
 // 1.5-3+ hours, not 10 minutes).
 exports.generateQuickTradeSignals = generateQuickTradeSignals;
+
+// Quick Trade signals for every running Quick Trade session (they're tied
+// to the session's own pairs and auto-execute extension).
+exports.generateActiveQuickTrade = async () => {
+  const sessions = await TradingSession.find({ mode: "quick_trade", status: "active" });
+  let created = 0;
+  for (const session of sessions) {
+    try {
+      created += (await generateQuickTradeSignals(session.user, session)).created;
+    } catch (err) {
+      console.error(`Quick trade generation failed for session ${session._id}:`, err.message);
+    }
+  }
+  return created;
+};
 
 // Mirrors mt5Controller.sendSignal's MT5Signal shape exactly -- this is the
 // same record the trader's EA polls for via /api/mt5/pending, just created
@@ -359,41 +406,35 @@ async function autoForwardToMT5(userId, session, notification) {
   }
 }
 
-exports.autoGenerate = async (userId) => {
+// One user's copy of an AI-verified signal goes to their MT5 EA when their
+// latest MT5 session is running with auto-send on.
+async function maybeAutoForwardToMT5(notification) {
+  const session = await TradingSession.findOne({ user: notification.user, mode: "mt5" }).sort({ createdAt: -1 });
+  if (session?.status !== "active" || !session.autoSendToMT5) return;
+  if (await dailyLossLimitHit(notification.user)) {
+    console.log(`🛑 Daily loss limit reached for ${notification.user} -- MT5 auto-send paused`);
+    pipelineStats.inc("risk.autoSendPaused");
+    return;
+  }
+  await autoForwardToMT5(notification.user, session, notification);
+}
+
+// Shared generation: one run for everyone (see broadcast). Triggers that
+// overlap (cron, in-process interval, app polls) join the run in flight
+// instead of racing its dedup checks.
+let generating = null;
+exports.autoGenerate = () => {
+  generating ||= generateShared().finally(() => { generating = null; });
+  return generating;
+};
+
+async function generateShared() {
   try {
-    // Each mode manages its own signal budget once the trader opts into a
-    // session for it — scoped per mode (not "whichever session was most
-    // recently created, of either mode") because quick_trade and mt5 are
-    // independent trading contexts. A Quick Trade session hitting its
-    // limit (including just hitting its *profit target* — a win, not a
-    // failure) has nothing to do with the ordinary forex/MT5 signal loop,
-    // which doesn't require a session to run in the first place; blocking
-    // it too silently starved a user of all signals until they happened to
-    // know to start an unrelated new session. Users who've never used
-    // sessions at all are unaffected either way.
-    const [latestQuickTrade, latestMt5] = await Promise.all([
-      TradingSession.findOne({ user: userId, mode: "quick_trade" }).sort({ createdAt: -1 }),
-      TradingSession.findOne({ user: userId, mode: "mt5" }).sort({ createdAt: -1 }),
-    ]);
-
-    if (latestQuickTrade?.status === "active") {
-      const { created, lastError } = await generateQuickTradeSignals(userId, latestQuickTrade);
-      console.log(`✅ Generated ${created} quick trade notifications for user ${userId}`);
-      const reason = created > 0 ? null : lastError ? `error: ${lastError}` : "quick_trade_no_signal";
-      return { count: created, reason };
-    }
-    if (latestQuickTrade && LIMIT_STOPPED_STATUSES.includes(latestQuickTrade.status)) {
-      console.log(`⏸ Skipping Quick Trade signal generation for ${userId} — session limit reached`);
-      return { count: 0, reason: "session_limit_reached" };
-    }
-
-    if (latestMt5 && LIMIT_STOPPED_STATUSES.includes(latestMt5.status)) {
-      console.log(`⏸ Skipping forex/MT5 signal generation for ${userId} — session limit reached`);
-      return { count: 0, reason: "session_limit_reached" };
-    }
+    await ensureSharedRecord();
 
     const [pastTrades, prices] = await Promise.all([
-      Trade.find({ user: userId }).sort({ openedAt: -1 }).limit(50),
+      // Every user's trades -- the AI learns from all of them together.
+      Trade.find({}).sort({ openedAt: -1 }).limit(50),
       marketService.getAllPrices(),
     ]);
 
@@ -437,18 +478,18 @@ exports.autoGenerate = async (userId) => {
     // Fetched once per cycle, not per pair -- same reasoning as the Quick
     // Trade path above.
     const [bookSummary, learnedSummary, signalStatsByPair] = !usesAi ? [null, null, {}] : await Promise.all([
-      ragService.getBookConceptSummary(userId),
-      learningService.getLearnedSummary(userId),
-      // How this user's past signals actually played out, per pair --
-      // fed back into the AI prompt (services/signalOutcomes.js).
-      signalOutcomes.statsTextByPair(userId).catch(() => ({})),
+      ragService.getBookConceptSummary(null, { allUsers: true }),
+      learningService.getSharedLearnedSummary(),
+      // How past signals actually played out, per pair -- fed back into
+      // the AI prompt (services/signalOutcomes.js).
+      signalOutcomes.statsTextByPair(SHARED).catch(() => ({})),
     ]);
 
     for (const pair of pairsToAnalyze) {
       try {
         const currentPrice = prices[pair] || null;
         if (ruleStrategy.has(pair)) {
-          notifications.push(...await createStrategySignals(userId, pair, currentPrice));
+          notifications.push(...await createStrategySignals(pair, currentPrice));
           continue;
         }
         if (!AI_AUTO_SIGNAL_PAIRS.includes(pair)) continue;
@@ -470,8 +511,8 @@ exports.autoGenerate = async (userId) => {
         // previously this only ever retrieved book/trade chunks, so an
         // uploaded screenshot never influenced auto-generated signals.
         const retrievedChunks = await ragService.retrieve(
-          userId, `${formattedPair} trading strategy signal`,
-          { topK: 6, sources: ["book", "trade", "screenshot"] }
+          null, `${formattedPair} trading strategy signal`,
+          { topK: 6, sources: ["book", "trade", "screenshot"], allUsers: true }
         );
         const momentum = computeMomentum(historical);
 
@@ -538,7 +579,7 @@ exports.autoGenerate = async (userId) => {
           // refresh every 30 min with Gemini as the backup model.
           const FOREX_DEDUP_WINDOW_MS = 30 * 60 * 1000;
           const existingToday = await Notification.findOne({
-            user: userId,
+            ...SHARED,
             pair,
             signal: analysis.signal,
             createdAt: { $gte: new Date(Date.now() - FOREX_DEDUP_WINDOW_MS) },
@@ -569,7 +610,7 @@ exports.autoGenerate = async (userId) => {
 
             // Loss safeguards (services/signalGuards.js): loss brake, no
             // conflicting dollar bets, respect a strong post-news move.
-            const guards = await signalGuards.evaluate({ userId, pair, signal: analysis.signal, ctx, newsCtx }).catch((err) => {
+            const guards = await signalGuards.evaluate({ scope: SHARED, pair, signal: analysis.signal, ctx, newsCtx }).catch((err) => {
               console.error("Signal guards failed:", err.message);
               return null;
             });
@@ -582,8 +623,7 @@ exports.autoGenerate = async (userId) => {
             }
             if (check && guards) check.rules.push(...guards.rules);
 
-            const notification = await Notification.create({
-              user: userId,
+            const copies = await broadcast({
               pair,
               signal: analysis.signal,
               entry: levels.entry || currentPrice || 0,
@@ -621,7 +661,8 @@ exports.autoGenerate = async (userId) => {
               verificationNote: analysis.verificationNote,
               read: false,
             });
-            notifications.push(notification);
+            if (!copies.length) continue;
+            notifications.push(copies[0]);
             console.log(`✅ Notification created: ${analysis.signal} ${pair}`);
             pipelineStats.inc("forex.created");
 
@@ -630,13 +671,8 @@ exports.autoGenerate = async (userId) => {
             // (claudeAI.js's verifySignal) -- an unverified or
             // verification-unavailable (null) signal still waits for
             // manual review via the "Send to MT5" button, same as today.
-            if (analysis.verified === true && latestMt5?.status === "active" && latestMt5.autoSendToMT5) {
-              if (await dailyLossLimitHit(userId)) {
-                console.log(`🛑 Daily loss limit reached for ${userId} -- MT5 auto-send paused`);
-                pipelineStats.inc("risk.autoSendPaused");
-              } else {
-                await autoForwardToMT5(userId, latestMt5, notification);
-              }
+            if (analysis.verified === true) {
+              for (const copy of copies) await maybeAutoForwardToMT5(copy);
             }
           } else {
             console.log(`⏭ Skipped duplicate: ${pair} ${analysis.signal}`);
@@ -659,12 +695,12 @@ exports.autoGenerate = async (userId) => {
     }
 
     try {
-      if (AI_NEWS_SIGNALS) await createNewsImpactNotifications(userId, newsArticles, prices, "forex");
+      if (AI_NEWS_SIGNALS) await createNewsImpactNotifications(newsArticles, prices, "forex");
     } catch (err) {
       console.error("News impact notification error:", err.message);
     }
 
-    console.log(`✅ Generated ${notifications.length} notifications for user ${userId}`);
+    console.log(`✅ Generated ${notifications.length} shared signal(s)`);
     const reason = notifications.length > 0
       ? null
       : lastError ? `error: ${lastError}` : "forex_no_signal";
@@ -673,17 +709,17 @@ exports.autoGenerate = async (userId) => {
     console.error("Auto generate error:", err.message);
     return { count: 0, reason: `error: ${err.message}` };
   }
-};
+}
 
-// Strategy signals for this user: each of the pair's strategies whose last
+// Strategy signals (shared, see broadcast): each of the pair's strategies whose last
 // closed candle is a setup -- up to the strategy's maxOpen trades running
 // and one signal per setup candle (as in the backtest), none inside the
 // high-impact news window.
-async function createStrategySignals(userId, pair, price) {
+async function createStrategySignals(pair, price) {
   const results = await ruleStrategy.getSignals(pair, price);
   const created = [];
   for (const sig of results) {
-    const n = sig.signal ? await createStrategySignal(userId, pair, sig) : null;
+    const n = sig.signal ? await createStrategySignal(pair, sig) : null;
     if (n) created.push(n);
   }
   const summary = results.map((r) => `${r.strategy.label}: ${r.signal ? r.signal.toUpperCase() : r.reason}`).join(" | ");
@@ -691,13 +727,13 @@ async function createStrategySignals(userId, pair, price) {
   return created;
 }
 
-async function createStrategySignal(userId, pair, sig) {
+async function createStrategySignal(pair, sig) {
   const s = sig.strategy;
   // Up to s.maxOpen trades of this setup running at once (as backtested),
   // and never two signals from the same setup candle.
   const [running, sameCandle] = await Promise.all([
-    Notification.countDocuments({ user: userId, pair, strategy: s.key, simOutcome: { $exists: false } }),
-    Notification.exists({ user: userId, pair, strategy: s.key, createdAt: { $gte: sig.barTime } }),
+    Notification.countDocuments({ ...SHARED, pair, strategy: s.key, simOutcome: { $exists: false } }),
+    Notification.exists({ ...SHARED, pair, strategy: s.key, createdAt: { $gte: sig.barTime } }),
   ]);
   if (sameCandle || running >= (s.maxOpen || 1)) {
     pipelineStats.inc("strategy.busy");
@@ -713,8 +749,7 @@ async function createStrategySignal(userId, pair, sig) {
     pipelineStats.noteDecision(pair, `${s.label} ${sig.signal.toUpperCase()} held back: ${near.currency} ${near.title} at ${near.time.toISOString().slice(11, 16)} UTC`);
     return null;
   }
-  const notification = await Notification.create({
-    user: userId,
+  const [notification] = await broadcast({
     pair,
     signal: sig.signal,
     entry: sig.entry,
@@ -730,6 +765,7 @@ async function createStrategySignal(userId, pair, sig) {
     sourceLabel: `Tested strategy · ${s.label}`,
     read: false,
   });
+  if (!notification) return null;
   pipelineStats.inc("strategy.created");
   pipelineStats.noteDecision(pair, `${s.label} ${sig.signal.toUpperCase()} sent: entry ${sig.entry} SL ${sig.stopLoss} TP ${sig.takeProfit}`);
   return notification;
@@ -742,8 +778,8 @@ async function createStrategySignal(userId, pair, sig) {
 // not just one). Mirrors the fix already made for Quick Trade (tied to
 // the browser extension's poll instead), since the external cron alone
 // proved unreliable (confirmed live: real gaps of 1.5-3+ hours despite a
-// 10-minute schedule). Throttled per-user via lastAutoGenAt so it doesn't
-// fire on literally every poll; fire-and-forget so this response never
+// 10-minute schedule). Throttled (once per window for everyone, since
+// generation is shared) so it doesn't fire on literally every poll; fire-and-forget so this response never
 // blocks on a multi-pair AI generation cycle just to return whatever
 // notifications already exist. The external cron stays in place as a
 // backup for whenever nobody has the app open at all.
@@ -752,15 +788,14 @@ async function createStrategySignal(userId, pair, sig) {
 // notification volume -- this is now the tightest it can usefully be
 // without also shortening the frontend's poll interval itself.
 const NOTIF_POLL_GENERATION_THROTTLE_MS = 5 * 60 * 1000;
+let lastPollGenAt = 0;
 
 exports.getNotifications = async (req, res) => {
   try {
-    const now = new Date();
-    if (!req.user.lastAutoGenAt || now - req.user.lastAutoGenAt > NOTIF_POLL_GENERATION_THROTTLE_MS) {
-      req.user.lastAutoGenAt = now;
+    if (Date.now() - lastPollGenAt > NOTIF_POLL_GENERATION_THROTTLE_MS) {
+      lastPollGenAt = Date.now();
       pipelineStats.inc("trigger.appPoll");
-      req.user.save().catch((err) => console.error("Failed to save lastAutoGenAt:", err.message));
-      exports.autoGenerate(req.user._id).catch((err) =>
+      exports.autoGenerate().catch((err) =>
         console.error("Poll-triggered auto-generate failed:", err.message)
       );
     }
@@ -856,7 +891,11 @@ exports.markAllAsRead = async (req, res) => {
 // Delete notification
 exports.deleteNotification = async (req, res) => {
   try {
-    await Notification.deleteOne({ _id: req.params.id, user: req.user._id });
+    const deleted = await Notification.findOneAndDelete({ _id: req.params.id, user: req.user._id });
+    // Another user's copy takes over as the shared record.
+    if (deleted?.primary && deleted.broadcastId) {
+      await Notification.updateOne({ broadcastId: deleted.broadcastId }, { primary: true });
+    }
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ message: err.message });

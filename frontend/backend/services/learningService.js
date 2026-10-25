@@ -1,5 +1,6 @@
 const Trade = require("../models/Trade");
 const LearnedInsights = require("../models/LearnedInsights");
+const AppConfig = require("../models/AppConfig");
 const claudeAI = require("./claudeAI");
 
 // Absolute floor -- below this there's nothing to compare at all (a
@@ -29,11 +30,11 @@ const LOOKBACK_MS = 60 * 24 * 60 * 60 * 1000;
 // gives one missed weekly cycle of slack before that happens.
 const STALE_MS = 14 * 24 * 60 * 60 * 1000;
 
-function buildSummaryText({ patterns, winRate, tradeCount }) {
+function buildSummaryText({ patterns, winRate, tradeCount, shared = false }) {
   const confidenceNote = tradeCount < CONFIDENT_SAMPLE_SIZE
     ? ` (small sample -- treat as an early, tentative signal, not a confirmed pattern)`
     : "";
-  const parts = [`Over this trader's last ${tradeCount} closed trades (${winRate}% win rate)${confidenceNote}:`];
+  const parts = [`Over ${shared ? "all traders'" : "this trader's"} last ${tradeCount} closed trades (${winRate}% win rate)${confidenceNote}:`];
 
   if (patterns.bestSession) parts.push(`Best session: ${patterns.bestSession}.`);
   if (patterns.worstSession) parts.push(`Weakest session: ${patterns.worstSession}.`);
@@ -93,6 +94,48 @@ exports.runWeeklyLearningForUser = async (userId) => {
 
   console.log(`Learning pass complete for user ${userId}: ${trades.length} trades, ${winRate}% win rate.`);
   return summary;
+};
+
+// Same pass over every user's closed trades together, for the shared
+// signals (controllers/notificationController.js). Kept in AppConfig --
+// LearnedInsights holds one doc per user. Weekly, throttled by its own
+// generatedAt (see cronJobs.js).
+const SHARED_KEY = "sharedLearnedInsights";
+
+exports.isSharedLearningDue = async () => {
+  const doc = await AppConfig.findOne({ key: SHARED_KEY }).lean();
+  const at = doc?.value?.attemptedAt ? new Date(doc.value.attemptedAt).getTime() : 0;
+  return Date.now() - at > 7 * 24 * 60 * 60 * 1000;
+};
+
+exports.runSharedLearning = async () => {
+  // Marked first so an overlapping cycle doesn't start a second run.
+  await AppConfig.updateOne({ key: SHARED_KEY }, { $set: { "value.attemptedAt": new Date() } }, { upsert: true });
+  const trades = await Trade.find({
+    status: "closed",
+    closedAt: { $gte: new Date(Date.now() - LOOKBACK_MS) },
+  }).sort({ closedAt: -1 }).lean();
+  if (trades.length < MIN_TRADES_FOR_LEARNING) {
+    console.log(`Shared learning pass skipped: only ${trades.length} closed trades in the last 60 days.`);
+    return null;
+  }
+  const patterns = await claudeAI.detectPatterns(trades);
+  const wins = trades.filter((t) => t.outcome === "win").length;
+  const winRate = Math.round((wins / trades.length) * 100);
+  const summary = buildSummaryText({ patterns, winRate, tradeCount: trades.length, shared: true });
+  await AppConfig.updateOne(
+    { key: SHARED_KEY },
+    { $set: { "value.summary": summary, "value.tradeCount": trades.length, "value.winRate": winRate, "value.generatedAt": new Date() } }
+  );
+  console.log(`Shared learning pass complete: ${trades.length} trades, ${winRate}% win rate.`);
+  return summary;
+};
+
+exports.getSharedLearnedSummary = async () => {
+  const v = (await AppConfig.findOne({ key: SHARED_KEY }).lean())?.value;
+  if (!v?.summary || !v.generatedAt) return "";
+  if (Date.now() - new Date(v.generatedAt).getTime() > STALE_MS) return "";
+  return `\nWhat's actually been working for traders recently (apply these patterns where relevant to the current setup):\n${v.summary}`;
 };
 
 // Cheap read of the latest cached summary -- called once per generation

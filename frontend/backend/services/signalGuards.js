@@ -40,14 +40,16 @@ const freshBreakFor = (ctx, signal, sinceMs, now) => {
   return null;
 };
 
-exports.evaluate = async ({ userId, pair, signal, ctx, newsCtx, now = new Date() }) => {
+// scope: which signals count -- the shared record ({ primary: true }) for
+// generation, or one user's ({ user }).
+exports.evaluate = async ({ scope, pair, signal, ctx, newsCtx, now = new Date() }) => {
   const rules = [];
   const add = (key, label, passed, detail) => rules.push({ key, label, passed, detail, hard: true });
   const t = now.getTime();
 
   // A. Loss brake
   const recent = await Notification.find({
-    user: userId, pair, signal: { $in: ["buy", "sell"] }, type: { $ne: "quick_trade" },
+    ...scope, pair, signal: { $in: ["buy", "sell"] }, type: { $ne: "quick_trade" },
     simOutcome: { $in: ["win", "loss"] }, simResolvedAt: { $gte: new Date(t - 24 * H) },
   }).select("signal simOutcome simR simResolvedAt").lean();
   const sameLosses = recent.filter((n) => n.signal === signal && n.simOutcome === "loss" && t - new Date(n.simResolvedAt) <= 12 * H)
@@ -70,7 +72,7 @@ exports.evaluate = async ({ userId, pair, signal, ctx, newsCtx, now = new Date()
   const mine = usdExposure(pair, signal);
   if (mine !== 0) {
     const running = await Notification.find({
-      user: userId, pair: { $ne: pair }, signal: { $in: ["buy", "sell"] }, type: { $ne: "quick_trade" },
+      ...scope, pair: { $ne: pair }, signal: { $in: ["buy", "sell"] }, type: { $ne: "quick_trade" },
       simOutcome: { $exists: false }, createdAt: { $gte: new Date(t - 8 * H) },
     }).select("pair signal").lean();
     const clash = running.find((n) => usdExposure(n.pair, n.signal) === -mine);

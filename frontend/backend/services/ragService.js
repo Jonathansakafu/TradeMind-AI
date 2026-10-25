@@ -165,9 +165,10 @@ exports.indexGuideChunks = async (guideId, rawText) => {
 
 // ---- Retrieval ----
 
-const bruteForceSearch = async (userId, queryEmbedding, { topK, sources }) => {
+const bruteForceSearch = async (userId, queryEmbedding, { topK, sources, allUsers }) => {
   const filter = { source: { $in: sources } };
-  if (userId) filter.user = userId;
+  if (allUsers) filter.user = { $exists: true };
+  else if (userId) filter.user = userId;
   else filter.user = { $exists: false };
 
   const chunks = await DocumentChunk.find(filter).lean();
@@ -182,7 +183,8 @@ const bruteForceSearch = async (userId, queryEmbedding, { topK, sources }) => {
 
 // Scoped search: userId present -> that user's book/trade chunks only.
 // userId null -> unscoped (used for the shared "guide" source).
-const searchScoped = async (userId, queryEmbedding, { topK, sources }) => {
+// allUsers -> every user's chunks (shared signal generation).
+const searchScoped = async (userId, queryEmbedding, { topK, sources, allUsers = false }) => {
   if (vectorSearchAvailable !== false) {
     try {
       // `source` filtered *inside* $vectorSearch (a pre-filter, applied
@@ -193,7 +195,7 @@ const searchScoped = async (userId, queryEmbedding, { topK, sources }) => {
       // trade chunks, leaving zero room for a genuinely relevant book
       // passage that just didn't make that pre-filter cut. Filtering first
       // means ranking only ever happens over the correctly-scoped pool.
-      const filter = userId
+      const filter = userId && !allUsers
         ? { $and: [{ source: { $in: sources } }, { user: new mongoose.Types.ObjectId(userId) }] }
         : { source: { $in: sources } };
 
@@ -211,7 +213,7 @@ const searchScoped = async (userId, queryEmbedding, { topK, sources }) => {
         // Belt-and-suspenders: no code path today creates a "guide" chunk
         // with a `user` set, but $vectorSearch's filter has no $exists
         // operator to assert that directly, unlike bruteForceSearch below.
-        ...(userId ? [] : [{ $match: { user: { $exists: false } } }]),
+        ...(userId || allUsers ? [] : [{ $match: { user: { $exists: false } } }]),
         {
           $project: {
             text: 1,
@@ -230,10 +232,10 @@ const searchScoped = async (userId, queryEmbedding, { topK, sources }) => {
     }
   }
 
-  return bruteForceSearch(userId, queryEmbedding, { topK, sources });
+  return bruteForceSearch(userId, queryEmbedding, { topK, sources, allUsers });
 };
 
-exports.retrieve = async (userId, queryText, { topK = 6, sources = ["book", "trade"] } = {}) => {
+exports.retrieve = async (userId, queryText, { topK = 6, sources = ["book", "trade"], allUsers = false } = {}) => {
   if (!queryText || !queryText.trim()) return [];
   const queryEmbedding = await embeddingService.embed(queryText);
 
@@ -242,7 +244,7 @@ exports.retrieve = async (userId, queryText, { topK = 6, sources = ["book", "tra
 
   const results = [];
   if (userSources.length > 0) {
-    results.push(...(await searchScoped(userId, queryEmbedding, { topK, sources: userSources })));
+    results.push(...(await searchScoped(userId, queryEmbedding, { topK, sources: userSources, allUsers })));
   }
   if (includeGuide) {
     results.push(...(await searchScoped(null, queryEmbedding, { topK, sources: ["guide"] })));
@@ -269,6 +271,8 @@ exports.formatContext = (chunks) => {
 // threshold above, so an uploaded book counts even when no individual
 // chunk scores high enough to be retrieved on its own.
 const MAX_BOOKS = 3;
+// Shared generation reads several traders' books, so it takes a few more.
+const MAX_SHARED_BOOKS = 5;
 // Global entries auto-extracted from trading-strategy news (see
 // services/newsKnowledgeService.js) -- same BookConcept shape, but
 // user-unscoped, so every trader's context includes them alongside their
@@ -286,12 +290,13 @@ const formatConceptEntries = (entries) => entries.map((b) => {
   return parts.join(" — ");
 });
 
-exports.getBookConceptSummary = async (userId) => {
+// allUsers: every user's uploaded books (shared signal generation).
+exports.getBookConceptSummary = async (userId, { allUsers = false } = {}) => {
   const [books, globalConcepts] = await Promise.all([
-    userId
-      ? BookConcept.find({ user: userId })
+    userId || allUsers
+      ? BookConcept.find(allUsers ? { user: { $exists: true } } : { user: userId })
           .sort({ createdAt: -1 })
-          .limit(MAX_BOOKS)
+          .limit(allUsers ? MAX_SHARED_BOOKS : MAX_BOOKS)
           .select("bookName concepts strategies rules")
           .lean()
       : Promise.resolve([]),
@@ -305,7 +310,7 @@ exports.getBookConceptSummary = async (userId) => {
 
   const sections = [];
   if (books.length) {
-    sections.push(`From the trader's uploaded books:\n${formatConceptEntries(books).join("\n")}`);
+    sections.push(`From ${allUsers ? "traders'" : "the trader's"} uploaded books:\n${formatConceptEntries(books).join("\n")}`);
   }
   if (globalConcepts.length) {
     sections.push(`From recent trading-strategy news:\n${formatConceptEntries(globalConcepts).join("\n")}`);

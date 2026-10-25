@@ -121,10 +121,11 @@ exports.researchResolved = async (limit = 60) => {
   return done;
 };
 
-// Lessons per pair + direction (last 30 days of this user's signals):
-// factors whose win rate is far from the usual one.
-exports.lessonsFor = async (userId, pair) => {
-  const rows = await Notification.find({ user: userId, pair, "research.at": { $exists: true }, simResolvedAt: { $gte: new Date(Date.now() - 30 * 24 * H) } })
+// Lessons per pair + direction (last 30 days of the signals in scope -- a
+// Notification filter, e.g. { user } or { primary: true }): factors whose
+// win rate is far from the usual one.
+exports.lessonsFor = async (scope, pair) => {
+  const rows = await Notification.find({ ...scope, pair, "research.at": { $exists: true }, simResolvedAt: { $gte: new Date(Date.now() - 30 * 24 * H) } })
     .select("signal simOutcome research.factors").lean();
   const out = [];
   for (const side of ["buy", "sell"]) {

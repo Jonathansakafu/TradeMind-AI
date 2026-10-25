@@ -173,10 +173,13 @@ exports.evaluateOpenSignals = async () => {
 };
 
 // Per-user stats over the last `days`, by pair and direction.
-exports.getStats = async (userId, days = 30) => {
+exports.getStats = (userId, days = 30) => statsFor({ user: userId }, days);
+
+// Same, for any set of signals (scope is a Notification filter).
+async function statsFor(scope, days) {
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
   const rows = await Notification.aggregate([
-    { $match: { user: userId, simOutcome: { $exists: true }, createdAt: { $gte: since } } },
+    { $match: { ...scope, simOutcome: { $exists: true }, createdAt: { $gte: since } } },
     { $group: {
       _id: { pair: "$pair", signal: "$signal" },
       wins: { $sum: { $cond: [{ $eq: ["$simOutcome", "win"] }, 1, 0] } },
@@ -186,16 +189,17 @@ exports.getStats = async (userId, days = 30) => {
     } },
   ]);
   const pending = await Notification.countDocuments({
-    user: userId, type: { $ne: "quick_trade" }, simOutcome: { $exists: false },
+    ...scope, type: { $ne: "quick_trade" }, simOutcome: { $exists: false },
     signal: { $in: ["buy", "sell"] }, stopLoss: { $gt: 0 }, createdAt: { $gte: since },
   });
   return { days, pending, rows: rows.map((r) => ({ pair: r._id.pair, signal: r._id.signal, wins: r.wins, losses: r.losses, expired: r.expired, totalR: Math.round(r.totalR * 100) / 100 })) };
-};
+}
 
 // One short line per pair for the AI prompt, e.g.
 // "Your recent XAUUSD signals (14 days): BUY 4/6 hit target, SELL 1/5 ..."
-exports.statsTextByPair = async (userId) => {
-  const { rows } = await exports.getStats(userId, 14);
+// scope: a Notification filter -- { primary: true } for the shared signals.
+exports.statsTextByPair = async (scope) => {
+  const { rows } = await statsFor(scope, 14);
   const out = {};
   for (const pair of new Set(rows.map((r) => r.pair))) {
     const parts = rows.filter((r) => r.pair === pair).map((r) => {
@@ -208,7 +212,7 @@ exports.statsTextByPair = async (userId) => {
   const research = require("./tradeResearch");
   const summary = await research.summaryLessons().catch(() => []);
   for (const pair of ["XAUUSD", "EURUSD", "GBPUSD"]) {
-    const lessons = await research.lessonsFor(userId, pair).catch(() => []);
+    const lessons = await research.lessonsFor(scope, pair).catch(() => []);
     // The AI's lessons that name this pair, or no pair at all.
     const general = summary.filter((l) => { const u = l.toUpperCase(); return u.includes(pair) || !["XAUUSD", "EURUSD", "GBPUSD", "GOLD"].some((p) => u.includes(p)); });
     const all = [...lessons, ...general.slice(0, 3)];

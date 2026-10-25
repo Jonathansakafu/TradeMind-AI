@@ -1,6 +1,6 @@
 const User = require("../models/User");
-const { autoGenerate } = require("../controllers/notificationController");
-const { runWeeklyLearningForUser } = require("./learningService");
+const { autoGenerate, generateActiveQuickTrade } = require("../controllers/notificationController");
+const { runWeeklyLearningForUser, isSharedLearningDue, runSharedLearning } = require("./learningService");
 const { extractSkillKnowledgeFromNews } = require("./newsKnowledgeService");
 const pipelineStats = require("./pipelineStats");
 const signalOutcomes = require("./signalOutcomes");
@@ -15,8 +15,7 @@ const newsCountdown = require("./newsCountdown");
 // more dependable than GitHub Actions scheduling on this app's free tier.
 const LEARNING_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
 
-// Runs autoGenerate for every user, with a pause between each so the
-// AI/market-data API calls don't all fire in the same instant. Shared by
+// Runs signal generation for everyone, plus the per-cycle upkeep below. Shared by
 // server.js's own in-process setInterval (works fine whenever the server
 // happens to already be awake) and the external cron endpoint (routes/
 // cronRoutes.js) that exists specifically because Render's free tier
@@ -61,17 +60,32 @@ async function runCycle() {
     console.error("News skill-knowledge extraction failed:", err.message)
   );
 
+  // Signals are generated once and sent to every user (see
+  // notificationController's broadcast), then each running Quick Trade
+  // session gets its own.
   const startedAt = new Date();
   const reasons = {};
-  let created = 0;
-  for (const user of users) {
-    const { count, reason } = await autoGenerate(user._id);
-    created += count || 0;
-    // Error text is truncated so the health report groups identical
-    // failures together instead of listing one line per user.
-    const key = count > 0 ? "created" : (reason || "unknown").slice(0, 120);
-    reasons[key] = (reasons[key] || 0) + 1;
+  const { count, reason } = await autoGenerate();
+  // Error text is truncated so the health report groups identical failures.
+  reasons[count > 0 ? "created" : (reason || "unknown").slice(0, 120)] = 1;
+  let created = count || 0;
+  try {
+    created += await generateActiveQuickTrade();
+  } catch (err) {
+    console.error("Quick trade generation failed:", err.message);
+  }
 
+  // Weekly learning over every user's trades together, for the shared signals.
+  try {
+    if (await isSharedLearningDue()) {
+      runSharedLearning().catch((err) => console.error("Shared learning failed:", err.message));
+    }
+  } catch (err) {
+    console.error("Shared learning check failed:", err.message);
+  }
+
+  // Each user's own weekly learning (their Ask AI answers).
+  for (const user of users) {
     const dueForLearning = !user.lastLearningAt
       || Date.now() - user.lastLearningAt.getTime() > LEARNING_INTERVAL_MS;
     if (dueForLearning) {
@@ -83,9 +97,6 @@ async function runCycle() {
         console.error(`Weekly learning failed for user ${user._id}:`, err.message)
       );
     }
-
-    // Pumzika sekunde 5 kati ya users
-    await new Promise((resolve) => setTimeout(resolve, 5000));
   }
   // Trail the stops of open strategy signals (services/ruleStrategy.js)
   // before scoring, so the score uses the stop the trader was told.
