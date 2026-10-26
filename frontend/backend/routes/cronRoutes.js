@@ -113,6 +113,32 @@ router.get("/health", async (req, res) => {
       },
       users,
       usersWithPushDevices: pushUsers,
+      // One anonymous row per account, oldest first (no names / emails --
+      // this report is public): can it receive alerts, and did the shared
+      // signals reach it.
+      perUser: await (async () => {
+        const list = await User.find({}).sort({ _id: 1 })
+          .select("createdAt notificationPrefs +pushSubscriptions +fcmTokens").lean();
+        const counts = await Notification.aggregate([
+          { $match: since(7 * 24 * H) },
+          { $group: { _id: "$user", n7d: { $sum: 1 }, shared7d: { $sum: { $cond: [{ $ifNull: ["$broadcastId", false] }, 1, 0] } }, last: { $max: "$createdAt" } } },
+        ]);
+        const byUser = Object.fromEntries(counts.map((c) => [String(c._id), c]));
+        return list.map((u, i) => {
+          const c = byUser[String(u._id)] || {};
+          return {
+            user: i + 1,
+            joined: u.createdAt?.toISOString().slice(0, 10),
+            androidDevices: (u.fcmTokens || []).length,
+            browserDevices: (u.pushSubscriptions || []).length,
+            pushOn: u.notificationPrefs?.push !== false,
+            emailOn: !!u.notificationPrefs?.email,
+            notifications7d: c.n7d || 0,
+            sharedSignals7d: c.shared7d || 0,
+            lastNotification: c.last || null,
+          };
+        });
+      })().catch((err) => ({ error: err.message })),
       // How signals played out over the last 48 h (auto-scored against real
       // prices; no money figures -- this report is public in Actions logs).
       signalResults48h: await (async () => {
